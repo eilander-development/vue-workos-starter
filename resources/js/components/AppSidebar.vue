@@ -27,13 +27,18 @@ const mainNavItems: NavItem[] = [
 
 const footerNavItems: NavItem[] = [
     {
-        title: 'Github Repo',
-        href: 'https://github.com/laravel/vue-starter-kit',
+        title: 'Frontend components',
+        href: 'https://www.shadcn-vue.com',
         icon: Folder,
     },
     {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#vue',
+        title: 'What To Build',
+        href: 'https://preview.themeforest.net/item/evank-tailwind-css-nextjs-admin-template/full_screen_preview/57881050',
+        icon: BookOpen,
+    },
+    {
+        title: 'Icons',
+        href: 'https://lucide.dev/icons/',
         icon: BookOpen,
     },
 ];
