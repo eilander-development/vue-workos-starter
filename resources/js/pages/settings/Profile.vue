@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import { edit } from '@/routes/profile';
+import { home } from '@/routes';
 import { Form, Head, usePage } from '@inertiajs/vue3';
 
 import DeleteUser from '@/components/DeleteUser.vue';
@@ -20,6 +21,10 @@ interface Props {
 defineProps<Props>();
 
 const breadcrumbItems: BreadcrumbItem[] = [
+    {
+        title: 'Home',
+        href: home().url,
+    },
     {
         title: 'Profile settings',
         href: edit().url,

@@ -8,8 +8,13 @@ import { type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { edit } from '@/routes/appearance';
+import { home } from '@/routes';
 
 const breadcrumbItems: BreadcrumbItem[] = [
+    {
+        title: 'Home',
+        href: home().url,
+    },
     {
         title: 'Appearance settings',
         href: edit().url,
