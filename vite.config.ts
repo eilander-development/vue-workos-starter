@@ -24,4 +24,15 @@ export default defineConfig({
             },
         }),
     ],
+    server: {
+        watch: {
+            usePolling: true,
+        },
+        host: '0.0.0.0',
+        port: 3099,
+        strictPort: true,
+        hmr: {
+            host: '130.0.2.47',
+        }
+    }
 });
