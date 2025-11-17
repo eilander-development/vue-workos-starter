@@ -81,7 +81,7 @@ const chartOptions = {
         labels: {
             show: true,
             style: {
-                colors: 'var(--color-gray-300)',
+                colors: 'var(--color-gray-400)',
                 fontFamily: "Inter, sans-serif",
             },
             format: 'MMM',
@@ -103,7 +103,7 @@ const chartOptions = {
         labels: {
             show: true,
             style: {
-                colors: 'var(--color-gray-200)',
+                colors: 'var(--color-gray-400)',
                 fontFamily: "Inter, sans-serif",
             },
         },
