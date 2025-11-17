@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 
 interface Props {
-  budgetExpenses: Array
+  budgetExpenses: Object
 }
 
 const props = defineProps<Props>()

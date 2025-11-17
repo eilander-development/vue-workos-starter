@@ -8,7 +8,7 @@ import {
 import VueApexCharts from 'vue3-apexcharts'
 
 interface Props {
-    monthyExpensesChart: Array
+    yearlyExpensesChart: Object|Array
 }
 
 const props = defineProps<Props>()
@@ -17,7 +17,7 @@ const chartOptions = {
     chart: {
         type: 'bar',
         height: 350,
-        stacked: true,
+        stacked: false,
         toolbar: {
             show: false
         },
@@ -32,16 +32,20 @@ const chartOptions = {
       show: false,
     },
     tooltip: {
-      shared: false,
-      intersect: true,
-      followCursor: true,
+      shared: true,
+      intersect: false,
+      followCursor: false,
       theme: 'dark',
       style: {
         fontFamily: "Inter, sans-serif",
       },
-        onDatasetHover: {
-            highlightDataSeries: false,
+        x: {
+            show: true,
+            format: 'MMM',
         },
+      onDatasetHover: {
+        highlightDataSeries: false,
+      },
     },
     plotOptions: {
         bar: {
@@ -74,34 +78,32 @@ const chartOptions = {
     },
     xaxis: {
         floating: false,
-        type: 'datetime',
-        categories: props.monthyExpensesChart.months,
         labels: {
             show: true,
             style: {
                 colors: 'var(--color-gray-300)',
                 fontFamily: "Inter, sans-serif",
             },
-            format: 'dd',
+            format: 'MMM',
         },
         tooltip: {
             enabled: false,
         },
-      crosshairs: {
-        show: false,
-      },
-      axisBorder: {
-        show: false,
-      },
-      axisTicks: {
-        show: false,
-      },
+        crosshairs: {
+            show: false,
+        },
+        axisBorder: {
+            show: false,
+        },
+        axisTicks: {
+            show: false,
+        },
     },
     yaxis: {
         labels: {
             show: true,
             style: {
-                colors: 'var(--color-gray-300)',
+                colors: 'var(--color-gray-200)',
                 fontFamily: "Inter, sans-serif",
             },
         },
@@ -116,10 +118,10 @@ const chartOptions = {
 <template>
   <Card class="w-full">
     <CardHeader>
-        <CardTitle>Monthly Income/Expenses</CardTitle>
+        <CardTitle>Income/Expenses per month</CardTitle>
     </CardHeader>
     <CardContent>
-        <VueApexCharts height="350" :options="chartOptions" :series="props.monthyExpensesChart.series"/>
+        <VueApexCharts height="350" :options="chartOptions" :series="props.yearlyExpensesChart.series"/>
     </CardContent>
 </Card>
 </template>

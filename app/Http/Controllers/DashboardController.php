@@ -19,9 +19,8 @@ class DashboardController extends Controller
     {
         return Inertia::render('Dashboard', [
             'monthlyBudgetExpenses' => \App\Services\Expenses::monthlyBudgetExpenses(),
-            'monthlyExpensesChart' => [
-                'series' => \App\Services\Expenses::yearlyExpensesChartSeries(),
-                'months' => \App\Services\Expenses::yearlyExpensesChartMonths()
+            'yearlyExpensesChart' => [
+                'series' => \App\Services\Expenses::yearlyExpensesChartSeries()
             ],
         ]);
     }
