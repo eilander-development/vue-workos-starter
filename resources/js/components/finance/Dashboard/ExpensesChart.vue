@@ -50,15 +50,15 @@ const chartOptions = {
     plotOptions: {
         bar: {
             horizontal: false,
-            borderRadius: 2,
-            borderRadiusApplication: 'end', // 'around', 'end'
-            borderRadiusWhenStacked: 'last', // 'all', 'last'
-            dataLabels: {
-                total: {
-                    enabled: false,
-                }
-            }
+            columnWidth: '35%',
+            borderRadius: 5,
+            borderRadiusApplication: 'end'
         },
+    },
+    stroke: {
+        show: true,
+        width: 5,
+        colors: ['transparent']
     },
     states: {
       hover: {
@@ -67,11 +67,6 @@ const chartOptions = {
           value: 1,
         },
       },
-    },
-    stroke: {
-      show: false,
-      width: 0,
-      colors: ["transparent"],
     },
     grid: {
       show: false,

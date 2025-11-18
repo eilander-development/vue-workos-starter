@@ -35,8 +35,8 @@ const stats = page.props.stats;
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <stats :stats="stats" />
             </div>
-            <div class="grid gap-4 md:grid-cols-3">
-                <ExpensesChart :yearlyExpensesChart="yearlyExpensesChart" class="md:col-span-2" />
+            <div class="grid gap-4 md:grid-cols-4">
+                <ExpensesChart :yearlyExpensesChart="yearlyExpensesChart" class="md:col-span-3" />
                 <GroupedBudgets :monthlyExpenses="monthlyExpenses" />
             </div>
         </div>
