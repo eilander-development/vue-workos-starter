@@ -116,12 +116,12 @@ const chartOptions = {
 </script>
 
 <template>
-  <Card class="w-full">
-    <CardHeader>
-        <CardTitle>Income/Expenses per month</CardTitle>
-    </CardHeader>
-    <CardContent>
-        <VueApexCharts height="350" :options="chartOptions" :series="props.yearlyExpensesChart.series"/>
-    </CardContent>
-</Card>
+    <Card class="rounded-md shadow-xl">
+        <CardHeader>
+            <CardTitle>Income vs Expenses</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <VueApexCharts height="350" :options="chartOptions" :series="props.yearlyExpensesChart.series"/>
+        </CardContent>
+    </Card>
 </template>

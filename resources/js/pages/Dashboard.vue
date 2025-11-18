@@ -21,8 +21,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const page = usePage();
-const monthlyBudgetExpenses = page.props.monthlyBudgetExpenses;
+const monthlyExpenses = page.props.monthlyExpenses;
 const yearlyExpensesChart = page.props.yearlyExpensesChart;
+const stats = page.props.stats;
 
 </script>
 
@@ -30,15 +31,13 @@ const yearlyExpensesChart = page.props.yearlyExpensesChart;
     <Head title="Dashboard" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div
-            class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-        >
+        <div class="flex flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <stats />
-            </div>  
+                <stats :stats="stats" />
+            </div>
             <div class="grid gap-4 md:grid-cols-3">
-                <GroupedBudgets :budgetExpenses="monthlyBudgetExpenses" />
                 <ExpensesChart :yearlyExpensesChart="yearlyExpensesChart" class="md:col-span-2" />
+                <GroupedBudgets :monthlyExpenses="monthlyExpenses" />
             </div>
         </div>
     </AppLayout>

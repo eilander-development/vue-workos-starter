@@ -14,16 +14,16 @@ import {
 } from '@/components/ui/card';
 
 interface Props {
-  budgetExpenses: Object
+    monthlyExpenses: Object
 }
 
 const props = defineProps<Props>()
 
 function ExpenseBar() {
-  const total = props.budgetExpenses.reduce((sum, item) => sum + item.amount, 0)
+  const total = props.monthlyExpenses.reduce((sum, item) => sum + item.amount, 0)
   let cumulativePercentage = 0
 
-  return props.budgetExpenses.map(item => {
+  return props.monthlyExpenses.map(item => {
     const percentage = (item.amount / total) * 100
     cumulativePercentage += percentage
     return {
@@ -39,9 +39,9 @@ function ExpenseBar() {
 </script>
 
 <template>
-    <Card>
+    <Card class="rounded-md shadow-xl">
         <CardHeader>
-            <CardTitle>Monthly Expenses</CardTitle>
+            <CardTitle>Expenses per budget</CardTitle>
         </CardHeader>
         <CardContent>
             <div class="w-full">
@@ -58,7 +58,7 @@ function ExpenseBar() {
                                     {{ budget.category }}
                                 </span>
                                 <span class="font-bold">
-                                    {{ new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(budget.amount) }}
+                                    {{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.amount) }}
                                 </span>
                                 <span>
                                     {{ budget.percentage.toFixed(0) }}%
@@ -75,7 +75,7 @@ function ExpenseBar() {
                         <div class="text-sm text-gray-500 dark:text-gray-400">{{ budget.category }}</div>
                     </div>
                     <div class="flex items-center gap-4">
-                        <div class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(budget.amount) }}</div>
+                        <div class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.amount) }}</div>
                         <div class="text-sm text-gray-500 dark:text-gray-400">{{ budget.percentage.toFixed(0) }}%</div>
                     </div>
                 </div>

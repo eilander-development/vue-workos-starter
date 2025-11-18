@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-class Expenses
+class Dashboard
 {
     /**
      * Retrieves the budget expenses data for various categories.
@@ -12,7 +12,27 @@ class Expenses
      *
      * @return array A structured array containing the budget expenses details.
      */
-    public static function monthlyBudgetExpenses() : array
+    public static function stats() : array
+    {
+        $income = 3900;
+        $expenses = 3258;
+        return [
+            'income' => $income,
+            'expenses' => $expenses,
+            'left' => $income - $expenses,
+            'budgets' => count(self::monthlyExpenses()),
+        ];
+    }
+
+    /**
+     * Retrieves the budget expenses data for various categories.
+     *
+     * This method provides an array of budget expenses, including category IDs,
+     * names, allocated amounts, and corresponding colors for representation.
+     *
+     * @return array A structured array containing the budget expenses details.
+     */
+    public static function monthlyExpenses() : array
     {
         return [
             ['id' => 1, 'category' => 'Marketing', 'amount' => 800, 'color' => 'bg-green-500'],
