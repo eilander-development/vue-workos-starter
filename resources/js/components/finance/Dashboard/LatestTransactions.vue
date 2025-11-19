@@ -28,22 +28,22 @@ const props = defineProps<Props>()
                 <table class="w-full caption-bottom text-sm">
                     <thead>
                         <tr class="border-b border-slate-900">
-                            <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Budget</th>
-                            <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Datum</th>
-                            <th class="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Omschrijving</th>
-                            <th class="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Bedrag</th>
+                            <th class="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Budget</th>
+                            <th class="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Datum</th>
+                            <th class="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Omschrijving</th>
+                            <th class="h-10 px-4 text-right align-middle font-medium text-muted-foreground">Bedrag</th>
                         </tr>
                     </thead>
                     <tbody>
                     <tr class="border-b border-slate-900 transition-colors hover:bg-muted/50" v-for="transaction in latestTransactions" :key="transaction.id">
-                        <td class="p-4">
+                        <td class="p-2">
                             <Category :color="categories[transaction.categoryId].color"
                                       :icon="categories[transaction.categoryId].icon"
                                       :category="categories[transaction.categoryId].category"  />
                         </td>
-                        <td class="p-4">{{transaction.date}}</td>
-                        <td class="p-4">{{transaction.description}}</td>
-                        <td class="p-4 text-right">
+                        <td class="p-2">{{transaction.date}}</td>
+                        <td class="p-2">{{transaction.description}}</td>
+                        <td class="p-2 text-right">
                             {{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(transaction.amount)}}
                         </td>
                     </tr>
