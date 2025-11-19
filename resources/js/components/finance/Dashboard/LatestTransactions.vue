@@ -24,8 +24,8 @@ const props = defineProps<Props>()
             <CardTitle>Laatste transacties</CardTitle>
         </CardHeader>
         <CardContent class="p-0">
-            <div class="relative w-full overflow-auto">
-                <table class="w-full caption-bottom text-sm">
+            <div class="relative w-full overflow-y-auto max-h-110">
+                <table class="table-auto overflow-scroll w-full text-sm">
                     <thead>
                         <tr class="border-b border-slate-900">
                             <th class="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Budget</th>
