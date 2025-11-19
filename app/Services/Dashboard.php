@@ -5,6 +5,27 @@ namespace App\Services;
 class Dashboard
 {
     /**
+     * Retrieves the latest transactions.
+     *
+     * This method returns an array containing the most recent transactions,
+     * including details such as the transaction ID, amount, category, and date.
+     *
+     * @return array An array of the latest transactions with key details.
+     */
+    public static function latestTransactions() : array
+    {
+        return [
+            [
+                'id' => 1,
+                'amount' => -23.30,
+                'categoryId' => 1,
+                'description' => 'Pizza Palace',
+                'date' => now()->format('d-m-Y'),
+            ],
+        ];
+    }
+
+    /**
      * Retrieves the budget expenses data for various categories.
      *
      * This method provides an array of budget expenses, including category IDs,
@@ -34,12 +55,15 @@ class Dashboard
      */
     public static function monthlyExpenses() : array
     {
-        return [
-            ['id' => 1, 'category' => 'Marketing', 'amount' => 800, 'color' => 'bg-green-500'],
-            ['id' => 2, 'category' => 'Sales', 'amount' => 300, 'color' => 'bg-yellow-500'],
-            ['id' => 3, 'category' => 'Support', 'amount' => 150, 'color' => 'bg-red-500'],
-            ['id' => 3, 'category' => 'Finance', 'amount' => 65, 'color' => 'bg-blue-500'],
-        ];
+        $budgets = collect([
+            ['categoryId' => 1, 'amount' => 500],
+            ['categoryId' => 2, 'amount' => 300],
+            ['categoryId' => 3, 'amount' => 50],
+            ['categoryId' => 4, 'amount' => 489],
+            ['categoryId' => 5, 'amount' => 165],
+        ]);
+
+        return $budgets->sortByDesc('amount')->values()->all();
     }
 
     /**
@@ -111,10 +135,7 @@ class Dashboard
             ],
             [
                 'name' => 'Expenses',
-                // 'data' => [3500, 3600, 3789, 4100, 3456, 3850, 0, 0, 0, 0, 0, 0],
-                // 'color' => 'oklch(50.5% 0.213 27.518)',
                 'color' => 'oklch(44.4% 0.177 26.899)',
-                //'color' => 'oklch(39.6% 0.141 25.723)',
                 'data' => [
                     [
                         'x' => 'Jan',

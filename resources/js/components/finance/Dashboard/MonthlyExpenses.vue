@@ -13,13 +13,16 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
+import Category from '@/components/Category.vue';
+
 interface Props {
-    monthlyExpenses: Object
+    monthlyExpenses: Object,
+    categories: Object,
 }
 
 const props = defineProps<Props>()
 
-function ExpenseBar() {
+function Expenses() {
   const total = props.monthlyExpenses.reduce((sum, item) => sum + item.amount, 0)
   let cumulativePercentage = 0
 
@@ -27,9 +30,10 @@ function ExpenseBar() {
     const percentage = (item.amount / total) * 100
     cumulativePercentage += percentage
     return {
-      category: item.category,
+      category: props.categories[item.categoryId].category,
       amount: item.amount,
-      color: item.color,
+      color: props.categories[item.categoryId].color,
+      icon: props.categories[item.categoryId].icon,
       percentage,
       cumulativePercentage: cumulativePercentage - percentage,
     }
@@ -41,19 +45,19 @@ function ExpenseBar() {
 <template>
     <Card class="rounded-md shadow-xl">
         <CardHeader>
-            <CardTitle>Expenses per budget</CardTitle>
+            <CardTitle>Uitgaven per budget</CardTitle>
         </CardHeader>
         <CardContent>
             <div class="w-full">
                 <div class="mb-4 flex h-2 overflow-hidden rounded bg-gray-100 text-xs">
-                    <template v-for="budget in ExpenseBar()" :key="budget.category">
+                    <template v-for="budget in Expenses()" :key="budget.category">
                         <Popover>
                             <PopoverTrigger as-child>
                                 <div :title="`${budget.category}: €${budget.amount} (${budget.percentage.toFixed(0)}%)`"
                                 :style="`width: ${budget.percentage}%`"
-                                :class="budget.color + ' transition-all duration-500 ease-out'"/>
+                                :class="`bg-${budget.color}-500 transition-all duration-500 ease-out`"/>
                             </PopoverTrigger>
-                            <PopoverContent class="w-50 flex items-center justify-between text-xs text-white" :class="budget.color">
+                            <PopoverContent class="w-50 flex items-center justify-between text-xs text-white" :class="`bg-${budget.color}-500`">
                                 <span>
                                     {{ budget.category }}
                                 </span>
@@ -69,11 +73,8 @@ function ExpenseBar() {
                 </div>
             </div>
             <div>
-                <div v-for="budget in ExpenseBar()" :key="budget.category" class="flex items-center justify-between py-3 border-b border-gray-900">
-                    <div class="flex items-center gap-2">
-                        <div :class="budget.color + ' inline-block h-3 w-3 rounded-full'"></div>
-                        <div class="text-sm text-gray-500 dark:text-gray-400">{{ budget.category }}</div>
-                    </div>
+                <div v-for="budget in Expenses()" :key="budget.category" class="flex items-center justify-between py-3 border-b border-gray-900">
+                    <Category :color="budget.color" :icon="budget.icon" :category="budget.category" />
                     <div class="flex items-center gap-4">
                         <div class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.amount) }}</div>
                         <div class="text-sm text-gray-500 dark:text-gray-400">{{ budget.percentage.toFixed(0) }}%</div>

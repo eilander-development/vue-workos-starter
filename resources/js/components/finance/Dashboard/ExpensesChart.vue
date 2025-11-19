@@ -113,7 +113,7 @@ const chartOptions = {
 <template>
     <Card class="rounded-md shadow-xl">
         <CardHeader>
-            <CardTitle>Income vs Expenses</CardTitle>
+            <CardTitle>Inkomen vs uitgaven</CardTitle>
         </CardHeader>
         <CardContent>
             <VueApexCharts height="350" :options="chartOptions" :series="props.yearlyExpensesChart.series"/>

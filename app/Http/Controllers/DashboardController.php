@@ -18,7 +18,9 @@ class DashboardController extends Controller
     public function index(Request $request): Response
     {
         return Inertia::render('Dashboard', [
+            'categories' => \App\Services\Categories::list(),
             'stats' => \App\Services\Dashboard::stats(),
+            'latestTransactions' => \App\Services\Dashboard::latestTransactions(),
             'monthlyExpenses' => \App\Services\Dashboard::monthlyExpenses(),
             'yearlyExpensesChart' => [
                 'series' => \App\Services\Dashboard::yearlyExpensesChartSeries()

@@ -16,7 +16,7 @@ const props = defineProps<Props>()
                 <TrendingUp class="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-                <p class="text-xs sm:text-sm text-muted-foreground">Income</p>
+                <p class="text-xs sm:text-sm text-muted-foreground">Inkomsten</p>
                 <p class="text-lg sm:text-xl md:text-2xl font-bold">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(stats.income) }}</p>
             </div>
         </CardContent>
@@ -27,7 +27,7 @@ const props = defineProps<Props>()
                 <TrendingDown class="h-6 w-6 text-red-600" />
             </div>
             <div>
-                <p class="text-xs sm:text-sm text-muted-foreground">Expenses</p>
+                <p class="text-xs sm:text-sm text-muted-foreground">Uitgaven</p>
                 <p class="text-lg sm:text-xl md:text-2xl font-bold">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(stats.expenses) }}</p>
             </div>
         </CardContent>
@@ -38,7 +38,7 @@ const props = defineProps<Props>()
                 <PiggyBank class="h-6 w-6 text-yellow-600" />
             </div>
             <div>
-                <p class="text-xs sm:text-sm text-muted-foreground">Left</p>
+                <p class="text-xs sm:text-sm text-muted-foreground">Te besteden</p>
                 <p class="text-lg sm:text-xl md:text-2xl font-bold"
                    :class="{'text-red-400' : stats.left < 0}">
                     {{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(stats.left) }}
