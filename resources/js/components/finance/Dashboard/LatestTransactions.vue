@@ -7,6 +7,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
+import { customScrollbar } from '@/composables/scrollbar';
+
 import Category from '@/components/Category.vue';
 
 interface Props {
@@ -24,7 +26,7 @@ const props = defineProps<Props>()
             <CardTitle>Laatste transacties</CardTitle>
         </CardHeader>
         <CardContent class="p-0">
-            <div class="relative w-full overflow-y-auto max-h-110">
+            <div :class="`${customScrollbar} relative w-full overflow-y-auto max-h-110`">
                 <table class="table-auto overflow-scroll w-full text-sm">
                     <thead>
                         <tr class="border-b border-slate-900">
