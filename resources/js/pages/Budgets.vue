@@ -5,6 +5,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/vue3';
 
 import Category from '@/components/Category.vue';
+import { dynamicBackgroundColor } from '@/composables/colorVariants';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -19,6 +20,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const page = usePage();
 const categories = page.props.categories;
+const selectedCategory = categories[2];
 
 </script>
 
@@ -27,36 +29,35 @@ const categories = page.props.categories;
     <Head title="Budgets" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <main class=" container mx-auto">
-            <div class=" pt-5">
-                <div class="lg:hidden overflow-x-auto pb-2">
-                    <div class="flex gap-4">
-                        <template v-for="budget in categories" :key="budget.id">
-                            <!-- active: border-primary/50 -->
-                            <div class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px]">
-                                <div class="p-4 sm:p-6">
-                                    <div class="flex items-center gap-3 sm:gap-4">
-                                        <Category :color="budget.color" :icon="budget.icon" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="font-medium"  />
-                                        <div class="flex-1">
-                                            <div class="flex items-center justify-between">
-                                                <div>
-                                                    <div class="font-medium text-sm sm:text-base">{{ budget.category }}</div>
-                                                    <div class="text-xs sm:text-sm text-muted-foreground">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</div>
-                                                </div>
+        <main class="p-4">
+            <div class="lg:hidden overflow-x-auto">
+                <div class="flex gap-4">
+                    <template v-for="budget in categories" :key="budget.id">
+                        <!-- active: border-primary/50 -->
+                        <div class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px]">
+                            <div class="p-4 sm:p-6">
+                                <div class="flex items-center gap-3 sm:gap-4">
+                                    <Category :color="budget.color" :icon="budget.icon" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="font-medium"  />
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <div class="font-medium text-sm sm:text-base">{{ budget.category }}</div>
+                                                <div class="text-xs sm:text-sm text-muted-foreground">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </template>
-                    </div>
+                        </div>
+                    </template>
                 </div>
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
                     <div class="hidden lg:block lg:col-span-3 space-y-4">
                         <template v-for="budget in categories" :key="budget.id">
                              <!-- active: border-primary/50 -->
                         <div class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px] sm:w-full">
-                            <div class="p-4 sm:p-6">
+                            <div class="p-4">
                                 <div class="flex items-center gap-3 sm:gap-4">
                                     <Category :color="budget.color" :icon="budget.icon" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="font-medium"  />
                                     <div class="flex-1">
@@ -73,16 +74,16 @@ const categories = page.props.categories;
                         </template>
                     </div>
                     <div class="lg:col-span-9">
-                        <div class="space-y-4 sm:space-y-6">
-                            <div class="bg-card p-4 sm:p-6 rounded-lg">
-                                <h2 class="text-xl sm:text-2xl font-bold">Food &amp; Dining</h2>
+                        <div class="space-y-4">
+                            <div :class="`${dynamicBackgroundColor(selectedCategory.color, true)} rounded-lg border bg-card text-card-foreground shadow-sm p-6`">
+                                <Category :color="selectedCategory.color" :icon="selectedCategory.icon" :category="selectedCategory.category" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="text-xl sm:text-2xl font-bold"  />
                             </div>
                             <div class="rounded-lg border bg-card text-card-foreground shadow-sm">
                                 <div class="p-6 pt-4 sm:pt-6">
                                     <div class="space-y-3 sm:space-y-4">
                                         <div
                                             class="flex items-center justify-between text-xs sm:text-sm text-muted-foreground">
-                                            <div>Spend</div>
+                                            <div>Uitgegeven</div>
                                             <div>Budget</div>
                                         </div>
                                         <div class="flex items-center justify-between">
@@ -91,13 +92,14 @@ const categories = page.props.categories;
                                         </div>
                                         <div aria-valuemax="100" aria-valuemin="0" role="progressbar"
                                             data-state="indeterminate" data-max="100"
-                                            class="relative w-full overflow-hidden rounded-full bg-secondary h-2">
+                                            class="relative w-full overflow-hidden rounded-full bg-slate-100 dark:bg-secondary h-2">
                                             <div data-state="indeterminate" data-max="100"
-                                                class="h-full w-full flex-1 bg-primary transition-all"
+                                                class=""
+                                                 :class="`bg-${selectedCategory.color}-500 h-full w-full flex-1 bg-primary transition-all`"
                                                 style="transform: translateX(-23.4412%);"></div>
                                         </div>
                                         <div class="flex items-center justify-between text-xs sm:text-sm">
-                                            <div class="text-indigo-600">77%</div>
+                                            <div class="">77%</div>
                                             <div class="text-muted-foreground">23%</div>
                                         </div>
                                     </div>
@@ -324,7 +326,6 @@ const categories = page.props.categories;
                         </div>
                     </div>
                 </div>
-            </div>
         </main>
     </AppLayout>
 </template>

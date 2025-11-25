@@ -45,7 +45,7 @@ function Expenses() {
                         <Category :color="budget.color" :icon="budget.icon" :category="budget.category" category-font="font-medium"  />
                         <span class="text-sm text-muted-foreground ml-auto"><span class="text-xs">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.amount)}}</span> / <span class="font-bold">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</span></span>
                     </div>
-                    <div class="relative h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div class="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-secondary">
                         <div :class="`bg-${budget.color}-500 h-full transition-all duration-500 ease-out`"
                              :style="`width: ${budget.percentage}%`"></div>
                     </div>
