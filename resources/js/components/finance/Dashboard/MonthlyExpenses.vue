@@ -16,6 +16,7 @@ import {
 import Category from '@/components/Category.vue';
 
 interface Props {
+    title?: string,
     monthlyExpenses: Object,
     categories: Object,
 }
@@ -34,6 +35,7 @@ function Expenses() {
       amount: item.amount,
       color: props.categories[item.categoryId].color,
       icon: props.categories[item.categoryId].icon,
+      slug: props.categories[item.categoryId].slug,
       percentage,
       cumulativePercentage: cumulativePercentage - percentage,
     }
@@ -45,7 +47,7 @@ function Expenses() {
 <template>
     <Card class="rounded-md shadow-xl">
         <CardHeader>
-            <CardTitle>Uitgaven per budget</CardTitle>
+            <CardTitle v-if="props.title">{{ props.title }}</CardTitle>
         </CardHeader>
         <CardContent>
             <div class="w-full">
@@ -74,7 +76,7 @@ function Expenses() {
             </div>
             <div>
                 <div v-for="budget in Expenses()" :key="budget.category" class="flex items-center justify-between py-3 border-b border-gray-900">
-                    <Category :color="budget.color" :icon="budget.icon" :category="budget.category" />
+                    <Category :color="budget.color" :icon="budget.icon" :slug="budget.slug" :category="budget.category" />
                     <div class="flex items-center gap-4">
                         <div class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.amount) }}</div>
                         <div class="text-sm text-gray-500 dark:text-gray-400">{{ budget.percentage.toFixed(0) }}%</div>

@@ -9,7 +9,7 @@ use Laravel\WorkOS\Http\Middleware\ValidateSessionWithWorkOS;
 Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('home');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::get('/budgets', [BudgetsController::class, 'index'])->name('budgets');
+    Route::get('/budgets/{category?}', [BudgetsController::class, 'index'])->name('budgets');
 });
 
 require __DIR__.'/settings.php';

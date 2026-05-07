@@ -22,6 +22,7 @@ class DashboardController extends Controller
             'stats' => \App\Services\Dashboard::stats(),
             'latestTransactions' => \App\Services\Dashboard::latestTransactions(),
             'monthlyExpenses' => \App\Services\Dashboard::monthlyExpenses(),
+            'monthlyBudgets' => \App\Services\Dashboard::monthlyBudgets(),
             'yearlyExpensesChart' => [
                 'series' => \App\Services\Dashboard::yearlyExpensesChartSeries()
             ],

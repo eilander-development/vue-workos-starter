@@ -23,6 +23,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const page = usePage();
 const categories = page.props.categories;
 const monthlyExpenses = page.props.monthlyExpenses;
+const monthlyBudgets = page.props.monthlyBudgets;
 const yearlyExpensesChart = page.props.yearlyExpensesChart;
 const stats = page.props.stats;
 const latestTransactions = page.props.latestTransactions;
@@ -37,9 +38,10 @@ const latestTransactions = page.props.latestTransactions;
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <Stats :stats="stats" />
             </div>
-            <div class="grid gap-4 md:grid-cols-4">
+            <div class="grid gap-4 md:grid-cols-5">
                 <ExpensesChart :yearlyExpensesChart="yearlyExpensesChart" class="md:col-span-3" />
-                <MonthlyExpenses :monthlyExpenses="monthlyExpenses" :categories="categories" />
+                <MonthlyExpenses :monthlyExpenses="monthlyBudgets" :categories="categories" title="Begroot per budget" />
+                <MonthlyExpenses :monthlyExpenses="monthlyExpenses" :categories="categories" title="Uitgaven per budget" />
             </div>
             <div class="grid gap-4 md:grid-cols-4">
                 <MonthlyBudgets :monthlyExpenses="monthlyExpenses" :categories="categories" />

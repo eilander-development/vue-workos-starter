@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { home, budgets } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, usePage, Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 import Category from '@/components/Category.vue';
@@ -21,11 +21,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const page = usePage();
 const categories = page.props.categories;
-let selectedCategory = ref(categories[1]);
-
-function selectCategory(categoryId) {
-    selectedCategory.value = categories[categoryId];
-}
+const selectedCategory = page.props.selected;
 
 </script>
 
@@ -35,27 +31,28 @@ function selectCategory(categoryId) {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <main class="p-4">
-            <div class="lg:hidden overflow-x-auto">
+            <div class="lg:hidden overflow-x-auto mb-1">
                 <div class="flex gap-4">
                     <template v-for="budget in categories" :key="budget.id">
                         <!-- active: border-primary/50 -->
-                        <div @click="selectCategory(budget.id)"
-                             :class="{'border-primary/50' : selectedCategory.id == budget.id}"
-                             class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px]">
-                            <div class="p-4 sm:p-6">
-                                <div class="flex items-center gap-3 sm:gap-4">
-                                    <Category :color="budget.color" :icon="budget.icon" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="font-medium"  />
-                                    <div class="flex-1">
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <div class="font-medium text-sm sm:text-base">{{ budget.category }}</div>
-                                                <div class="text-xs sm:text-sm text-muted-foreground">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</div>
+                        <Link :href="`/budgets/${budget.slug}`" as="div">
+                            <div :class="[selectedCategory.id == budget.id ? dynamicBackgroundColor(selectedCategory.color, true) : '']"
+                                class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px]">
+                                <div class="p-4 sm:p-6">
+                                    <div class="flex items-center gap-3 sm:gap-4">
+                                        <Category :color="budget.color" :icon="budget.icon" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="font-medium"  />
+                                        <div class="flex-1">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <div class="font-medium text-sm sm:text-base">{{ budget.category }}</div>
+                                                    <div class="text-xs sm:text-sm text-muted-foreground">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </Link>
                     </template>
                 </div>
             </div>
@@ -63,23 +60,24 @@ function selectCategory(categoryId) {
                     <div class="hidden lg:block lg:col-span-3 space-y-4">
                         <template v-for="budget in categories" :key="budget.id">
                              <!-- active: border-primary/50 -->
-                        <div @click="selectCategory(budget.id)"
-                             :class="{'border-primary/50' : selectedCategory.id == budget.id}"
-                             class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px] sm:w-full">
-                            <div class="p-4">
-                                <div class="flex items-center gap-3 sm:gap-4">
-                                    <Category :color="budget.color" :icon="budget.icon" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="font-medium"  />
-                                    <div class="flex-1">
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <div class="font-medium text-sm sm:text-base">{{ budget.category }}</div>
-                                                <div class="text-xs sm:text-sm text-muted-foreground">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</div>
+                            <Link :href="`/budgets/${budget.slug}`" as="div">
+                                <div :class="[selectedCategory.id == budget.id ? dynamicBackgroundColor(selectedCategory.color, true) : '']"
+                                    class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px] sm:w-full">
+                                    <div class="p-4">
+                                        <div  class="flex items-center gap-3 sm:gap-4">
+                                            <Category :color="budget.color" :icon="budget.icon" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="font-medium"  />
+                                            <div class="flex-1">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <div class="font-medium text-sm sm:text-base">{{ budget.category }}</div>
+                                                        <div class="text-xs sm:text-sm text-muted-foreground">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            </Link>
                         </template>
                     </div>
                     <div class="lg:col-span-9">
@@ -96,20 +94,20 @@ function selectCategory(categoryId) {
                                             <div>Budget</div>
                                         </div>
                                         <div class="flex items-center justify-between">
-                                            <div class="text-lg sm:text-2xl font-bold">$650.75</div>
-                                            <div class="text-lg sm:text-2xl font-bold">$850</div>
+                                            <div class="text-lg sm:text-2xl font-bold">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.spend)}}</div>
+                                            <div class="text-lg sm:text-2xl font-bold">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.budget)}}</div>
                                         </div>
                                         <div aria-valuemax="100" aria-valuemin="0" role="progressbar"
                                             data-state="indeterminate" data-max="100"
-                                            class="relative w-full overflow-hidden rounded-full bg-slate-100 dark:bg-secondary h-2">
+                                            class="relative w-full overflow-hidden rounded-full h-2"
+                                            :class="`bg-${selectedCategory.color}-500`">
                                             <div data-state="indeterminate" data-max="100"
-                                                class=""
-                                                 :class="`bg-${selectedCategory.color}-500 h-full w-full flex-1 bg-primary transition-all`"
-                                                style="transform: translateX(-23.4412%);"></div>
+                                                class="h-full w-full flex-1 transition-all bg-slate-100 dark:bg-secondary"
+                                                :style="`transform: translateX(${Math.round((selectedCategory.spend / selectedCategory.budget) * 100)}% );`"></div>
                                         </div>
                                         <div class="flex items-center justify-between text-xs sm:text-sm">
-                                            <div class="">77%</div>
-                                            <div class="text-muted-foreground">23%</div>
+                                            <div class="">{{ Math.round((selectedCategory.spend / selectedCategory.budget) * 100) }}%</div>
+                                            <div class="text-muted-foreground">{{ Math.round((1 - (selectedCategory.spend / selectedCategory.budget)) * 100) }}%</div>
                                         </div>
                                     </div>
                                 </div>
@@ -118,33 +116,71 @@ function selectCategory(categoryId) {
                                 <div class="rounded-lg border bg-card text-card-foreground shadow-sm">
                                     <div class="p-4 sm:p-6">
                                         <div class="space-y-1">
-                                            <div class="text-xs sm:text-sm text-muted-foreground">Last Month</div>
-                                            <div class="text-lg sm:text-2xl font-bold">$820.5</div>
+                                            <div class="text-xs sm:text-sm text-muted-foreground">Budget</div>
+                                            <div class="text-lg sm:text-2xl font-bold">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.budget) }}</div>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="rounded-lg border bg-card text-card-foreground shadow-sm">
                                     <div class="p-4 sm:p-6">
                                         <div class="space-y-1">
-                                            <div class="text-xs sm:text-sm text-muted-foreground">Expenses</div>
-                                            <div class="text-lg sm:text-2xl font-bold">$650.75</div>
+                                            <div class="text-xs sm:text-sm text-muted-foreground">Uitgegeven</div>
+                                            <div class="text-lg sm:text-2xl font-bold">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.spend) }}</div>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="rounded-lg border bg-card text-card-foreground shadow-sm">
                                     <div class="p-4 sm:p-6">
                                         <div class="space-y-1">
-                                            <div class="text-xs sm:text-sm text-muted-foreground">Savings</div>
-                                            <div class="text-lg sm:text-2xl font-bold">$169.75</div>
+                                            <div class="text-xs sm:text-sm text-muted-foreground">Te besteden</div>
+                                            <div class="text-lg sm:text-2xl font-bold">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.remaining) }}</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="rounded-lg border bg-card text-card-foreground shadow-sm">
                                 <div class="flex flex-col space-y-1.5 p-6 pb-2 pt-4 px-4 sm:pb-4 sm:pt-6 sm:px-6">
-                                    <div class="font-medium tracking-tight text-base sm:text-lg">Monthly Spending Trend
+                                        <div class="flex items-center gap-4">
+                                        <table class="table-auto overflow-scroll w-full text-sm">
+                                            <thead>
+                                                <tr class="border-b border-slate-900">
+                                                    <th class="h-10 px-4 text-left font-medium">Omschrijving</th>
+                                                    <th class="h-10 px-4 text-left font-medium">Betaald op</th>
+                                                    <th class="h-10 px-4 text-right font-medium">Budget</th>
+                                                    <th class="h-10 px-4 text-right font-medium">Betaald</th>
+                                                    <th class="h-10 px-4 text-right font-medium">Nog te betalen</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template v-for="budget in selectedCategory.budgets" :key="budget.id">
+                                                <tr class="border-b border-slate-900 transition-colors hover:bg-muted/50 text-sm text-muted-foreground">
+                                                    <td class="px-4 py-2">{{ budget.name }}</td>
+                                                    <td class="px-4 py-2">07-05-2026</td>
+                                                    <td class="px-4 py-2 text-right">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget) }}</td>
+                                                    <td class="px-4 py-2 text-right">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.spend) }}</td>
+                                                    <td class="px-4 py-2 text-right" :class="{'text-green-600': budget.budget - budget.spend > 0, 'text-red-600': budget.remaining < 0}">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.remaining) }}</td>
+                                                </tr>
+                                                </template>
+                                                <tr class="border-b border-slate-900 transition-colors bg-muted">
+                                                    <td class="h-10 px-4 font-black">Totaal</td>
+                                                    <td class="h-10 px-4">&nbsp;</td>
+                                                    <td class="h-10 px-4 text-right">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.budget) }}</td>
+                                                    <td class="h-10 px-4 text-right">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.spend) }}</td>
+                                                    <td class="h-10 px-4 text-right">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.unpaid) }}</td>
+                                                </tr>
+                                                <tr v-if="selectedCategory.overdue > 0" class="border-b border-slate-900 transition-colors bg-red-600">
+                                                    <td class="h-10 px-4 font-black">Teveel betaald</td>
+                                                    <td class="h-10 px-4">&nbsp;</td>
+                                                    <td class="h-10 px-4 text-right">&nbsp;</td>
+                                                    <td class="h-10 px-4 text-right">&nbsp;</td>
+                                                    <td class="h-10 px-4 text-right">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(selectedCategory.overdue) }}</td>
+                                                </tr>
+                                            </tbody>    
+                                        </table>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="rounded-lg border bg-card text-card-foreground shadow-sm">
                                 <div class="p-6 pt-0 px-2 sm:px-6">
                                     <div class="h-[200px] sm:h-[250px] md:h-[300px]">
                                         <div class="recharts-responsive-container"

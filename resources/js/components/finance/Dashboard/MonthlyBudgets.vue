@@ -18,13 +18,14 @@ const props = defineProps<Props>()
 
 function Expenses() {
     return props.monthlyExpenses.map(item => {
-        const percentage = (item.amount / props.categories[item.categoryId].budget) * 100
+        const percentage = (props.categories[item.categoryId].spend / props.categories[item.categoryId].budget) * 100
         return {
             category: props.categories[item.categoryId].category,
-            amount: item.amount,
             color: props.categories[item.categoryId].color,
             budget: props.categories[item.categoryId].budget,
+            spend: props.categories[item.categoryId].spend,
             icon: props.categories[item.categoryId].icon,
+            slug: props.categories[item.categoryId].slug,
             percentage,
         }
     })
@@ -42,8 +43,8 @@ function Expenses() {
             <template v-for="budget in Expenses()" :key="budget.category">
                 <div class="space-y-3">
                     <div class="flex items-center gap-3">
-                        <Category :color="budget.color" :icon="budget.icon" :category="budget.category" category-font="font-medium"  />
-                        <span class="text-sm text-muted-foreground ml-auto"><span class="text-xs">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.amount)}}</span> / <span class="font-bold">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</span></span>
+                        <Category :color="budget.color" :icon="budget.icon" :slug="budget.slug" :category="budget.category" category-font="font-medium"  />
+                        <span class="text-sm text-muted-foreground ml-auto"><span class="text-xs">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.spend)}}</span> / <span class="font-bold">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</span></span>
                     </div>
                     <div class="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-secondary">
                         <div :class="`bg-${budget.color}-500 h-full transition-all duration-500 ease-out`"

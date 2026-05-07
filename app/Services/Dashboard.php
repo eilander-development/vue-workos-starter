@@ -130,17 +130,44 @@ class Dashboard
      *
      * @return array A structured array containing the budget expenses details.
      */
+    public static function monthlyBudgets() : array
+    {
+        $budgets = collect([]);
+
+        $categories = \App\Services\Categories::list();
+
+        foreach ($categories as $category) {
+            $budgets->push([
+                'categoryId' => $category['id'],
+                'amount' => $category['budget'],
+            ]);
+        }
+
+        return collect($budgets)->sortByDesc('amount')->values()->all();
+    }
+
+    /**
+     * Retrieves the budget expenses data for various categories.
+     *
+     * This method provides an array of budget expenses, including category IDs,
+     * names, allocated amounts, and corresponding colors for representation.
+     *
+     * @return array A structured array containing the budget expenses details.
+     */
     public static function monthlyExpenses() : array
     {
-        $budgets = collect([
-            ['categoryId' => 1, 'amount' => 500],
-            ['categoryId' => 2, 'amount' => 300],
-            ['categoryId' => 3, 'amount' => 50],
-            ['categoryId' => 4, 'amount' => 489],
-            ['categoryId' => 5, 'amount' => 165],
-        ]);
+        $budgets = collect([]);
 
-        return $budgets->sortByDesc('amount')->values()->all();
+        $categories = \App\Services\Categories::list();
+
+        foreach ($categories as $category) {
+            $budgets->push([
+                'categoryId' => $category['id'],
+                'amount' => $category['spend'],
+            ]);
+        }
+
+        return collect($budgets)->sortByDesc('amount')->values()->all();
     }
 
     /**

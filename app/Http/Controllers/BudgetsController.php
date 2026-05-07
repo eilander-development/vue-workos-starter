@@ -15,10 +15,13 @@ class BudgetsController extends Controller
     /**
      * Show the user's profile settings page.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, $category = null): Response
     {
+        $categories = \App\Services\Categories::list();
+
         return Inertia::render('Budgets', [
-            'categories' => \App\Services\Categories::list(),
+            'categories' => $categories,
+            'selected' => collect($categories)->firstWhere('slug', $category) ?? $categories[1],
         ]);
     }
 }
