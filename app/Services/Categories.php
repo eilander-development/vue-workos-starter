@@ -15,11 +15,21 @@ class Categories
     public static function list() : array
     {
         return [
-            1 => ['id' => 1, 'category' => 'Eten/drinken', 'color' => 'red', 'icon' => 'Salad', 'budget' => 550],
-            2 => ['id' => 2, 'category' => 'Vervoer', 'color' => 'yellow', 'icon' => 'Car', 'budget' => 480],
-            3 => ['id' => 3, 'category' => 'Huisdieren', 'color' => 'indigo', 'icon' => 'Cat', 'budget' => 50],
-            4 => ['id' => 4, 'category' => 'Woning', 'color' => 'blue', 'icon' => 'House', 'budget' => 1680],
-            5 => ['id' => 5, 'category' => 'Verzekeringen', 'color' => 'orange', 'icon' => 'ShieldAlert', 'budget' => 190],
+            1 => ['id' => 1, 'category' => 'Eten/drinken', 'color' => 'red', 'icon' => 'Salad', 'budget' => 550, 'budgets' => [
+                ['id' => 1, 'name' => 'Eten/drinken', 'amount' => 550],
+            ]],
+            2 => ['id' => 2, 'category' => 'Vervoer', 'color' => 'yellow', 'icon' => 'Car', 'budget' => 480, 'budgets' => [
+                ['id' => 1, 'name' => 'Wegenbelasting', 'amount' => 550],
+            ]],
+            3 => ['id' => 3, 'category' => 'Huisdieren', 'color' => 'indigo', 'icon' => 'Cat', 'budget' => 50, 'budgets' => [
+                ['id' => 1, 'name' => 'Eten/drinken', 'amount' => 550],
+            ]],
+            4 => ['id' => 4, 'category' => 'Woning', 'color' => 'blue', 'icon' => 'House', 'budget' => 1680, 'budgets' => [
+                ['id' => 1, 'name' => 'Eten/drinken', 'amount' => 550],
+            ]],
+            5 => ['id' => 5, 'category' => 'Verzekeringen', 'color' => 'orange', 'icon' => 'ShieldAlert', 'budget' => 190, 'budgets' => [
+                ['id' => 1, 'name' => 'Eten/drinken', 'amount' => 550],
+            ]],
         ];
     }
 }
