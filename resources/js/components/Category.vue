@@ -21,7 +21,7 @@ const iconContainerSize = props.iconContainerSize ?? 'p-2';
 </script>
 
 <template>
-    <Link :href="`/budgets/${props.slug}`" as="div" class="cursor-pointer">
+    <Link :href="`/expenses/${props.slug}`" as="div" class="cursor-pointer">
         <div class="flex items-center gap-2">
             <div :class="`${dynamicBackgroundColor(props.color, true)} ${iconContainerSize} rounded-full`">
                 <Icon :name="props.icon" :class="`${dynamicTextColor(props.color)} ${iconSize}`" />

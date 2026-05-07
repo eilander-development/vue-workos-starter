@@ -10,7 +10,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Laravel\WorkOS\Http\Requests\AuthKitAccountDeletionRequest;
 
-class BudgetsController extends Controller
+class ExpensesController extends Controller
 {
     /**
      * Show the user's profile settings page.
@@ -19,7 +19,7 @@ class BudgetsController extends Controller
     {
         $categories = \App\Services\Categories::list();
 
-        return Inertia::render('Budgets', [
+        return Inertia::render('Expenses', [
             'categories' => $categories,
             'selected' => collect($categories)->firstWhere('slug', $category) ?? $categories[1],
         ]);

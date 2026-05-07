@@ -118,7 +118,7 @@ class Dashboard
             'income' => $income,
             'expenses' => $expenses,
             'left' => $income - $expenses,
-            'budgets' => count(self::monthlyExpenses()),
+            'budgets' => count(\App\Services\Categories::list()),
         ];
     }
 
@@ -130,7 +130,7 @@ class Dashboard
      *
      * @return array A structured array containing the budget expenses details.
      */
-    public static function monthlyBudgets() : array
+    public static function monthlyExpensesBudgets() : array
     {
         $budgets = collect([]);
 
@@ -154,7 +154,7 @@ class Dashboard
      *
      * @return array A structured array containing the budget expenses details.
      */
-    public static function monthlyExpenses() : array
+    public static function monthlyExpensesSpend() : array
     {
         $budgets = collect([]);
 

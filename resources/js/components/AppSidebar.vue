@@ -11,10 +11,10 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { home, budgets } from '@/routes';
+import { home, expenses } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, ChartPie } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Banknote, PiggyBank, Euro, Wallet } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -22,11 +22,25 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: home(),
         icon: LayoutGrid,
+        color: 'white',
     },
     {
-        title: 'Budgets',
-        href: budgets(),
-        icon: ChartPie,
+        title: 'Uitgaven',
+        href: expenses(),
+        icon: Wallet,
+        color: 'white',
+    },
+    {
+        title: 'Inkomsten',
+        href: expenses(),
+        icon: Euro,
+        color: 'white',
+    },
+    {
+        title: 'Sparen',
+        href: expenses(),
+        icon: PiggyBank,
+        color: 'white',
     },
 ];
 
@@ -35,16 +49,19 @@ const footerNavItems: NavItem[] = [
         title: 'Frontend components',
         href: 'https://www.shadcn-vue.com',
         icon: Folder,
+        color: 'white',
     },
     {
         title: 'What To Build',
         href: 'https://preview.themeforest.net/item/evank-tailwind-css-nextjs-admin-template/full_screen_preview/57881050',
         icon: BookOpen,
+        color: 'white',
     },
     {
         title: 'Icons',
         href: 'https://lucide.dev/icons/',
         icon: BookOpen,
+        color: 'white',
     },
 ];
 </script>

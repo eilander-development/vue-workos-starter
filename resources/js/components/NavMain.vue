@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
     SidebarGroup,
-    SidebarGroupLabel,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
@@ -28,7 +27,7 @@ const page = usePage();
                     :tooltip="item.title"
                 >
                     <Link :href="item.href">
-                        <component :is="item.icon" />
+                        <component :is="item.icon" :color="item.color" />
                         <span>{{ item.title }}</span>
                     </Link>
                 </SidebarMenuButton>

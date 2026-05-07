@@ -22,8 +22,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const page = usePage();
 const categories = page.props.categories;
-const monthlyExpenses = page.props.monthlyExpenses;
-const monthlyBudgets = page.props.monthlyBudgets;
+const monthlyExpensesSpend = page.props.monthlyExpenses.spend;
+const monthlyExpensesBudgets = page.props.monthlyExpenses.budgets;
 const yearlyExpensesChart = page.props.yearlyExpensesChart;
 const stats = page.props.stats;
 const latestTransactions = page.props.latestTransactions;
@@ -40,11 +40,11 @@ const latestTransactions = page.props.latestTransactions;
             </div>
             <div class="grid gap-4 md:grid-cols-5">
                 <ExpensesChart :yearlyExpensesChart="yearlyExpensesChart" class="md:col-span-3" />
-                <MonthlyExpenses :monthlyExpenses="monthlyBudgets" :categories="categories" title="Begroot per budget" />
-                <MonthlyExpenses :monthlyExpenses="monthlyExpenses" :categories="categories" title="Uitgaven per budget" />
+                <MonthlyExpenses :monthlyExpenses="monthlyExpensesBudgets" :categories="categories" title="Begroot per budget" />
+                <MonthlyExpenses :monthlyExpenses="monthlyExpensesSpend" :categories="categories" title="Uitgaven per budget" />
             </div>
             <div class="grid gap-4 md:grid-cols-4">
-                <MonthlyBudgets :monthlyExpenses="monthlyExpenses" :categories="categories" />
+                <MonthlyBudgets :monthlyExpenses="monthlyExpensesSpend" :categories="categories" />
                 <LatestTransactions :latestTransactions="latestTransactions" :categories="categories" class="md:col-span-3" />
             </div>
         </div>

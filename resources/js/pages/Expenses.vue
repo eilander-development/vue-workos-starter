@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { home, budgets } from '@/routes';
+import { home, expenses } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage, Link } from '@inertiajs/vue3';
 
-import Budget from '@/components/finance/Budgets/Budget.vue';
+import Budget from '@/components/finance/Expenses/Budget.vue';
 import Category from '@/components/Category.vue';
-import Categories from '@/components/finance/Budgets/Categories.vue';
-import Stats from '@/components/finance/Budgets/Stats.vue';
-import Progress from '@/components/finance/Budgets/Progress.vue';
+import Categories from '@/components/finance/Expenses/Categories.vue';
+import Stats from '@/components/finance/Expenses/Stats.vue';
+import Progress from '@/components/finance/Expenses/Progress.vue';
 import { dynamicBackgroundColor } from '@/composables/colorVariants';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -17,8 +17,8 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: home().url,
     },
     {
-        title: 'Budgets',
-        href: budgets().url,
+        title: 'Uitgaven',
+        href: expenses().url,
     },
 ];
 
@@ -30,7 +30,7 @@ const selectedCategory = page.props.selected;
 
 <template>
 
-    <Head title="Budgets" />
+    <Head title="Uitgaven" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <main class="p-4">
@@ -38,7 +38,7 @@ const selectedCategory = page.props.selected;
                 <div class="flex gap-4">
                     <template v-for="budget in categories" :key="budget.id">
                         <!-- active: border-primary/50 -->
-                        <Link :href="`/budgets/${budget.slug}`" as="div">
+                        <Link :href="`/expenses/${budget.slug}`" as="div">
                             <div :class="[selectedCategory.id == budget.id ? dynamicBackgroundColor(selectedCategory.color, true) : '']"
                                 class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px]">
                                 <Budget :budget="budget" />
@@ -51,7 +51,7 @@ const selectedCategory = page.props.selected;
                     <div class="hidden lg:block lg:col-span-3 space-y-4">
                         <template v-for="budget in categories" :key="budget.id">
                              <!-- active: border-primary/50 -->
-                            <Link :href="`/budgets/${budget.slug}`" as="div">
+                            <Link :href="`/expenses/${budget.slug}`" as="div">
                                 <div :class="[selectedCategory.id == budget.id ? dynamicBackgroundColor(selectedCategory.color, true) : '']"
                                     class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px] sm:w-full">
                                    <Budget :budget="budget" />
