@@ -8,7 +8,7 @@ interface Props {
     icon?: string;
     category?: string;
     categoryFont?: string;
-    iconSize?: string;
+    slug?: string;
     iconSize?: string;
     iconContainerSize?: string;
 }

@@ -41,6 +41,7 @@ const props = defineProps<Props>()
                         <td class="p-2">
                             <Category :color="categories[transaction.categoryId].color"
                                       :icon="categories[transaction.categoryId].icon"
+                                      :slug="categories[transaction.categoryId].slug"
                                       :category="categories[transaction.categoryId].category"  />
                         </td>
                         <td class="p-2">{{transaction.date}}</td>
