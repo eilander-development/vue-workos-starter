@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Filters from '@/components/finance/Transactions/Filters.vue';
 import { home, transactions } from '@/routes';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type TransactionFilter } from '@/types';
 import { Head, usePage } from '@inertiajs/vue3';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -17,15 +17,14 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-type ActiveFilter = 'all' | 'expenses' | 'income' | 'savings';
 const page = usePage();
 const categories = page.props.categories;
-const activeFilter = ref<ActiveFilter>('all');
-const search = ref('');
+const activeFilter = ref<TransactionFilter>('all');
+const search = defineModel<string>({ required: false });
 
 // Doe iets wanneer de ouder de verandering opmerkt
-watch(activeFilter, (nieuwFilter) => {
-  activeFilter.value = nieuwFilter;
+watch(activeFilter, (value) => {
+  activeFilter.value = value;
 });
 
 </script>

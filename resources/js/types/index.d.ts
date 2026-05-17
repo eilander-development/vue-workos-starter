@@ -1,6 +1,8 @@
 import { InertiaLinkProps } from '@inertiajs/vue3';
 import type { LucideIcon } from 'lucide-vue-next';
 
+export type TransactionFilter = 'all' | 'expenses' | 'income' | 'savings';
+
 export interface Auth {
     user: User;
 }

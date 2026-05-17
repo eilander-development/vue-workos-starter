@@ -2,9 +2,10 @@
 import { watch } from 'vue';
 import { useFilters } from '@/composables/finance/Transactions/useFilters';
 import { PiggyBank, Euro, Wallet } from 'lucide-vue-next';
+import { type TransactionFilter } from '@/types';
 
 // Maak een v-model binding aan
-const model = defineModel<'all' | 'expenses' | 'income' | 'savings'>({ required: true });
+const model = defineModel<TransactionFilter>({ required: true });
 
 const { activeFilter, setActiveFilter } = useFilters();
 

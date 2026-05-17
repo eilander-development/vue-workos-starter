@@ -1,19 +1,18 @@
 import { onMounted, ref, defineEmits } from 'vue';
+import { type TransactionFilter } from '@/types';
 
-type ActiveFilter = 'all' | 'expenses' | 'income' | 'savings';
-
-const activeFilter = ref<ActiveFilter>('all');
+const activeFilter = ref<TransactionFilter>('all');
 const emit = defineEmits(['filterChanged']);
 
 export function useFilters() {
     onMounted(() => {
-        const savedTab = localStorage.getItem('activeFilter') as ActiveFilter | null;
+        const savedTab = localStorage.getItem('activeFilter') as TransactionFilter | null;
         if (savedTab) {
             activeFilter.value = savedTab;
         }
     });
 
-    function setActiveFilter(value: ActiveFilter) {
+    function setActiveFilter(value: TransactionFilter) {
         activeFilter.value = value;
         localStorage.setItem('activeFilter', value);
         
