@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { home, expenses } from '@/routes';
+import { home, income } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage, Link } from '@inertiajs/vue3';
 
@@ -17,8 +17,8 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: home().url,
     },
     {
-        title: 'Uitgaven',
-        href: expenses().url,
+        title: 'Inkomsten',
+        href: income().url,
     },
 ];
 
@@ -30,7 +30,7 @@ const selectedCategory = page.props.selected;
 
 <template>
 
-    <Head title="Uitgaven" />
+    <Head title="Inkomsten" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <main class="p-4">

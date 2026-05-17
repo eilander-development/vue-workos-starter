@@ -11,7 +11,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { home, expenses } from '@/routes';
+import { home, expenses, income, savings, transactions } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
 import { BookOpen, Folder, LayoutGrid, Banknote, PiggyBank, Euro, Wallet } from 'lucide-vue-next';
@@ -32,14 +32,20 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Inkomsten',
-        href: expenses(),
+        href: income(),
         icon: Euro,
         color: 'white',
     },
     {
         title: 'Sparen',
-        href: expenses(),
+        href: savings(),
         icon: PiggyBank,
+        color: 'white',
+    },
+    {
+        title: 'Transacties',
+        href: transactions(),
+        icon: Banknote,
         color: 'white',
     },
 ];
