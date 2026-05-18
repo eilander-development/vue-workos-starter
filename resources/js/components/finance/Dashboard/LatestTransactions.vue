@@ -72,7 +72,7 @@ const props = defineProps<Props>();
                                     "
                                     :category="
                                         categories[transaction.categoryId]
-                                            .category
+                                            .name
                                     "
                                 />
                             </td>

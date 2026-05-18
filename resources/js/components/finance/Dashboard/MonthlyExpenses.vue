@@ -28,10 +28,10 @@ function Expenses() {
   let cumulativePercentage = 0
 
   return props.monthlyExpenses.map(item => {
-    const percentage = (item.amount / total) * 100
-    cumulativePercentage += percentage
+    const percentage = (item.amount / total) * 100;
+    cumulativePercentage += percentage;
     return {
-      category: props.categories[item.categoryId].category,
+      name: props.categories[item.categoryId].name ?? 'Onbekend',
       amount: item.amount,
       color: props.categories[item.categoryId].color,
       icon: props.categories[item.categoryId].icon,

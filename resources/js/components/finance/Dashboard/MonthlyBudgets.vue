@@ -20,7 +20,7 @@ function Expenses() {
     return props.monthlyExpenses.map(item => {
         const percentage = (props.categories[item.categoryId].spend / props.categories[item.categoryId].budget) * 100
         return {
-            category: props.categories[item.categoryId].category,
+            category: props.categories[item.categoryId].name,
             color: props.categories[item.categoryId].color,
             budget: props.categories[item.categoryId].budget,
             spend: props.categories[item.categoryId].spend,

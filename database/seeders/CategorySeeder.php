@@ -30,6 +30,33 @@ class CategorySeeder extends Seeder
                     ['name' => 'Wegenbelasting', 'budget' => 124, 'spend' => 124],
                 ],
             ],
+            [
+                'name' => 'Huisdieren',
+                'slug' => 'huisdieren',
+                'icon' => 'Cat',
+                'color' => 'indigo',
+                'budgets' => [
+                    ['name' => 'Timmie', 'budget' => 550, 'spend' => 0],
+                ],
+            ],
+            [
+                'name' => 'Woning',
+                'slug' => 'woning',
+                'icon' => 'House',
+                'color' => 'green',
+                'budgets' => [
+                    ['name' => 'Eten/drinken', 'budget' => 550, 'spend' => 0],
+                ],
+            ],
+            [
+                'name' => 'Verzekeringen',
+                'slug' => 'verzekeringen',
+                'icon' => 'ShieldAlert',
+                'color' => 'orange',
+                'budgets' => [
+                    ['name' => 'Eten/drinken', 'budget' => 550, 'spend' => 0],
+                ],
+            ],
         ];
 
         foreach ($categories as $category) {
