@@ -14,7 +14,24 @@ class TransactionsController extends Controller
      */
     public function index(Request $request): Response|JsonResponse
     {
-        $transactions = [];
+        $transactions = [
+            [
+                'id' => 1,
+                'amount' => -23.30,
+                'categoryId' => 1,
+                'budgetId' => 1,
+                'description' => 'Pizza Palace',
+                'date' => now()->format('d-m-Y'),
+            ],
+            [
+                'id' => 2,
+                'amount' => +53.30,
+                'categoryId' => 2,
+                'budgetId' => 1,
+                'description' => 'Belastingdienst',
+                'date' => now()->format('d-m-Y'),
+            ]
+        ];
         if ($request->wantsJson()) {
             return response()->json([
                 'filters' => $request->only(['search', 'type']),

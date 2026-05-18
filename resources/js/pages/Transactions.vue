@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import Filters from '@/components/finance/Transactions/Filters.vue';
+import Category from '@/components/Category.vue';
 import { useLiveSearch } from '@/composables/useLiveSearch';
+import { customScrollbar } from '@/composables/scrollbar';
 import { index } from '@/actions/App/Http/Controllers/TransactionsController';
 import { home, transactions } from '@/routes';
 import { type BreadcrumbItem, type TransactionFilter } from '@/types';
@@ -22,6 +24,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const page = usePage();
+const categories = page.props.categories;
 const filters = ref(page.props.filters || []);
 const transactionList = ref(page.props.transactions || []);
 const activeFilter = ref<TransactionFilter>(page.props.filters?.type || 'all');
@@ -118,69 +121,104 @@ const debouncedSearch = debounce(() => {
                         <div
                             class="inline-block min-w-full px-4 align-middle sm:px-0"
                         >
-                            <div class="relative w-full overflow-auto">
-                                <table class="w-full caption-bottom text-sm">
+                            <div
+                                :class="`${customScrollbar} relative max-h-110 w-full overflow-y-auto`"
+                            >
+                                <table
+                                    class="w-full table-auto overflow-scroll text-sm"
+                                >
                                     <thead>
                                         <tr
-                                            class="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+                                            class="sticky top-0 border-b bg-gray-800 transition-colors"
                                         >
                                             <th
-                                                class="h-12 px-4 text-left align-middle text-xs font-medium text-muted-foreground sm:text-sm"
+                                                class="h-10 px-4 text-left align-middle font-medium text-muted-foreground"
                                             >
-                                                Category
+                                                Categorie
                                             </th>
                                             <th
-                                                class="hidden h-12 px-4 text-left align-middle text-xs font-medium text-muted-foreground sm:table-cell sm:text-sm"
+                                                class="h-10 px-2 text-left align-middle font-medium text-muted-foreground"
                                             >
-                                                Date
+                                                Datum
                                             </th>
                                             <th
-                                                class="h-12 px-4 text-left align-middle text-xs font-medium text-muted-foreground sm:text-sm"
+                                                class="h-10 px-2 text-left align-middle font-medium text-muted-foreground"
                                             >
-                                                Description
+                                                Omschrijving
                                             </th>
                                             <th
-                                                class="hidden h-12 px-4 text-left align-middle text-xs font-medium text-muted-foreground sm:text-sm md:table-cell"
+                                                class="h-10 px-2 text-right align-middle font-medium text-muted-foreground"
                                             >
-                                                Account
-                                            </th>
-                                            <th
-                                                class="h-12 px-4 text-right align-middle text-xs font-medium text-muted-foreground sm:text-sm"
-                                            >
-                                                Amount
+                                                Bedrag
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr
-                                            class="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+                                            class="border-b border-slate-900 transition-colors hover:bg-muted/50"
+                                            v-for="transaction in transactionList"
+                                            :key="transaction.id"
                                         >
-                                            <td
-                                                class="p-4 py-2 align-middle sm:py-4"
-                                            >
-                                                <div
-                                                    class="flex items-center gap-1.5 sm:gap-2"
-                                                ></div>
+                                            <td class="p-2">
+                                                <Category
+                                                    :color="
+                                                        categories[
+                                                            transaction
+                                                                .categoryId
+                                                        ].color
+                                                    "
+                                                    :icon="
+                                                        categories[
+                                                            transaction
+                                                                .categoryId
+                                                        ].icon
+                                                    "
+                                                    :slug="
+                                                        categories[
+                                                            transaction
+                                                                .categoryId
+                                                        ].slug
+                                                    "
+                                                    :budget="
+                                                        categories[
+                                                            transaction
+                                                                .categoryId
+                                                        ].budgets[0].name
+                                                    "
+                                                    :category="
+                                                        categories[
+                                                            transaction
+                                                                .categoryId
+                                                        ].category
+                                                    "
+                                                />
                                             </td>
-                                            <td
-                                                class="hidden p-4 py-2 align-middle text-xs sm:table-cell sm:py-4 sm:text-sm"
-                                            >
-                                                Mar 28
+                                            <td class="p-2">
+                                                {{ transaction.date }}
                                             </td>
-                                            <td
-                                                class="max-w-[120px] truncate p-4 py-2 align-middle text-xs sm:max-w-none sm:py-4 sm:text-sm"
-                                            >
-                                                Salary Deposit
+                                            <td class="p-2">
+                                                {{ transaction.description }}
                                             </td>
-                                            <td
-                                                class="hidden p-4 py-2 align-middle text-xs sm:py-4 sm:text-sm md:table-cell"
-                                            >
-                                                Checking Account
-                                            </td>
-                                            <td
-                                                class="p-4 py-2 text-right align-middle text-xs font-medium text-green-500 sm:py-4 sm:text-sm"
-                                            >
-                                                +$3,200
+                                            <td class="p-2 text-right">
+                                                <span
+                                                    :class="
+                                                        transaction.amount > 0
+                                                            ? 'rounded-md bg-green-800 p-2 py-1 text-white'
+                                                            : ''
+                                                    "
+                                                >
+                                                    {{
+                                                        new Intl.NumberFormat(
+                                                            'nl-NL',
+                                                            {
+                                                                style: 'currency',
+                                                                currency: 'EUR',
+                                                            },
+                                                        ).format(
+                                                            transaction.amount,
+                                                        )
+                                                    }}
+                                                </span>
                                             </td>
                                         </tr>
                                     </tbody>
