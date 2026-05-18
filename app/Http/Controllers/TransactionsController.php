@@ -14,24 +14,12 @@ class TransactionsController extends Controller
      */
     public function index(Request $request): Response|JsonResponse
     {
-        $transactions = [
-            [
-                'id' => 1,
-                'amount' => -23.30,
-                'categoryId' => 1,
-                'budgetId' => 1,
-                'description' => 'Pizza Palace',
-                'date' => now()->format('d-m-Y'),
-            ],
-            [
-                'id' => 2,
-                'amount' => +53.30,
-                'categoryId' => 2,
-                'budgetId' => 1,
-                'description' => 'Belastingdienst',
-                'date' => now()->format('d-m-Y'),
-            ]
-        ];
+        $transactions = \App\Services\Transactions::list(
+            searchTerm: $request->input('search') ?? '',
+            type: $request->input('type') ?? ''
+        );
+        
+
         if ($request->wantsJson()) {
             return response()->json([
                 'filters' => $request->only(['search', 'type']),

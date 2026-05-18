@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useFilters } from '@/composables/finance/Transactions/useFilters';
-import { PiggyBank, Euro, Wallet } from 'lucide-vue-next';
+import { PiggyBank, Euro, Wallet, CopyPlus } from 'lucide-vue-next';
 import { type TransactionFilter } from '@/types';
 
 const props = defineProps<{
@@ -18,9 +18,10 @@ const { activeFilter, setActiveFilter } = useFilters();
 
 const tabs = [
     { value: 'all', Icon: null, label: 'Alles' },
-    { value: 'expenses', Icon: Wallet, label: 'Uitgaven' },
+    { value: 'expense', Icon: Wallet, label: 'Uitgaven' },
     { value: 'income', Icon: Euro, label: 'Inkomsten' },
-    { value: 'savings', Icon: PiggyBank, label: 'Sparen' },
+    { value: 'saving', Icon: PiggyBank, label: 'Sparen' },
+    { value: 'uncategorized', Icon: CopyPlus, label: 'Nog te categoriseren' },
 ] as const;
 
 function selectFilter(filter: TransactionFilter) {

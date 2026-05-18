@@ -111,10 +111,6 @@ const debouncedSearch = debounce(() => {
                             :isLoading="isLoading"
                         />
                     </div>
-                    <div>
-                        Find {{ searchTerm }} in {{ activeFilter }}
-                        {{ filters }}
-                    </div>
                 </div>
                 <div class="p-4 pt-0 sm:p-6 sm:pt-0">
                     <div class="-mx-4 overflow-x-auto sm:mx-0">
@@ -161,36 +157,11 @@ const debouncedSearch = debounce(() => {
                                         >
                                             <td class="p-2">
                                                 <Category
-                                                    :color="
-                                                        categories[
-                                                            transaction
-                                                                .categoryId
-                                                        ].color
-                                                    "
-                                                    :icon="
-                                                        categories[
-                                                            transaction
-                                                                .categoryId
-                                                        ].icon
-                                                    "
-                                                    :slug="
-                                                        categories[
-                                                            transaction
-                                                                .categoryId
-                                                        ].slug
-                                                    "
-                                                    :budget="
-                                                        categories[
-                                                            transaction
-                                                                .categoryId
-                                                        ].budgets[0].name
-                                                    "
-                                                    :category="
-                                                        categories[
-                                                            transaction
-                                                                .categoryId
-                                                        ].category
-                                                    "
+                                                    :color="categories[transaction.categoryId] ? categories[transaction.categoryId].color : null"
+                                                    :icon="categories[transaction.categoryId] ? categories[transaction.categoryId].icon : null"
+                                                    :slug="categories[transaction.categoryId] ? categories[transaction.categoryId].slug : null"
+                                                    :budget="categories[transaction.categoryId] ? categories[transaction.categoryId].budgets[0].name : null"
+                                                    :category="categories[transaction.categoryId] ? categories[transaction.categoryId].category : null"
                                                 />
                                             </td>
                                             <td class="p-2">
