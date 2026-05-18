@@ -25,7 +25,7 @@ const props = defineProps<Props>();
                 <table class="w-full table-auto overflow-scroll text-sm">
                     <thead>
                         <tr
-                            class="sticky top-0 border-b bg-gray-800 transition-colors"
+                            class="sticky top-0 z-10 bg-gray-800 shadow-[inset_0_-1px_0_0_rgb(55_65_81)]"
                         >
                             <th
                                 class="h-10 px-4 text-left align-middle font-medium text-muted-foreground"
