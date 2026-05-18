@@ -62,7 +62,7 @@ const selectedCategory = page.props.selected;
                     <div class="lg:col-span-9">
                         <div class="space-y-4">
                             <div :class="`${dynamicBackgroundColor(selectedCategory.color, true)} rounded-lg border bg-card text-card-foreground shadow-sm p-6`">
-                                <Category :color="selectedCategory.color" :icon="selectedCategory.icon" :category="selectedCategory.category" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="text-xl sm:text-2xl font-bold"  />
+                                <Category :color="selectedCategory.color" :icon="selectedCategory.icon" :category="selectedCategory.name" icon-container-size="p-2 sm:p-3" icon-size="h-6 w-6" category-font="text-xl sm:text-2xl font-bold"  />
                             </div>
                             <Progress :selectedCategory="selectedCategory" />
                             <Stats :selectedCategory="selectedCategory" />

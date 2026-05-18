@@ -38,21 +38,21 @@ const defaultColor = 'slate';
 
             </div>
             <div
-                v-if="props.name && props.budget != undefined"
+                v-if="props.category && props.budget != undefined"
                 class="flex flex-col"
             >
                 <div :class="`${categoryFont ?? ''} text-xs`">
-                    {{ props.name }}
+                    {{ props.category }}
                 </div>
                 <div class="text-[10px] text-muted-foreground">
                     {{ props.budget }}
                 </div>
             </div>
             <span
-                v-if="props.name && props.budget == undefined"
+                v-if="props.category && props.budget == undefined"
                 :class="`${categoryFont ?? ''} text-sm`"
             >
-                {{ props.name }}
+                {{ props.category }}
             </span>
             
         </div>

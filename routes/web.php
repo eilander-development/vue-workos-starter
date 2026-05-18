@@ -18,7 +18,7 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::get('/savings/{category?}', [SavingsController::class, 'index'])->name('savings');
     Route::get('/transactions', [TransactionsController::class, 'index'])->name('transactions');
     Route::post('/transactions/{transactionId}/assign', [TransactionsController::class, 'assign'])->name('transactions.assign');
-    Route::get('/categories', [CategoriesController::class, 'index'])->name('categories.index');
+    Route::get('/categories', [CategoriesController::class, 'index'])->name('categories');
     Route::post('/categories', [CategoriesController::class, 'store'])->name('categories.store');
     Route::post('/categories/{category}/budgets', [CategoriesController::class, 'storeBudget'])->name('categories.budgets.store');
 });

@@ -76,7 +76,7 @@ function Expenses() {
             </div>
             <div>
                 <div v-for="budget in Expenses()" :key="budget.category" class="flex items-center justify-between py-3 border-b border-gray-900">
-                    <Category :color="budget.color" :icon="budget.icon" :slug="budget.slug" :category="budget.category" />
+                    <Category :color="budget.color" :icon="budget.icon" :slug="budget.slug" :category="budget.name" />
                     <div class="flex items-center gap-4">
                         <div class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.amount) }}</div>
                         <div class="text-sm text-gray-500 dark:text-gray-400">{{ budget.percentage.toFixed(0) }}%</div>

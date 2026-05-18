@@ -16,7 +16,7 @@ const props = defineProps<Props>()
             <div class="flex-1">
                 <div class="flex items-center justify-between">
                     <div>
-                        <div class="font-medium text-sm sm:text-base">{{ budget.category }}</div>
+                        <div class="font-medium text-sm sm:text-base">{{ budget.name }}</div>
                         <div class="text-xs sm:text-sm text-muted-foreground">{{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget)}}</div>
                     </div>
                 </div>
