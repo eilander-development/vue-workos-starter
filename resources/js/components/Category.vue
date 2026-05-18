@@ -21,18 +21,21 @@ const props = defineProps<Props>();
 
 const iconSize = props.iconSize ?? 'h-4 w-4';
 const iconContainerSize = props.iconContainerSize ?? 'p-2';
+const defaultColor = 'slate';
+
 </script>
 
 <template>
     <Link :href="`/expenses/${props.slug}`" as="div" class="cursor-pointer">
         <div class="flex items-center gap-2">
             <div
-                :class="`${dynamicBackgroundColor(props.color, true)} ${iconContainerSize} rounded-full`"
+                :class="`${dynamicBackgroundColor(props.color ?? defaultColor, true)} ${iconContainerSize} rounded-full`"
             >
                 <Icon
-                    :name="props.icon"
-                    :class="`${dynamicTextColor(props.color)} ${iconSize}`"
+                    :name="props.icon ?? 'Plus'"
+                    :class="`${dynamicTextColor(props.color ?? defaultColor)} ${iconSize}`"
                 />
+
             </div>
             <div
                 v-if="props.category && props.budget != undefined"
@@ -51,6 +54,7 @@ const iconContainerSize = props.iconContainerSize ?? 'p-2';
             >
                 {{ props.category }}
             </span>
+            
         </div>
     </Link>
 </template>

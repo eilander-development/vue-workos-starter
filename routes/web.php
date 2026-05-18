@@ -16,6 +16,7 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::get('/income/{category?}', [IncomeController::class, 'index'])->name('income');
     Route::get('/savings/{category?}', [SavingsController::class, 'index'])->name('savings');
     Route::get('/transactions', [TransactionsController::class, 'index'])->name('transactions');
+    Route::post('/transactions/{transactionId}/assign', [TransactionsController::class, 'assign'])->name('transactions.assign');
 });
 
 require __DIR__.'/settings.php';

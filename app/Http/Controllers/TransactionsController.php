@@ -33,4 +33,24 @@ class TransactionsController extends Controller
             'transactions' => $transactions,
         ]);
     }
+
+    public function assign(Request $request, int $transactionId): JsonResponse
+    {
+        $data = $request->validate([
+            'categoryId' => ['required', 'integer'],
+            'budgetId' => ['required', 'integer'],
+            'type' => ['required', 'string', 'in:expense,income,saving'],
+            'icon' => ['required', 'string'],
+            'color' => ['required', 'string'],
+        ]);
+
+        return response()->json([
+            'transactionId' => $transactionId,
+            'categoryId' => $data['categoryId'],
+            'budgetId' => $data['budgetId'],
+            'type' => $data['type'],
+            'icon' => $data['icon'],
+            'color' => $data['color'],
+        ]);
+    }
 }

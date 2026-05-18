@@ -2,12 +2,13 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import Filters from '@/components/finance/Transactions/Filters.vue';
 import Category from '@/components/Category.vue';
+import AssignTransactionCategoryModal from '@/components/finance/Transactions/AssignTransactionCategoryModal.vue';
 import { useLiveSearch } from '@/composables/useLiveSearch';
 import { customScrollbar } from '@/composables/scrollbar';
 import { index } from '@/actions/App/Http/Controllers/TransactionsController';
 import { home, transactions } from '@/routes';
 import { type BreadcrumbItem, type TransactionFilter } from '@/types';
-
+import { Plus } from 'lucide-vue-next';
 import { Head, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import debounce from 'lodash/debounce';
@@ -29,6 +30,48 @@ const filters = ref(page.props.filters || []);
 const transactionList = ref(page.props.transactions || []);
 const activeFilter = ref<TransactionFilter>(page.props.filters?.type || 'all');
 const searchTerm = ref<string>(page.props.filters?.search || '');
+const assignDialogOpen = ref(false);
+const selectedTransaction = ref(null as null | Record<string, unknown>);
+
+const openAssignDialog = (transaction: Record<string, unknown>) => {
+    selectedTransaction.value = transaction;
+    assignDialogOpen.value = true;
+};
+
+const handleCategoryAssigned = async (payload: {
+    transactionId: number;
+    categoryId: number;
+    budgetId: number;
+    type: string;
+    icon: string;
+    color: string;
+}) => {
+    try {
+        await axios.post(`/transactions/${payload.transactionId}/assign`, {
+            categoryId: payload.categoryId,
+            budgetId: payload.budgetId,
+            type: payload.type,
+            icon: payload.icon,
+            color: payload.color,
+        });
+
+        const transaction = transactionList.value.find(
+            (item: any) => item.id === payload.transactionId,
+        );
+
+        if (!transaction) {
+            return;
+        }
+
+        transaction.categoryId = payload.categoryId;
+        transaction.budgetId = payload.budgetId;
+        transaction.type = payload.type;
+        transaction.icon = payload.icon;
+        transaction.color = payload.color;
+    } catch (error) {
+        console.error('Kon de transactie niet opslaan:', error);
+    }
+};
 
 // axios commands
 const {
@@ -129,7 +172,7 @@ const debouncedSearch = debounce(() => {
                                         >
                                             <th
                                                 class="h-10 px-4 text-left align-middle font-medium text-muted-foreground"
-                                            >
+                                            >   
                                                 Categorie
                                             </th>
                                             <th
@@ -156,13 +199,26 @@ const debouncedSearch = debounce(() => {
                                             :key="transaction.id"
                                         >
                                             <td class="p-2">
-                                                <Category
-                                                    :color="categories[transaction.categoryId] ? categories[transaction.categoryId].color : null"
-                                                    :icon="categories[transaction.categoryId] ? categories[transaction.categoryId].icon : null"
-                                                    :slug="categories[transaction.categoryId] ? categories[transaction.categoryId].slug : null"
-                                                    :budget="categories[transaction.categoryId] ? categories[transaction.categoryId].budgets[0].name : null"
-                                                    :category="categories[transaction.categoryId] ? categories[transaction.categoryId].category : null"
-                                                />
+                                                <template v-if="transaction.categoryId">
+                                                    <Category
+                                                        :color="categories[transaction.categoryId] ? categories[transaction.categoryId].color : null"
+                                                        :icon="categories[transaction.categoryId] ? categories[transaction.categoryId].icon : null"
+                                                        :slug="categories[transaction.categoryId] ? categories[transaction.categoryId].slug : null"
+                                                        :budget="categories[transaction.categoryId] ? categories[transaction.categoryId].budgets[0].name : null"
+                                                        :category="categories[transaction.categoryId] ? categories[transaction.categoryId].category : null"
+                                                    />
+                                                </template>
+                                                <template v-else>
+                                                    <button
+                                                        type="button"
+                                                        class="rounded-md border border-dashed border-muted-foreground px-3 py-2 text-xs text-muted-foreground hover:bg-green-900 hover:text-white cursor-pointer"
+                                                        @click="openAssignDialog(transaction)"
+                                                    >
+                                                        <div class="flex items-center gap-1">
+                                                            <Plus class="h-4 w-4" /> Voeg categorie toe
+                                                        </div>
+                                                    </button>
+                                                </template>
                                             </td>
                                             <td class="p-2">
                                                 {{ transaction.date }}
@@ -171,13 +227,7 @@ const debouncedSearch = debounce(() => {
                                                 {{ transaction.description }}
                                             </td>
                                             <td class="p-2 text-right">
-                                                <span
-                                                    :class="
-                                                        transaction.amount > 0
-                                                            ? 'rounded-md bg-green-800 p-2 py-1 text-white'
-                                                            : ''
-                                                    "
-                                                >
+                                                <span :class="transaction.amount > 0 ? 'rounded-md bg-green-800 p-2 py-1 text-white': ''">
                                                     {{
                                                         new Intl.NumberFormat(
                                                             'nl-NL',
@@ -199,6 +249,13 @@ const debouncedSearch = debounce(() => {
                     </div>
                 </div>
             </div>
+            <AssignTransactionCategoryModal
+                :open="assignDialogOpen"
+                @update:open="(value) => assignDialogOpen = value"
+                :transaction="selectedTransaction"
+                :categories="categories"
+                @assigned="handleCategoryAssigned"
+            />
         </main>
     </AppLayout>
 </template>

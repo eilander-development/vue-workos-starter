@@ -36,8 +36,17 @@ class Transactions
                 'date' => now()->format('d-m-Y'),
             ],
             [
-                'id' => 2,
+                'id' => 3,
                 'amount' => +53.30,
+                'categoryId' => null,
+                'budgetId' => null,
+                'type' => null,
+                'description' => 'Belastingdienst',
+                'date' => now()->format('d-m-Y'),
+            ],
+            [
+                'id' => 4,
+                'amount' => -3.30,
                 'categoryId' => null,
                 'budgetId' => null,
                 'type' => null,
