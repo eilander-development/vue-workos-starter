@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Filters from '@/components/finance/Transactions/Filters.vue';
 import { home, transactions } from '@/routes';
@@ -20,13 +20,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const page = usePage();
 const categories = page.props.categories;
 const activeFilter = ref<TransactionFilter>('all');
-const search = defineModel<string>({ required: false });
-
-// Doe iets wanneer de ouder de verandering opmerkt
-watch(activeFilter, (value) => {
-  activeFilter.value = value;
-});
-
+const search = ref<string>('');
 </script>
 
 <template>
@@ -52,7 +46,7 @@ watch(activeFilter, (value) => {
                                 class="flex w-full rounded-md border border-input bg-background px-3 py-2 ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm pl-9 h-8 sm:h-10 text-xs sm:text-sm"
                                 placeholder="Zoeken..." value="" v-model="search">
                         </div>
-                        <Filters v-model="activeFilter" />
+                        <Filters v-model:activeFilter="activeFilter" />
                         Find {{ search }} in {{ activeFilter }}
                     </div>
                 </div>

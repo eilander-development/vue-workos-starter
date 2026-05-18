@@ -5,7 +5,7 @@ import { PiggyBank, Euro, Wallet } from 'lucide-vue-next';
 import { type TransactionFilter } from '@/types';
 
 // Maak een v-model binding aan
-const model = defineModel<TransactionFilter>({ required: true });
+const model = defineModel<TransactionFilter>('activeFilter',{ required: true });
 
 const { activeFilter, setActiveFilter } = useFilters();
 
@@ -16,7 +16,9 @@ const tabs = [
     { value: 'savings', Icon: PiggyBank, label: 'Sparen' },
 ] as const;
 
-watch(activeFilter, (newVal) => { model.value = newVal; }, { immediate: true });
+watch(activeFilter, (value) => {
+  model.value = value;
+},{ immediate: true });
 
 </script>
 
