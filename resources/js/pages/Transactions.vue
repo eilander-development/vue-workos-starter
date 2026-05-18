@@ -63,6 +63,7 @@ const handleCategoryAssigned = async (payload: {
             return;
         }
 
+        // vul de transaction aan met de nieuwe categoriegegevens
         transaction.categoryId = payload.categoryId;
         transaction.budgetId = payload.budgetId;
         transaction.type = payload.type;

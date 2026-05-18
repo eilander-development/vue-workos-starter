@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\CategoriesController;
 use App\Http\Controllers\ExpensesController;
 use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\SavingsController;
@@ -17,6 +18,9 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::get('/savings/{category?}', [SavingsController::class, 'index'])->name('savings');
     Route::get('/transactions', [TransactionsController::class, 'index'])->name('transactions');
     Route::post('/transactions/{transactionId}/assign', [TransactionsController::class, 'assign'])->name('transactions.assign');
+    Route::get('/categories', [CategoriesController::class, 'index'])->name('categories.index');
+    Route::post('/categories', [CategoriesController::class, 'store'])->name('categories.store');
+    Route::post('/categories/{category}/budgets', [CategoriesController::class, 'storeBudget'])->name('categories.budgets.store');
 });
 
 require __DIR__.'/settings.php';

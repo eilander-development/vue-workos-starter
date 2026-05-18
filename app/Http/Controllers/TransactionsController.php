@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Repositories\TransactionRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -44,13 +45,22 @@ class TransactionsController extends Controller
             'color' => ['required', 'string'],
         ]);
 
-        return response()->json([
-            'transactionId' => $transactionId,
-            'categoryId' => $data['categoryId'],
-            'budgetId' => $data['budgetId'],
+        $repository = new TransactionRepository();
+        $transaction = $repository->saveTransaction($transactionId, [
+            'category_id' => $data['categoryId'],
+            'budget_id' => $data['budgetId'],
             'type' => $data['type'],
             'icon' => $data['icon'],
             'color' => $data['color'],
+        ]);
+
+        return response()->json([
+            'transactionId' => $transaction->id,
+            'categoryId' => $transaction->category_id,
+            'budgetId' => $transaction->budget_id,
+            'type' => $transaction->type,
+            'icon' => $transaction->icon,
+            'color' => $transaction->color,
         ]);
     }
 }
