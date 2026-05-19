@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import Filters from '@/components/finance/Transactions/Filters.vue';
+import Filters from '@/components/finance/Filters.vue';
 import Category from '@/components/Category.vue';
 import AssignTransactionCategoryModal from '@/components/finance/Transactions/AssignTransactionCategoryModal.vue';
 import { useLiveSearch } from '@/composables/useLiveSearch';

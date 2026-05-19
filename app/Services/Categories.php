@@ -53,6 +53,21 @@ class Categories
             ];
         })->toArray();
 
+        $budgetTypes = collect($category->budgets)
+            ->flatMap(fn ($budget) => $budget->transactions->pluck('type'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $type = 'expense';
+        if ($budgetTypes->contains('income')) {
+            $type = 'income';
+        } elseif ($budgetTypes->contains('saving')) {
+            $type = 'saving';
+        } elseif ($budgetTypes->isEmpty()) {
+            $type = 'uncategorized';
+        }
+
         $totalBudget = collect($budgets)->sum('budget');
         $totalSpend = collect($budgets)->sum('spend');
         $remaining = $totalBudget - $totalSpend;
@@ -60,9 +75,11 @@ class Categories
         return [
             'id' => $category->id,
             'name' => $category->name,
+            'category' => $category->name,
             'slug' => $category->slug,
             'icon' => $category->icon,
             'color' => $category->color,
+            'type' => $type,
             'budgets' => $budgets,
             'budget' => $totalBudget,
             'spend' => $totalSpend,

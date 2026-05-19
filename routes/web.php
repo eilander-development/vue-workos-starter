@@ -20,6 +20,7 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::post('/transactions/{transactionId}/assign', [TransactionsController::class, 'assign'])->name('transactions.assign');
     Route::get('/categories', [CategoriesController::class, 'index'])->name('categories');
     Route::post('/categories', [CategoriesController::class, 'store'])->name('categories.store');
+    Route::patch('/categories/{category}', [CategoriesController::class, 'update'])->name('categories.update');
     Route::post('/categories/{category}/budgets', [CategoriesController::class, 'storeBudget'])->name('categories.budgets.store');
 });
 

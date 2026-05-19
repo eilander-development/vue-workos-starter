@@ -12,6 +12,15 @@ class CategoryRepository
         return Category::create($data);
     }
 
+    public function updateCategory(int $categoryId, array $data): Category
+    {
+        $category = Category::findOrFail($categoryId);
+
+        $category->update($data);
+
+        return $category;
+    }
+
     public function createBudget(int $categoryId, array $data): Budget
     {
         $category = Category::findOrFail($categoryId);

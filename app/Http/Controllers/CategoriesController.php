@@ -22,12 +22,29 @@ class CategoriesController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'unique:categories,slug'],
+            'type' => ['required', 'string', 'in:expense,income,saving,uncategorized'],
             'icon' => ['nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:50'],
         ]);
 
         $repository = new CategoryRepository();
         $repository->createCategory($data);
+
+        return redirect()->route('categories.index');
+    }
+
+    public function update(Request $request, int $categoryId): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => ['required', 'string', 'max:255', 'unique:categories,slug,' . $categoryId],
+            'type' => ['required', 'string', 'in:expense,income,saving,uncategorized'],
+            'icon' => ['nullable', 'string', 'max:255'],
+            'color' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $repository = new CategoryRepository();
+        $repository->updateCategory($categoryId, $data);
 
         return redirect()->route('categories.index');
     }

@@ -14,6 +14,7 @@ class CategorySeeder extends Seeder
             [
                 'name' => 'Eten/drinken',
                 'slug' => 'eten-drinken',
+                'type' => 'expense',
                 'icon' => 'Salad',
                 'color' => 'red',
                 'budgets' => [
@@ -24,6 +25,7 @@ class CategorySeeder extends Seeder
             [
                 'name' => 'Vervoer',
                 'slug' => 'vervoer',
+                'type' => 'expense',
                 'icon' => 'Car',
                 'color' => 'yellow',
                 'budgets' => [
@@ -33,6 +35,7 @@ class CategorySeeder extends Seeder
             [
                 'name' => 'Huisdieren',
                 'slug' => 'huisdieren',
+                'type' => 'expense',
                 'icon' => 'Cat',
                 'color' => 'indigo',
                 'budgets' => [
@@ -42,6 +45,7 @@ class CategorySeeder extends Seeder
             [
                 'name' => 'Woning',
                 'slug' => 'woning',
+                'type' => 'expense',
                 'icon' => 'House',
                 'color' => 'green',
                 'budgets' => [
@@ -51,6 +55,7 @@ class CategorySeeder extends Seeder
             [
                 'name' => 'Verzekeringen',
                 'slug' => 'verzekeringen',
+                'type' => 'expense',
                 'icon' => 'ShieldAlert',
                 'color' => 'orange',
                 'budgets' => [
