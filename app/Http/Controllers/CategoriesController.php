@@ -30,7 +30,7 @@ class CategoriesController extends Controller
         $repository = new CategoryRepository();
         $repository->createCategory($data);
 
-        return redirect()->route('categories.index');
+        return redirect()->route('categories');
     }
 
     public function update(Request $request, int $categoryId): RedirectResponse
@@ -46,7 +46,7 @@ class CategoriesController extends Controller
         $repository = new CategoryRepository();
         $repository->updateCategory($categoryId, $data);
 
-        return redirect()->route('categories.index');
+        return redirect()->route('categories');
     }
 
     public function storeBudget(Request $request, int $categoryId): RedirectResponse
@@ -59,6 +59,6 @@ class CategoriesController extends Controller
         $repository = new CategoryRepository();
         $repository->createBudget($categoryId, $data);
 
-        return redirect()->route('categories.index');
+        return redirect()->route('categories');
     }
 }

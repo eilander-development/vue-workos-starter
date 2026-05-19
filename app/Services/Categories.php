@@ -59,15 +59,6 @@ class Categories
             ->unique()
             ->values();
 
-        $type = 'expense';
-        if ($budgetTypes->contains('income')) {
-            $type = 'income';
-        } elseif ($budgetTypes->contains('saving')) {
-            $type = 'saving';
-        } elseif ($budgetTypes->isEmpty()) {
-            $type = 'uncategorized';
-        }
-
         $totalBudget = collect($budgets)->sum('budget');
         $totalSpend = collect($budgets)->sum('spend');
         $remaining = $totalBudget - $totalSpend;
@@ -79,7 +70,7 @@ class Categories
             'slug' => $category->slug,
             'icon' => $category->icon,
             'color' => $category->color,
-            'type' => $type,
+            'type' => $category->type,
             'budgets' => $budgets,
             'budget' => $totalBudget,
             'spend' => $totalSpend,

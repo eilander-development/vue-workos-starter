@@ -106,7 +106,6 @@ watch(
         <DialogTitle>Categorie wijzigen</DialogTitle>
         <DialogDescription>
           Pas de categoriegegevens aan. De preview toont hoe het eruit ziet.
-          {{ props.category.icon }}
         </DialogDescription>
       </DialogHeader>
 

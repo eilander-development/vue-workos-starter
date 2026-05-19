@@ -15,8 +15,9 @@ class CategoryRepository
     public function updateCategory(int $categoryId, array $data): Category
     {
         $category = Category::findOrFail($categoryId);
-
         $category->update($data);
+
+        
 
         return $category;
     }
