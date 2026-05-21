@@ -28,4 +28,27 @@ class CategoryRepository
 
         return $category->budgets()->create($data);
     }
+
+    public function updateBudget(int $categoryId, int $budgetId, array $data): Budget
+    {
+        $category = Category::findOrFail($categoryId);
+        $budget = $category->budgets()->findOrFail($budgetId);
+        $budget->update($data);
+
+        return $budget;
+    }
+
+    public function deleteCategory(int $categoryId): void
+    {
+        $category = Category::findOrFail($categoryId);
+        $category->budgets()->delete();
+        $category->delete();
+    }
+
+    public function deleteBudget(int $categoryId, int $budgetId): void
+    {
+        $category = Category::findOrFail($categoryId);
+        $budget = $category->budgets()->findOrFail($budgetId);
+        $budget->delete();
+    }
 }

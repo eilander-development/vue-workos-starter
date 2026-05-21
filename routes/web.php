@@ -21,7 +21,9 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::get('/categories', [CategoriesController::class, 'index'])->name('categories');
     Route::post('/categories', [CategoriesController::class, 'store'])->name('categories.store');
     Route::patch('/categories/{category}', [CategoriesController::class, 'update'])->name('categories.update');
+    Route::delete('/categories/{category}', [CategoriesController::class, 'destroy'])->name('categories.destroy');
     Route::post('/categories/{category}/budgets', [CategoriesController::class, 'storeBudget'])->name('categories.budgets.store');
+    Route::delete('/categories/{category}/budgets/{budget}', [CategoriesController::class, 'destroyBudget'])->name('categories.budgets.destroy');
 });
 
 require __DIR__.'/settings.php';

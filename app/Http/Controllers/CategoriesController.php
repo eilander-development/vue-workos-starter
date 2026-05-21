@@ -41,10 +41,40 @@ class CategoriesController extends Controller
             'type' => ['required', 'string', 'in:expense,income,saving,uncategorized'],
             'icon' => ['nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:50'],
+            'budgets' => ['nullable', 'array'],
+            'budgets.*.id' => ['nullable', 'integer'],
+            'budgets.*.name' => ['nullable', 'string', 'max:255'],
+            'budgets.*.budget' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $repository = new CategoryRepository();
-        $repository->updateCategory($categoryId, $data);
+        $repository->updateCategory($categoryId, [
+            'name' => $data['name'],
+            'slug' => $data['slug'],
+            'type' => $data['type'],
+            'icon' => $data['icon'] ?? null,
+            'color' => $data['color'] ?? null,
+        ]);
+
+        foreach ($data['budgets'] ?? [] as $budgetData) {
+            $name = trim((string) ($budgetData['name'] ?? ''));
+            $amount = $budgetData['budget'] ?? null;
+
+            if ($name === '' || $amount === null || $amount === '') {
+                continue;
+            }
+
+            $payload = [
+                'name' => $name,
+                'budget' => $amount,
+            ];
+
+            if (!empty($budgetData['id'])) {
+                $repository->updateBudget($categoryId, (int) $budgetData['id'], $payload);
+            } else {
+                $repository->createBudget($categoryId, $payload);
+            }
+        }
 
         return redirect()->route('categories');
     }
@@ -58,6 +88,22 @@ class CategoriesController extends Controller
 
         $repository = new CategoryRepository();
         $repository->createBudget($categoryId, $data);
+
+        return redirect()->route('categories');
+    }
+
+    public function destroy(int $categoryId): RedirectResponse
+    {
+        $repository = new CategoryRepository();
+        $repository->deleteCategory($categoryId);
+
+        return redirect()->route('categories');
+    }
+
+    public function destroyBudget(int $categoryId, int $budgetId): RedirectResponse
+    {
+        $repository = new CategoryRepository();
+        $repository->deleteBudget($categoryId, $budgetId);
 
         return redirect()->route('categories');
     }
