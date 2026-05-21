@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import axios from 'axios';
 import { Head, Form, usePage } from '@inertiajs/vue3';
 import { home } from '@/routes';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DialogClose, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ref, computed } from 'vue';
-import { EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-vue-next';
+import { EllipsisVertical, Eye, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 
 const page = usePage();
 const categories = Array.isArray(page.props.categories) ? page.props.categories : Object.values(page.props.categories ?? {});
-const categoryMap = computed(() => new Map(categories.map((c: any) => [c.id, c])));
-const budgetMap = computed(
+const categoryMap = computed<Map<number, any>>(() => new Map(categories.map((c: any) => [c.id, c])));
+const budgetMap = computed<Map<number, { id: number; name: string; categoryName: string }>>(
   () =>
     new Map(
       categories.flatMap((c: any) =>
@@ -20,13 +21,41 @@ const budgetMap = computed(
       ),
     ),
 );
-const rules = Array.isArray(page.props.rules) ? page.props.rules : [];
-const result = page.props.result as any;
+const rulesMeta = page.props.rules as any;
+const rules = computed(() =>
+    Array.isArray(rulesMeta?.data)
+        ? rulesMeta.data
+        : Array.isArray(rulesMeta)
+        ? rulesMeta
+        : [],
+);
+const result = computed(() => page.props.result ?? (page.props.flash as any)?.result);
 
 const createOpen = ref(false);
 const editOpen = ref(false);
 const activeRule = ref<any | null>(null);
 const deleteRuleId = ref<number | null>(null);
+const selectedRuleForTransactions = ref<any | null>(null);
+const ruleTransactionsOpen = ref(false);
+const ruleTransactions = ref<any[]>([]);
+const ruleTransactionsPagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: 100,
+  total: 0,
+  from: 0,
+  to: 0,
+});
+const similarRuleTransactionsOpen = ref(false);
+const similarRuleTransactions = ref<any[]>([]);
+const similarRuleTransactionsPagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: 100,
+  total: 0,
+  from: 0,
+  to: 0,
+});
 const ruleType = ref<'iban' | 'description'>('iban');
 const editType = ref<'iban' | 'description'>('iban');
 const matchPlaceholder = computed(() => (ruleType.value === 'iban' ? 'NL00BANK...' : 'Bijv. Albert Heijn'));
@@ -44,6 +73,85 @@ const openEdit = (rule: any) => {
 };
 const openDeleteRuleModal = (ruleId: number) => {
   deleteRuleId.value = ruleId;
+};
+
+const closeRuleTransactions = () => {
+  ruleTransactionsOpen.value = false;
+  selectedRuleForTransactions.value = null;
+  ruleTransactions.value = [];
+};
+
+const closeSimilarRuleTransactions = () => {
+  similarRuleTransactionsOpen.value = false;
+  selectedRuleForTransactions.value = null;
+  similarRuleTransactions.value = [];
+};
+
+const fetchRuleTransactions = async (ruleId: number | null, page = 1) => {
+  if (!ruleId) {
+    return;
+  }
+
+  try {
+    const response = await axios.get(`/imports/transactions/rules/${ruleId}/transactions`, {
+      params: { page },
+      headers: { Accept: 'application/json' },
+    });
+
+    ruleTransactions.value = response.data.transactions ?? [];
+    ruleTransactionsPagination.value = response.data.pagination ?? ruleTransactionsPagination.value;
+  } catch (error) {
+    console.error('Kon gekoppelde transacties niet ophalen:', error);
+  }
+};
+
+const openRuleTransactions = async (rule: any) => {
+  selectedRuleForTransactions.value = rule;
+  ruleTransactionsOpen.value = true;
+  await fetchRuleTransactions(rule.id);
+};
+
+const fetchSimilarRuleTransactions = async (ruleId: number | null, page = 1) => {
+  if (!ruleId) {
+    return;
+  }
+
+  try {
+    const response = await axios.get(`/imports/transactions/rules/${ruleId}/similar-transactions`, {
+      params: { page },
+      headers: { Accept: 'application/json' },
+    });
+
+    similarRuleTransactions.value = response.data.transactions ?? [];
+    similarRuleTransactionsPagination.value = response.data.pagination ?? similarRuleTransactionsPagination.value;
+  } catch (error) {
+    console.error('Kon vergelijkbare transacties niet ophalen:', error);
+  }
+};
+
+const applyTransactionRule = async (transactionId: number) => {
+  const ruleId = selectedRuleForTransactions.value?.id;
+  if (!ruleId) {
+    return;
+  }
+
+  try {
+    await axios.post(
+      `/imports/transactions/rules/${ruleId}/transactions/${transactionId}/apply`,
+      {},
+      { headers: { Accept: 'application/json' } },
+    );
+
+    await fetchSimilarRuleTransactions(ruleId, similarRuleTransactionsPagination.value.current_page);
+  } catch (error) {
+    console.error('Kon transactie niet koppelen:', error);
+  }
+};
+
+const openSimilarRuleTransactions = async (rule: any) => {
+  selectedRuleForTransactions.value = rule;
+  similarRuleTransactionsOpen.value = true;
+  await fetchSimilarRuleTransactions(rule.id);
 };
 </script>
 
@@ -104,6 +212,14 @@ const openDeleteRuleModal = (ruleId: number) => {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" class="w-40">
+                      <DropdownMenuItem @click="openRuleTransactions(rule)">
+                        <Eye class="mr-2 h-4 w-4" />
+                        Transacties
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click="openSimilarRuleTransactions(rule)">
+                        <Eye class="mr-2 h-4 w-4" />
+                        Vergelijkbare transacties
+                      </DropdownMenuItem>
                       <DropdownMenuItem @click="openEdit(rule)">
                         <Pencil class="mr-2 h-4 w-4" />
                         Bewerken
@@ -118,6 +234,27 @@ const openDeleteRuleModal = (ruleId: number) => {
               </tr>
             </tbody>
           </table>
+          <div v-if="rulesMeta && !Array.isArray(rulesMeta)" class="flex items-center justify-between border-t border-slate-900 bg-muted px-4 py-3 text-sm text-muted-foreground">
+            <div>
+              Toon {{ rulesMeta.from ?? 0 }} - {{ rulesMeta.to ?? 0 }} van {{ rulesMeta.total ?? 0 }} regels
+            </div>
+            <div class="flex items-center gap-2">
+              <a
+                :href="rulesMeta.prev_page_url || '#'"
+                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted"
+                :class="{ 'pointer-events-none opacity-50': !rulesMeta.prev_page_url }"
+              >
+                Vorige
+              </a>
+              <a
+                :href="rulesMeta.next_page_url || '#'"
+                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted"
+                :class="{ 'pointer-events-none opacity-50': !rulesMeta.next_page_url }"
+              >
+                Volgende
+              </a>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </main>
@@ -176,6 +313,152 @@ const openDeleteRuleModal = (ruleId: number) => {
           <Form v-if="deleteRuleId !== null" :action="`/imports/transactions/rules/${deleteRuleId}`" method="delete">
             <Button type="submit" variant="destructive">Verwijderen</Button>
           </Form>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="ruleTransactionsOpen" @update:open="(value) => { if (!value) closeRuleTransactions(); ruleTransactionsOpen = value; }">
+      <DialogContent class="sm:max-w-4xl">
+        <DialogHeader class="space-y-3">
+          <DialogTitle>Transacties voor koppelregel</DialogTitle>
+          <DialogDescription>
+            Transacties die gekoppeld zijn aan de geselecteerde regel.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20">
+          <table class="w-full table-auto text-sm">
+            <thead class="sticky top-0 bg-slate-950">
+              <tr class="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th class="p-2">Datum</th>
+                <th class="p-2">Omschrijving</th>
+                <th class="p-2">IBAN</th>
+                <th class="p-2">Categorie</th>
+                <th class="p-2">Budget</th>
+                <th class="p-2 text-right">Bedrag</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="transaction in ruleTransactions" :key="transaction.id" class="border-b border-slate-800">
+                <td class="p-2 text-sm">{{ transaction.date }}</td>
+                <td class="p-2 text-sm">{{ transaction.description }}</td>
+                <td class="p-2 text-sm">{{ transaction.counterparty_iban ?? '-' }}</td>
+                <td class="p-2 text-sm">{{ transaction.category_name ?? '-' }}</td>
+                <td class="p-2 text-sm">{{ transaction.budget_name ?? '-' }}</td>
+                <td class="p-2 text-right text-sm">
+                  {{ new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(transaction.amount) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between border-t border-slate-800 px-4 py-3 text-sm text-muted-foreground">
+          <div>
+            Toon {{ ruleTransactionsPagination.from }} - {{ ruleTransactionsPagination.to }} van {{ ruleTransactionsPagination.total }} transacties
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              @click="fetchRuleTransactions(selectedRuleForTransactions?.id, ruleTransactionsPagination.current_page - 1)"
+              :disabled="ruleTransactionsPagination.current_page <= 1"
+            >
+              Vorige
+            </button>
+            <button
+              type="button"
+              class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              @click="fetchRuleTransactions(selectedRuleForTransactions?.id, ruleTransactionsPagination.current_page + 1)"
+              :disabled="ruleTransactionsPagination.current_page >= ruleTransactionsPagination.last_page"
+            >
+              Volgende
+            </button>
+          </div>
+        </div>
+
+        <DialogFooter class="mt-4 gap-2">
+          <DialogClose as-child>
+            <Button variant="secondary">Sluiten</Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="similarRuleTransactionsOpen" @update:open="(value) => { if (!value) closeSimilarRuleTransactions(); similarRuleTransactionsOpen = value; }">
+      <DialogContent class="sm:max-w-4xl">
+        <DialogHeader class="space-y-3">
+          <DialogTitle>Vergelijkbare transacties</DialogTitle>
+          <DialogDescription>
+            Transacties die nog niet gekoppeld zijn en overeenkomen met deze regel.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20">
+          <table class="w-full table-auto text-sm">
+            <thead class="sticky top-0 bg-slate-950">
+              <tr class="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th class="p-2">Datum</th>
+                <th class="p-2">Omschrijving</th>
+                <th class="p-2">IBAN</th>
+                <th class="p-2">Categorie</th>
+                <th class="p-2">Budget</th>
+                <th class="p-2 text-right">Bedrag</th>
+                <th class="p-2 text-right">Acties</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="transaction in similarRuleTransactions" :key="transaction.id" class="border-b border-slate-800">
+                <td class="p-2 text-sm">{{ transaction.date }}</td>
+                <td class="p-2 text-sm">{{ transaction.description }}</td>
+                <td class="p-2 text-sm">{{ transaction.counterparty_iban ?? '-' }}</td>
+                <td class="p-2 text-sm">{{ transaction.category_name ?? '-' }}</td>
+                <td class="p-2 text-sm">{{ transaction.budget_name ?? '-' }}</td>
+                <td class="p-2 text-right text-sm">
+                  {{ new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(transaction.amount) }}
+                </td>
+                <td class="p-2 text-right text-sm">
+                  <button
+                    type="button"
+                    class="rounded-md border border-input bg-background px-2 py-1 text-xs transition hover:bg-muted"
+                    @click="applyTransactionRule(transaction.id)"
+                  >
+                    Koppelen
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between border-t border-slate-800 px-4 py-3 text-sm text-muted-foreground">
+          <div>
+            Toon {{ similarRuleTransactionsPagination.from }} - {{ similarRuleTransactionsPagination.to }} van {{ similarRuleTransactionsPagination.total }} transacties
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              @click="fetchSimilarRuleTransactions(selectedRuleForTransactions?.id, similarRuleTransactionsPagination.current_page - 1)"
+              :disabled="similarRuleTransactionsPagination.current_page <= 1"
+            >
+              Vorige
+            </button>
+            <button
+              type="button"
+              class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              @click="fetchSimilarRuleTransactions(selectedRuleForTransactions?.id, similarRuleTransactionsPagination.current_page + 1)"
+              :disabled="similarRuleTransactionsPagination.current_page >= similarRuleTransactionsPagination.last_page"
+            >
+              Volgende
+            </button>
+          </div>
+        </div>
+
+        <DialogFooter class="mt-4 gap-2">
+          <DialogClose as-child>
+            <Button variant="secondary">Sluiten</Button>
+          </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>

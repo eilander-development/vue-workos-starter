@@ -23,7 +23,12 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::post('/imports/transactions/rules', [ImportController::class, 'storeRule'])->name('imports.transactions.rules.store');
     Route::patch('/imports/transactions/rules/{rule}', [ImportController::class, 'updateRule'])->name('imports.transactions.rules.update');
     Route::delete('/imports/transactions/rules/{rule}', [ImportController::class, 'destroyRule'])->name('imports.transactions.rules.destroy');
+    Route::get('/imports/transactions/rules/{rule}/transactions', [ImportController::class, 'ruleTransactions'])->name('imports.transactions.rules.transactions');
+    Route::get('/imports/transactions/rules/{rule}/similar-transactions', [ImportController::class, 'similarRuleTransactions'])->name('imports.transactions.rules.similar_transactions');
+    Route::post('/imports/transactions/rules/{rule}/transactions/{transaction}/apply', [ImportController::class, 'applyRuleToTransaction'])->name('imports.transactions.rules.transactions.apply');
+    Route::post('/imports/transactions/rules/{rule}/apply', [ImportController::class, 'applyRule'])->name('imports.transactions.rules.apply');
     Route::post('/transactions/{transactionId}/assign', [TransactionsController::class, 'assign'])->name('transactions.assign');
+    Route::delete('/transactions/{transaction}', [TransactionsController::class, 'destroy'])->name('transactions.destroy');
     Route::get('/categories', [CategoriesController::class, 'index'])->name('categories');
     Route::post('/categories', [CategoriesController::class, 'store'])->name('categories.store');
     Route::patch('/categories/{category}', [CategoriesController::class, 'update'])->name('categories.update');

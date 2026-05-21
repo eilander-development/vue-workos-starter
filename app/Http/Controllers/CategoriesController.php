@@ -20,13 +20,25 @@ class CategoriesController extends Controller
             $filter = 'all';
         }
 
+        $pageNumber = max(1, (int) $request->input('page', 1));
         $categories = \App\Services\Categories::list($filter);
         $allCategories = \App\Services\Categories::list('all');
 
+        $paginatedCategories = array_values(array_slice($categories, ($pageNumber - 1) * 100, 100));
+        $totalCategories = count($categories);
+
         return Inertia::render('Categories', [
-            'categories' => $categories,
+            'categories' => $paginatedCategories,
             'stats' => \App\Services\Categories::stats($allCategories),
             'activeFilter' => $filter,
+            'pagination' => [
+                'current_page' => $pageNumber,
+                'last_page' => (int) ceil($totalCategories / 100),
+                'per_page' => 100,
+                'total' => $totalCategories,
+                'from' => $totalCategories ? (($pageNumber - 1) * 100) + 1 : 0,
+                'to' => min($pageNumber * 100, $totalCategories),
+            ],
         ]);
     }
 

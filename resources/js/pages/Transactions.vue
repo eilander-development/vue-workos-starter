@@ -8,10 +8,26 @@ import { customScrollbar } from '@/composables/scrollbar';
 import { index } from '@/actions/App/Http/Controllers/TransactionsController';
 import { home, transactions } from '@/routes';
 import { type BreadcrumbItem, type TransactionFilter } from '@/types';
-import { Plus } from 'lucide-vue-next';
+import { EllipsisVertical, Pencil, Eye, Trash2, Plus } from 'lucide-vue-next';
 import { Head, usePage } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import debounce from 'lodash/debounce';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -24,18 +40,107 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const page = usePage();
-const categories = page.props.categories;
-const filters = ref(page.props.filters || []);
-const transactionList = ref(page.props.transactions || []);
+const page = usePage() as any;
+const categories = page.props.categories as Record<number, any>;
+const budgetLabelForTransaction = (transaction: Record<string, any>) => {
+    if (!transaction?.categoryId || !transaction?.budgetId) {
+        return null;
+    }
+
+    const category = categories[transaction.categoryId];
+    return category?.budgets?.find((budget: any) => budget.id === transaction.budgetId)?.name ?? null;
+};
+const filters = ref<any>(page.props.filters || {});
+const transactionList = ref<any[]>(page.props.transactions || []);
+const pagination = ref<any>(page.props.pagination ?? {
+    current_page: 1,
+    last_page: 1,
+    per_page: 100,
+    total: transactionList.value.length,
+    from: transactionList.value.length ? 1 : 0,
+    to: transactionList.value.length,
+});
+const currentPage = ref(pagination.value.current_page);
+const lastPage = ref(pagination.value.last_page);
+const displayPagination = computed(() => {
+    const value = pagination.value ?? {
+        current_page: 1,
+        last_page: 1,
+        per_page: 100,
+        total: transactionList.value.length,
+        from: transactionList.value.length ? 1 : 0,
+        to: transactionList.value.length,
+    };
+
+    return {
+        current_page: value.current_page ?? 1,
+        last_page: value.last_page ?? 1,
+        per_page: value.per_page ?? 100,
+        total: value.total ?? transactionList.value.length,
+        from: value.from ?? (transactionList.value.length ? 1 : 0),
+        to: value.to ?? transactionList.value.length,
+    };
+});
 const activeFilter = ref<TransactionFilter>(page.props.filters?.type || 'all');
 const searchTerm = ref<string>(page.props.filters?.search || '');
 const assignDialogOpen = ref(false);
-const selectedTransaction = ref(null as null | Record<string, unknown>);
+const selectedTransaction = ref<Record<string, any> | null>(null);
+const showDialogOpen = ref(false);
+const deleteDialogOpen = ref(false);
+const createRuleDialogOpen = ref(false);
+const showSimilarTransactionsDialog = ref(false);
+const matchingTransactions = ref<Record<string, any>[]>([]);
+const matchingPagination = ref({
+    current_page: 1,
+    last_page: 1,
+    per_page: 100,
+    total: 0,
+    from: 0,
+    to: 0,
+});
+const matchingRuleId = ref<number | null>(null);
+const ruleType = ref<'iban' | 'description'>('iban');
+const ruleMatchValue = ref('');
+const ruleCategoryId = ref<number | null>(null);
+const ruleBudgetId = ref<number | null>(null);
+const ruleTransactionIban = ref('');
+const ruleTransactionDescription = ref('');
+const ruleSaveLoading = ref(false);
 
-const openAssignDialog = (transaction: Record<string, unknown>) => {
+const openAssignDialog = (transaction: Record<string, any>) => {
     selectedTransaction.value = transaction;
     assignDialogOpen.value = true;
+};
+
+const openTransactionDetails = (transaction: Record<string, any>) => {
+    selectedTransaction.value = transaction;
+    showDialogOpen.value = true;
+};
+
+const confirmDeleteTransaction = (transaction: Record<string, any>) => {
+    selectedTransaction.value = transaction;
+    deleteDialogOpen.value = true;
+};
+
+const deleteTransaction = async () => {
+    if (!selectedTransaction.value || !selectedTransaction.value.id) {
+        return;
+    }
+
+    try {
+        await axios.delete(`/transactions/${selectedTransaction.value.id}`);
+
+        transactionList.value = transactionList.value.filter(
+            (item: any) => item.id !== selectedTransaction.value?.id,
+        );
+
+        deleteDialogOpen.value = false;
+        selectedTransaction.value = null;
+
+        fetchTransactions();
+    } catch (error) {
+        console.error('Kon transactie niet verwijderen:', error);
+    }
 };
 
 const handleCategoryAssigned = async (payload: {
@@ -69,6 +174,21 @@ const handleCategoryAssigned = async (payload: {
         transaction.type = payload.type;
         transaction.icon = payload.icon;
         transaction.color = payload.color;
+
+        const description = transaction.description ?? '';
+        const iban = transaction.counterpartyIban ?? '';
+
+        if (!description && !iban) {
+            return;
+        }
+
+        ruleCategoryId.value = payload.categoryId;
+        ruleBudgetId.value = payload.budgetId;
+        ruleTransactionDescription.value = description;
+        ruleTransactionIban.value = iban;
+        ruleType.value = iban ? 'iban' : 'description';
+        ruleMatchValue.value = iban || description;
+        createRuleDialogOpen.value = true;
     } catch (error) {
         console.error('Kon de transactie niet opslaan:', error);
     }
@@ -85,34 +205,135 @@ const {
     const response = await axios.get<{
         transactions: [];
         filters: [];
+        pagination: any;
     }>(routeInfo.url, {
         params: {
             search: searchTerm.value,
             type: activeFilter.value,
+            page: currentPage.value,
         },
         headers: { Accept: 'application/json' },
         signal,
     });
 
-    transactionList.value = response.data.transactions;
-    filters.value = response.data.filters;
+    transactionList.value = response.data.transactions ?? [];
+    filters.value = response.data.filters ?? [];
+    pagination.value = response.data.pagination ?? pagination.value;
+    currentPage.value = pagination.value.current_page;
+    lastPage.value = pagination.value.last_page;
 });
 
 // methods
 const debouncedSearch = debounce(() => {
+    pagination.value.current_page = 1;
     fetchTransactions();
 }, 300);
+
+const onFilterChange = () => {
+    currentPage.value = 1;
+    pagination.value.current_page = 1;
+    fetchTransactions();
+};
+
+const matchPlaceholder = computed(() => (ruleType.value === 'iban' ? 'NL00BANK...' : 'Bijv. Albert Heijn'));
+
+const closeCreateRuleDialog = () => {
+    createRuleDialogOpen.value = false;
+    ruleSaveLoading.value = false;
+};
+
+const fetchMatchingTransactions = async (ruleId: number | null, page = 1) => {
+    try {
+        const response = await axios.get(`/imports/transactions/rules/${ruleId}/transactions`, {
+            params: { page },
+            headers: { Accept: 'application/json' },
+        });
+
+        matchingTransactions.value = response.data.transactions ?? [];
+        matchingPagination.value = response.data.pagination ?? matchingPagination.value;
+    } catch (error) {
+        console.error('Kon gekoppelde transacties niet ophalen:', error);
+    }
+};
+
+const saveImportRule = async () => {
+    if (!ruleCategoryId.value || !ruleBudgetId.value || !ruleMatchValue.value.trim()) {
+        return;
+    }
+
+    ruleSaveLoading.value = true;
+
+    try {
+        const response = await axios.post('/imports/transactions/rules', {
+            type: ruleType.value,
+            match_value: ruleMatchValue.value,
+            category_id: ruleCategoryId.value,
+            budget_id: ruleBudgetId.value,
+            transaction_id: selectedTransaction.value?.id,
+        }, {
+            headers: { Accept: 'application/json' },
+        });
+
+        const rule = response.data.rule;
+        const matches = response.data.matchedTransactions ?? [];
+
+        if (rule) {
+            matchingRuleId.value = rule.id;
+        }
+
+        if (matches.length) {
+            matchingTransactions.value = matches;
+            matchingPagination.value = response.data.pagination ?? matchingPagination.value;
+            showSimilarTransactionsDialog.value = true;
+        }
+    } catch (error) {
+        console.error('Kon de koppelregel niet aanmaken:', error);
+    } finally {
+        ruleSaveLoading.value = false;
+        closeCreateRuleDialog();
+    }
+};
+
+const applyRuleToMatchingTransactions = async () => {
+    if (!matchingRuleId.value) {
+        return;
+    }
+
+    try {
+        await axios.post(`/imports/transactions/rules/${matchingRuleId.value}/apply`, {}, {
+            headers: { Accept: 'application/json' },
+        });
+        showSimilarTransactionsDialog.value = false;
+        fetchTransactions();
+    } catch (error) {
+        console.error('Kon de vergelijkbare transacties niet koppelen:', error);
+    }
+};
+
+const closeSimilarTransactionsDialog = () => {
+    showSimilarTransactionsDialog.value = false;
+    matchingTransactions.value = [];
+    matchingRuleId.value = null;
+};
+
+const goToPage = (pageNumber: number) => {
+    if (pageNumber < 1 || pageNumber > lastPage.value) {
+        return;
+    }
+
+    currentPage.value = pageNumber;
+    pagination.value.current_page = pageNumber;
+    fetchTransactions();
+};
 </script>
 
 <template>
     <Head title="Transacties" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <main class="p-4">
-            <div
-                class="rounded-lg border bg-card text-card-foreground shadow-sm"
-            >
-                <div class="flex flex-col space-y-1.5 p-4 sm:p-6">
+        <main class="p-4 h-full">
+            <div class="rounded-lg border bg-card text-card-foreground shadow-sm h-full">
+                <div class="flex flex-col space-y-1.5 p-4 sm:p-6 ">
                     <div
                         class="text-base font-medium tracking-tight sm:text-lg"
                     >
@@ -151,19 +372,15 @@ const debouncedSearch = debounce(() => {
                         </div>
                         <Filters
                             v-model:activeFilter="activeFilter"
-                            @change="fetchTransactions"
+                            @change="onFilterChange"
                             :isLoading="isLoading"
                         />
                     </div>
                 </div>
                 <div class="p-4 pt-0 sm:p-6 sm:pt-0">
                     <div class="-mx-4 overflow-x-auto sm:mx-0">
-                        <div
-                            class="inline-block min-w-full px-4 align-middle sm:px-0"
-                        >
-                            <div
-                                :class="`${customScrollbar} relative max-h-110 w-full overflow-y-auto`"
-                            >
+                        <div class="inline-block min-w-full px-4 align-middle sm:px-0" >
+                            <div :class="`${customScrollbar} relative max-h-140 w-full overflow-y-auto`" >
                                 <table
                                     class="w-full table-auto overflow-scroll text-sm"
                                 >
@@ -187,15 +404,25 @@ const debouncedSearch = debounce(() => {
                                                 Omschrijving
                                             </th>
                                             <th
+                                                class="h-10 px-2 text-left align-middle font-medium text-muted-foreground"
+                                            >
+                                                Type
+                                            </th>
+                                            <th
                                                 class="h-10 px-2 text-right align-middle font-medium text-muted-foreground"
                                             >
                                                 Bedrag
+                                            </th>
+                                            <th
+                                                class="h-10 px-2 text-right align-middle font-medium text-muted-foreground"
+                                            >
+                                                &nbsp;
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr
-                                            class="border-b border-slate-900 transition-colors hover:bg-muted/50"
+                                            class="group border-b border-slate-900 transition-colors hover:bg-muted/50"
                                             v-for="transaction in transactionList"
                                             :key="transaction.id"
                                         >
@@ -205,7 +432,7 @@ const debouncedSearch = debounce(() => {
                                                         :color="categories[transaction.categoryId] ? categories[transaction.categoryId].color : null"
                                                         :icon="categories[transaction.categoryId] ? categories[transaction.categoryId].icon : null"
                                                         :slug="categories[transaction.categoryId] ? categories[transaction.categoryId].slug : null"
-                                                        :budget="categories[transaction.categoryId] ? categories[transaction.categoryId].budgets[0].name : null"
+                                                        :budget="budgetLabelForTransaction(transaction)"
                                                         :category="categories[transaction.categoryId] ? categories[transaction.categoryId].category : null"
                                                     />
                                                 </template>
@@ -227,6 +454,23 @@ const debouncedSearch = debounce(() => {
                                             <td class="p-2">
                                                 {{ transaction.description }}
                                             </td>
+                                            <td class="p-2">
+                                                <span
+                                                    :class="[
+                                                        'inline-flex items-center rounded-full px-2 py-1 text-[11px] font-semibold uppercase',
+                                                        transaction.type === 'income' ? 'bg-emerald-900 text-emerald-100' :
+                                                        transaction.type === 'expense' ? 'bg-rose-900 text-rose-100' :
+                                                        'bg-slate-800 text-slate-100',
+                                                    ]"
+                                                >
+                                                    {{
+                                                        transaction.type === 'income' ? 'Inkomen' :
+                                                        transaction.type === 'expense' ? 'Uitgave' :
+                                                        transaction.type === 'saving' ? 'Sparen' :
+                                                        'Onbekend'
+                                                    }}
+                                                </span>
+                                            </td>
                                             <td class="p-2 text-right">
                                                 <span :class="transaction.amount > 0 ? 'rounded-md bg-green-800 p-2 py-1 text-white': ''">
                                                     {{
@@ -242,14 +486,304 @@ const debouncedSearch = debounce(() => {
                                                     }}
                                                 </span>
                                             </td>
+                                            <td class="p-2 text-right">
+                                                <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-150 ease-in-out inline-flex justify-end">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger as-child>
+                                                            <button
+                                                                type="button"
+                                                                class="rounded-md p-2 text-muted-foreground hover:bg-slate-800/60"
+                                                            >
+                                                                <EllipsisVertical class="h-4 w-4" />
+                                                            </button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" class="w-44">
+                                                            <DropdownMenuItem @click="openTransactionDetails(transaction)">
+                                                                <Eye class="mr-2 h-4 w-4" />
+                                                                Bekijk
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem @click="openAssignDialog(transaction)">
+                                                                <Pencil class="mr-2 h-4 w-4" />
+                                                                Bewerken
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem @click="confirmDeleteTransaction(transaction)">
+                                                                <Trash2 class="mr-2 h-4 w-4 text-red-500" />
+                                                                <span class="text-red-500">Verwijderen</span>
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </div>
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
+                    <div class="flex items-center justify-between border-t border-slate-900 bg-muted px-4 py-3 text-sm text-muted-foreground">
+                        <div>
+                            Toon {{ displayPagination.from }} - {{ displayPagination.to }} van {{ displayPagination.total }} transacties
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="goToPage(currentPage - 1)"
+                                :disabled="currentPage <= 1"
+                            >
+                                Vorige
+                            </button>
+                            <button
+                                type="button"
+                                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="goToPage(currentPage + 1)"
+                                :disabled="currentPage >= lastPage"
+                            >
+                                Volgende
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
+            <Dialog :open="showDialogOpen" @update:open="(value) => showDialogOpen = value">
+                <DialogContent class="sm:max-w-lg">
+                    <DialogHeader class="space-y-3">
+                        <DialogTitle>Bekijk transactie</DialogTitle>
+                        <DialogDescription>
+                            Alle details van de geselecteerde transactie.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div class="space-y-4">
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                                <div class="text-xs text-muted-foreground">Datum</div>
+                                <div class="mt-1 text-sm font-semibold">{{ selectedTransaction?.date ?? 'N.v.t.' }}</div>
+                            </div>
+                            <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                                <div class="text-xs text-muted-foreground">Bedrag</div>
+                                <div class="mt-1 text-sm font-semibold">
+                                    {{ selectedTransaction ? new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(selectedTransaction.amount) : 'N.v.t.' }}
+                                </div>
+                            </div>
+                                <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                                    <div class="text-xs text-muted-foreground">Budget</div>
+                                    <div class="mt-1 text-sm font-semibold">
+                                        {{ selectedTransaction ? budgetLabelForTransaction(selectedTransaction) ?? 'Onbekend' : 'Onbekend' }}
+                                    </div>
+                                </div>
+                            <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                                <div class="text-xs text-muted-foreground">Type</div>
+                                <div class="mt-1 text-sm font-semibold uppercase">
+                                    {{ selectedTransaction?.type === 'income' ? 'Inkomen' : selectedTransaction?.type === 'expense' ? 'Uitgave' : selectedTransaction?.type === 'saving' ? 'Sparen' : 'Onbekend' }}
+                                </div>
+                            </div>
+                            <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                                <div class="text-xs text-muted-foreground">Categorie</div>
+                                <div class="mt-1 text-sm font-semibold">
+                                    {{ selectedTransaction?.categoryId && categories[selectedTransaction.categoryId] ? categories[selectedTransaction.categoryId].category : 'Onbekend' }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                            <div class="text-xs text-muted-foreground">Omschrijving</div>
+                            <div class="mt-1 text-sm">{{ selectedTransaction?.description ?? 'N.v.t.' }}</div>
+                        </div>
+                    </div>
+
+                    <DialogFooter class="mt-4 gap-2">
+                        <DialogClose as-child>
+                            <Button variant="secondary">Sluiten</Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog :open="deleteDialogOpen" @update:open="(value) => deleteDialogOpen = value">
+                <DialogContent class="sm:max-w-lg">
+                    <DialogHeader class="space-y-3">
+                        <DialogTitle>Verwijder transactie</DialogTitle>
+                        <DialogDescription>
+                            Weet je zeker dat je deze transactie wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div class="space-y-3">
+                        <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                            <div class="text-xs text-muted-foreground">Omschrijving</div>
+                            <div class="mt-1 text-sm">{{ selectedTransaction?.description ?? 'N.v.t.' }}</div>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                                <div class="text-xs text-muted-foreground">Datum</div>
+                                <div class="mt-1 text-sm font-semibold">{{ selectedTransaction?.date ?? 'N.v.t.' }}</div>
+                            </div>
+                            <div class="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                                <div class="text-xs text-muted-foreground">Bedrag</div>
+                                <div class="mt-1 text-sm font-semibold">
+                                    {{ selectedTransaction ? new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(selectedTransaction.amount) : 'N.v.t.' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter class="mt-4 gap-2">
+                        <DialogClose as-child>
+                            <Button variant="secondary">Annuleren</Button>
+                        </DialogClose>
+                        <Button variant="destructive" @click="deleteTransaction">Verwijder</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog :open="createRuleDialogOpen" @update:open="(value) => { if (!value) closeCreateRuleDialog(); createRuleDialogOpen = value; }">
+                <DialogContent class="sm:max-w-lg">
+                    <DialogHeader class="space-y-3">
+                        <DialogTitle>Koppelregel aanmaken?</DialogTitle>
+                        <DialogDescription>
+                            Maak een regel aan zodat vergelijkbare transacties in de toekomst automatisch gekoppeld worden.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div class="space-y-4">
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium">Regeltype</label>
+                                <select
+                                    v-model="ruleType"
+                                    class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                                >
+                                    <option value="iban" :disabled="!ruleTransactionIban">Rekeningnummer bevat</option>
+                                    <option value="description">Omschrijving bevat</option>
+                                </select>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium">Zoekterm</label>
+                                <input
+                                    v-model="ruleMatchValue"
+                                    :placeholder="matchPlaceholder"
+                                    class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                                />
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium">Categorie</label>
+                                <select
+                                    v-model="ruleCategoryId"
+                                    class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                                >
+                                    <option value="" disabled>Keuze categorie</option>
+                                    <option
+                                        v-for="(category, index) in Object.values(categories)"
+                                        :key="index"
+                                        :value="category.id"
+                                    >
+                                        {{ category.category ?? category.name }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium">Budget</label>
+                                <select
+                                    v-model="ruleBudgetId"
+                                    class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                                >
+                                    <option value="" disabled>Keuze budget</option>
+                                    <template v-for="(category, index) in Object.values(categories)" :key="index">
+                                        <optgroup :label="category.category ?? category.name">
+                                            <option
+                                                v-for="budget in category.budgets ?? []"
+                                                :key="budget.id"
+                                                :value="budget.id"
+                                            >
+                                                {{ budget.name }}
+                                            </option>
+                                        </optgroup>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter class="mt-4 gap-2">
+                        <DialogClose as-child>
+                            <Button variant="secondary" @click="closeCreateRuleDialog">Nee, bedankt</Button>
+                        </DialogClose>
+                        <Button :disabled="!ruleMatchValue.trim() || !ruleCategoryId || !ruleBudgetId || (ruleType === 'iban' && !ruleTransactionIban)" @click="saveImportRule">
+                            Ja, regel aanmaken
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog :open="showSimilarTransactionsDialog" @update:open="(value) => { if (!value) closeSimilarTransactionsDialog(); showSimilarTransactionsDialog = value; }">
+                <DialogContent class="sm:max-w-4xl">
+                    <DialogHeader class="space-y-3">
+                        <DialogTitle>Vergelijkbare transacties</DialogTitle>
+                        <DialogDescription>
+                            Deze transacties matchen met de nieuwe koppelregel. Wil je ze ook koppelen?
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div class="overflow-x-auto max-h-[60vh]">
+                        <table class="w-full table-auto text-sm">
+                            <thead>
+                                <tr class="bg-slate-900 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                                    <th class="p-2">Datum</th>
+                                    <th class="p-2">Omschrijving</th>
+                                    <th class="p-2">IBAN</th>
+                                    <th class="p-2 text-right">Bedrag</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="transaction in matchingTransactions" :key="transaction.id" class="border-b border-slate-800">
+                                    <td class="p-2 text-sm">{{ transaction.date }}</td>
+                                    <td class="p-2 text-sm">{{ transaction.description }}</td>
+                                    <td class="p-2 text-sm">{{ transaction.counterparty_iban ?? '-' }}</td>
+                                    <td class="p-2 text-right text-sm">
+                                        {{ new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(transaction.amount) }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex items-center justify-between border-t border-slate-800 px-4 py-3 text-sm text-muted-foreground">
+                        <div>
+                            Toon {{ matchingPagination.from }} - {{ matchingPagination.to }} van {{ matchingPagination.total }} transacties
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="fetchMatchingTransactions(matchingRuleId, matchingPagination.current_page - 1)"
+                                :disabled="matchingPagination.current_page <= 1"
+                            >
+                                Vorige
+                            </button>
+                            <button
+                                type="button"
+                                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="fetchMatchingTransactions(matchingRuleId, matchingPagination.current_page + 1)"
+                                :disabled="matchingPagination.current_page >= matchingPagination.last_page"
+                            >
+                                Volgende
+                            </button>
+                        </div>
+                    </div>
+
+                    <DialogFooter class="mt-4 gap-2">
+                        <DialogClose as-child>
+                            <Button variant="secondary" @click="closeSimilarTransactionsDialog">Nee</Button>
+                        </DialogClose>
+                        <Button @click="applyRuleToMatchingTransactions">Ja, koppel deze transacties</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <AssignTransactionCategoryModal
                 :open="assignDialogOpen"
                 @update:open="(value) => assignDialogOpen = value"

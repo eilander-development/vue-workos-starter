@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Transaction;
 use App\Repositories\TransactionRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,23 +16,36 @@ class TransactionsController extends Controller
      */
     public function index(Request $request): Response|JsonResponse
     {
+        $pageNumber = $request->integer('page', 1);
         $transactions = \App\Services\Transactions::list(
             searchTerm: $request->input('search') ?? '',
-            type: $request->input('type') ?? ''
+            type: $request->input('type') ?? '',
+            perPage: 100,
+            page: $pageNumber,
         );
-        
+
+        $payload = [
+            'current_page' => $transactions->currentPage(),
+            'last_page' => $transactions->lastPage(),
+            'per_page' => $transactions->perPage(),
+            'total' => $transactions->total(),
+            'from' => $transactions->firstItem(),
+            'to' => $transactions->lastItem(),
+        ];
 
         if ($request->wantsJson()) {
             return response()->json([
                 'filters' => $request->only(['search', 'type']),
-                'transactions' => $transactions,
+                'transactions' => $transactions->items(),
+                'pagination' => $payload,
             ]);
         }
 
         return Inertia::render('Transactions', [
             'filters' => $request->only(['search', 'type']),
             'categories' => \App\Services\Categories::list(),
-            'transactions' => $transactions,
+            'transactions' => $transactions->items(),
+            'pagination' => $payload,
         ]);
     }
 
@@ -62,5 +76,12 @@ class TransactionsController extends Controller
             'icon' => $transaction->icon,
             'color' => $transaction->color,
         ]);
+    }
+
+    public function destroy(Transaction $transaction): JsonResponse
+    {
+        $transaction->delete();
+
+        return response()->json([], 204);
     }
 }

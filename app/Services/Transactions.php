@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Transaction;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Schema;
 
 class Transactions
@@ -16,7 +17,7 @@ class Transactions
      *
      * @return array The list of transactions.
      */
-    public static function list(string $searchTerm, string $type) : array
+    public static function list(string $searchTerm, string $type, int $perPage = 100, int $page = 1) : LengthAwarePaginator
     {
 
         if (Schema::hasTable('transactions')) {
@@ -35,17 +36,19 @@ class Transactions
                 }
             }
 
-            $transactions = $query->get()->map(function (Transaction $transaction) {
-                return [
-                    'id' => $transaction->id,
-                    'amount' => (float) $transaction->amount,
-                    'categoryId' => $transaction->category_id,
-                    'budgetId' => $transaction->budget_id,
-                    'type' => $transaction->type,
-                    'description' => $transaction->description,
-                    'date' => $transaction->date->format('d-m-Y'),
-                ];
-            });
+            $transactions = $query->orderByDesc('date')
+                ->paginate($perPage, ['*'], 'page', $page)
+                ->through(function (Transaction $transaction) {
+                    return [
+                        'id' => $transaction->id,
+                        'amount' => (float) $transaction->amount,
+                        'categoryId' => $transaction->category_id,
+                        'budgetId' => $transaction->budget_id,
+                        'type' => $transaction->type,
+                        'description' => $transaction->description,
+                        'date' => $transaction->date->format('d-m-Y'),
+                    ];
+                });
         } else {
             $transactions = collect([
                 [
@@ -55,6 +58,7 @@ class Transactions
                     'budgetId' => 1,
                     'type' => self::$expense,
                     'description' => 'Pizza Palace',
+                    'counterpartyIban' => 'NL00BANK1234567890',
                     'date' => now()->format('d-m-Y'),
                 ],
                 [
@@ -64,6 +68,7 @@ class Transactions
                     'budgetId' => 1,
                     'type' => self::$income,
                     'description' => 'Belastingdienst',
+                    'counterpartyIban' => '',
                     'date' => now()->format('d-m-Y'),
                 ],
                 [
@@ -104,9 +109,23 @@ class Transactions
                     });
                 }
             }
+
+            $total = $transactions->count();
+            $results = $transactions->slice(($page - 1) * $perPage, $perPage)->values();
+
+            $transactions = new LengthAwarePaginator(
+                $results,
+                $total,
+                $perPage,
+                $page,
+                [
+                    'path' => url()->current(),
+                    'query' => ['search' => $searchTerm, 'type' => $type],
+                ],
+            );
         }
 
-        return $transactions->toArray();
+        return $transactions;
     }
 }
 

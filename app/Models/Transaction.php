@@ -23,4 +23,9 @@ class Transaction extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
+    public function importRule(): BelongsTo
+    {
+        return $this->belongsTo(ImportRule::class, 'rule_id');
+    }
 }

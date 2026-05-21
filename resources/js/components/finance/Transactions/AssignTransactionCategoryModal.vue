@@ -39,7 +39,7 @@ interface Transaction {
 
 const props = defineProps<{
   open: boolean;
-  transaction: Transaction | null;
+  transaction: Record<string, any> | null;
   categories: Record<number, CategoryData> | Record<string, CategoryData>;
 }>();
 const emit = defineEmits<{
@@ -65,24 +65,8 @@ const selectedCategory = computed(() =>
 const budgetItems = computed(() => selectedCategory.value?.budgets || []);
 
 const resetSelection = () => {
-  if (categoryItems.value.length === 0) {
-    selectedCategoryId.value = null;
-    selectedBudgetId.value = null;
-    selectedType.value = 'expense';
-    return;
-  }
-
-  if (props.transaction && props.transaction.categoryId) {
-    selectedCategoryId.value = props.transaction.categoryId;
-  } else {
-    selectedCategoryId.value = categoryItems.value[0].id;
-  }
-
-  const category = categoryItems.value.find(
-    (category) => category.id === selectedCategoryId.value,
-  );
-
-  selectedBudgetId.value = category?.budgets?.[0]?.id ?? null;
+  selectedCategoryId.value = null;
+  selectedBudgetId.value = null;
 
   const transactionType = props.transaction?.type;
   selectedType.value =
@@ -160,6 +144,9 @@ const handleAssign = () => {
             v-model="selectedCategoryId"
             class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           >
+            <option value="" disabled selected>
+              Selecteer een categorie
+            </option>
             <option
               v-for="category in categoryItems"
               :key="category.id"
@@ -175,7 +162,11 @@ const handleAssign = () => {
           <select
             v-model="selectedBudgetId"
             class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            :disabled="!selectedCategoryId"
           >
+            <option value="" disabled selected>
+              Selecteer eerst een categorie
+            </option>
             <option
               v-for="budget in budgetItems"
               :key="budget.id"
@@ -229,7 +220,7 @@ const handleAssign = () => {
                 {{ props.transaction?.description ?? '' }}
               </div>
               <div class="text-sm font-semibold text-right">
-                <span :class="transaction.amount > 0 ? 'rounded-md bg-green-800 p-2 py-1 text-white': ''">
+                <span :class="props.transaction?.amount != null && props.transaction.amount > 0 ? 'rounded-md bg-green-800 p-2 py-1 text-white' : ''">
                     {{ props.transaction ? new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(props.transaction.amount) : '' }}
                 </span>
             </div>
@@ -239,9 +230,7 @@ const handleAssign = () => {
       </div>
 
       <DialogFooter class="mt-4 gap-2">
-        <DialogClose as-child>
-          <Button variant="secondary" @click="handleClose">Annuleren</Button>
-        </DialogClose>
+        <Button variant="secondary" @click="handleClose">Annuleren</Button>
         <Button :disabled="!selectedCategoryId || !selectedBudgetId" @click="handleAssign">
           Opslaan
         </Button>

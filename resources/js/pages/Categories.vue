@@ -42,6 +42,8 @@ const typeLabels: Record<TransactionFilter, string> = {
 };
 
 const filteredCategories = computed(() => categoriesData.value);
+const currentPage = ref(page.props.pagination?.current_page ?? 1);
+const lastPage = computed(() => page.props.pagination?.last_page ?? 1);
 
 const syncActiveCategory = () => {
     if (!activeCategory.value?.id) {
@@ -93,14 +95,35 @@ watch(
 );
 
 const onFilterChange = (value: TransactionFilter) => {
+    currentPage.value = 1;
+
     router.get(
         '/categories',
-        { filter: value },
+        { filter: value, page: currentPage.value },
         {
             preserveState: true,
             preserveScroll: true,
             replace: true,
-            only: ['categories', 'stats', 'activeFilter'],
+            only: ['categories', 'stats', 'activeFilter', 'pagination'],
+        },
+    );
+};
+
+const goToPage = (pageNumber: number) => {
+    if (pageNumber < 1 || pageNumber > lastPage.value) {
+        return;
+    }
+
+    currentPage.value = pageNumber;
+
+    router.get(
+        '/categories',
+        { filter: activeFilter.value, page: currentPage.value },
+        {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            only: ['categories', 'stats', 'activeFilter', 'pagination'],
         },
     );
 };
@@ -116,7 +139,7 @@ const onFilterChange = (value: TransactionFilter) => {
             </div>
         </div>
         <main class="p-4">
-            <div class="rounded-lg border bg-card text-card-foreground shadow-sm">
+            <div class="rounded-md border bg-card text-card-foreground shadow-sm">
                 <div class="flex gap-6 lg:flex-row lg:items-center lg:justify-between pr-6">
                     <div class="flex flex-col space-y-1.5 p-4 sm:p-6">
                         <div class="text-base font-medium tracking-tight sm:text-lg">
@@ -185,6 +208,29 @@ const onFilterChange = (value: TransactionFilter) => {
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                <div class="flex items-center justify-between rounded-b-md border-t border-slate-900 bg-muted px-4 py-3 text-sm text-muted-foreground">
+                    <div>
+                        Toon {{ page.props.pagination?.from ?? 0 }} - {{ page.props.pagination?.to ?? 0 }} van {{ page.props.pagination?.total ?? 0 }} categorieën
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                            @click="goToPage((page.props.pagination?.current_page ?? 1) - 1)"
+                            :disabled="(page.props.pagination?.current_page ?? 1) <= 1"
+                        >
+                            Vorige
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                            @click="goToPage((page.props.pagination?.current_page ?? 1) + 1)"
+                            :disabled="(page.props.pagination?.current_page ?? 1) >= (page.props.pagination?.last_page ?? 1)"
+                        >
+                            Volgende
+                        </button>
+                    </div>
                 </div>
             </div>
             <CategoryEditModal :open="editModalOpen" :category="activeCategory" @update:open="(value) => editModalOpen = value" />
