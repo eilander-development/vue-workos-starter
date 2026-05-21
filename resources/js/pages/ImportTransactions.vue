@@ -69,17 +69,17 @@ const openEdit = (rule: any) => {
           </div>
           <table class="w-full table-auto text-sm">
             <tbody>
-              <tr v-for="rule in rules" :key="rule.id" class="border-b border-slate-900">
+              <tr v-for="rule in rules" :key="rule.id" class="group border-b border-slate-900 transition-colors hover:bg-muted/50">
                 <td class="p-2">{{ rule.type === 'iban' ? 'Rekeningnummer bevat' : 'Omschrijving bevat' }}</td>
                 <td class="p-2">{{ rule.match_value }}</td>
                 <td class="p-2">{{ rule.category_id }}</td>
                 <td class="p-2">{{ rule.budget_id }}</td>
                 <td class="w-0 p-2 text-right">
-                  <button type="button" class="px-2 py-2 text-white" @click="openEdit(rule)"><Pencil class="h-4 w-4" /></button>
+                  <button type="button" class="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-muted group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100" @click="openEdit(rule)"><Pencil class="h-4 w-4" /></button>
                 </td>
                 <td class="w-0 p-2 text-right">
                   <Form :action="`/imports/transactions/rules/${rule.id}`" method="delete">
-                    <button type="submit" class="px-2 py-2 text-red-400" onclick="return confirm('Weet je zeker dat je deze regel wilt verwijderen?')"><Trash2 class="h-4 w-4" /></button>
+                    <button type="submit" class="rounded-md p-1 text-red-400 opacity-0 transition hover:bg-red-950/40 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100" onclick="return confirm('Weet je zeker dat je deze regel wilt verwijderen?')"><Trash2 class="h-4 w-4" /></button>
                   </Form>
                 </td>
               </tr>
@@ -91,7 +91,7 @@ const openEdit = (rule: any) => {
 
     <Dialog :open="createOpen" @update:open="(value) => (createOpen = value)">
       <DialogContent class="sm:max-w-lg">
-        <DialogHeader><DialogTitle>Koppelregel toevoegen</DialogTitle></DialogHeader>
+        <DialogHeader class="space-y-3"><DialogTitle>Koppelregel toevoegen</DialogTitle></DialogHeader>
         <Form id="create-rule-form" action="/imports/transactions/rules" method="post" class="grid gap-3">
           <select v-model="ruleType" name="type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
             <option value="iban">Rekeningnummer bevat</option>
@@ -111,7 +111,7 @@ const openEdit = (rule: any) => {
 
     <Dialog :open="editOpen" @update:open="(value) => (editOpen = value)">
       <DialogContent class="sm:max-w-lg">
-        <DialogHeader><DialogTitle>Koppelregel wijzigen</DialogTitle></DialogHeader>
+        <DialogHeader class="space-y-3"><DialogTitle>Koppelregel wijzigen</DialogTitle></DialogHeader>
         <Form v-if="activeRule" id="edit-rule-form" :action="`/imports/transactions/rules/${activeRule.id}`" method="patch" class="grid gap-3">
           <select v-model="editType" name="type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
             <option value="iban">Rekeningnummer bevat</option>
@@ -130,4 +130,3 @@ const openEdit = (rule: any) => {
     </Dialog>
   </AppLayout>
 </template>
-
