@@ -2,118 +2,218 @@
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from '@/components/ui/dialog';
 import { dynamicBackgroundColor, dynamicTextColor } from '@/composables/colorVariants';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Form } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { Check, ChevronDown, Plus, Trash2 } from 'lucide-vue-next';
 
 const props = defineProps<{
-  open: boolean;
+    open: boolean;
 }>();
 const emit = defineEmits<{
-  (e: 'update:open', value: boolean): void;
+    (e: 'update:open', value: boolean): void;
 }>();
 
-const formData = ref({
-  name: '',
-  slug: '',
-  icon: 'Plus',
-  color: 'slate',
-  type: 'expense',
+const defaultFormData = () => ({
+    name: '',
+    slug: '',
+    icon: 'Plus',
+    color: 'slate',
+    type: 'expense',
+    budgets: [] as Array<{ name: string; budget: number | string }>,
 });
 
+const formData = ref(defaultFormData());
+const slugPreview = computed(() =>
+    (formData.value.name || '')
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]/g, '')
+        .replace(/--+/g, '-'),
+);
+
 const colorOptions = [
-  'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal',
-  'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink',
-  'rose', 'slate', 'gray', 'zinc', 'neutral', 'stone'
+    'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal',
+    'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink',
+    'rose', 'slate', 'gray', 'zinc', 'neutral', 'stone',
 ];
+const colorPreview: Record<string, string> = {
+    red: '#ef4444', orange: '#f97316', amber: '#f59e0b', yellow: '#eab308',
+    lime: '#84cc16', green: '#22c55e', emerald: '#10b981', teal: '#14b8a6',
+    cyan: '#06b6d4', sky: '#0ea5e9', blue: '#3b82f6', indigo: '#6366f1',
+    violet: '#8b5cf6', purple: '#a855f7', fuchsia: '#d946ef', pink: '#ec4899',
+    rose: '#f43f5e', slate: '#64748b', gray: '#6b7280', zinc: '#71717a',
+    neutral: '#737373', stone: '#78716c',
+};
 
 const iconOptions = [
-  'Plus', 'Home', 'Settings', 'User', 'Mail', 'Clock', 'AlertCircle',
-  'Check', 'X', 'ChevronDown', 'ChevronUp', 'ChevronLeft', 'ChevronRight',
-  'Search', 'Filter', 'Download', 'Upload', 'Copy', 'Trash', 'Edit',
-  'Eye', 'EyeOff', 'Lock', 'Unlock', 'Shield', 'Heart', 'Star',
-  'Zap', 'Gift', 'Briefcase', 'ShoppingCart', 'CreditCard', 'Wallet',
-  'TrendingUp', 'TrendingDown', 'BarChart', 'PieChart', 'DollarSign',
-  'Utensils', 'Salad', 'Coffee', 'Wine', 'Plane', 'Car', 'Bus',
-  'Home' , 'Zap', 'Droplets', 'Wind', 'Smartphone', 'Headphones',
-  'Gamepad2', 'BookOpen', 'Users', 'Award', 'Activity', 'Anchor',
-  'Aperture', 'Archive', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp'
+    'Plus', 'Home', 'Settings', 'User', 'Mail', 'Clock', 'AlertCircle',
+    'Check', 'X', 'ChevronDown', 'ChevronUp', 'ChevronLeft', 'ChevronRight',
+    'Search', 'Filter', 'Download', 'Upload', 'Copy', 'Trash', 'Edit',
+    'Eye', 'EyeOff', 'Lock', 'Unlock', 'Shield', 'Heart', 'Star',
+    'Zap', 'Gift', 'Briefcase', 'ShoppingCart', 'CreditCard', 'Wallet',
+    'TrendingUp', 'TrendingDown', 'BarChart', 'PieChart', 'DollarSign',
+    'Utensils', 'Salad', 'Coffee', 'Wine', 'Plane', 'Car', 'Bus',
+    'Home', 'Zap', 'Droplets', 'Wind', 'Smartphone', 'Headphones',
+    'Gamepad2', 'BookOpen', 'Users', 'Award', 'Activity', 'Anchor',
+    'Aperture', 'Archive', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp',
+    'Cat', 'Dog', 'Fish', 'Bird', 'HeartCrack', 'HeartHandshake', 'HeartOff',
+    'HeartPulse', 'House', 'IceCream', 'Lollipop', 'Mug', 'Pizza', 'Ramen',
+    'Sushi', 'Table', 'Tree', 'Umbrella', 'Wand', 'Watch', 'Wifi', 'ZapOff',
+    'ZoomIn', 'ZoomOut', 'Anchor', 'Aperture', 'Archive', 'ArrowDown',
+    'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ShieldAlert', 'ShieldCheck',
+    'ShieldClose', 'ShieldOff', 'ShieldQuestion',
 ];
 
 const typeOptions = [
-  { value: 'expense', label: 'Uitgaven' },
-  { value: 'income', label: 'Inkomsten' },
-  { value: 'saving', label: 'Sparen' },
-  { value: 'uncategorized', label: 'Ongecategoriseerd' },
+    { value: 'expense', label: 'Uitgaven' },
+    { value: 'income', label: 'Inkomsten' },
+    { value: 'saving', label: 'Sparen' },
+    { value: 'uncategorized', label: 'Ongecategoriseerd' },
 ];
 
-const close = () => {
-  formData.value = { name: '', slug: '', icon: 'Plus', color: 'slate', type: 'expense' };
-  emit('update:open', false);
+const addBudgetRow = () => {
+    formData.value.budgets.push({ name: '', budget: '' });
 };
 
-const generateSlug = () => {
-  formData.value.slug = formData.value.name
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w-]/g, '');
+const removeBudgetRow = (index: number) => {
+    formData.value.budgets.splice(index, 1);
+};
+
+const close = () => {
+    formData.value = defaultFormData();
+    emit('update:open', false);
 };
 </script>
 
 <template>
-  <Dialog :open="props.open" @update:open="(value) => emit('update:open', value)">
-    <DialogContent class="sm:max-w-md">
-      <DialogHeader class="space-y-3">
-        <DialogTitle>Nieuwe categorie</DialogTitle>
-        <DialogDescription>
-          Voeg een categorie toe met kleur, icoon en type.
-        </DialogDescription>
-      </DialogHeader>
+    <Dialog :open="props.open" @update:open="(value) => emit('update:open', value)">
+        <DialogContent class="sm:max-w-lg">
+            <DialogHeader class="space-y-3">
+                <DialogTitle>Nieuwe categorie</DialogTitle>
+                <DialogDescription>Voeg een categorie toe. De preview toont hoe het eruit ziet.</DialogDescription>
+            </DialogHeader>
 
-      <Form id="create-category-form" action="/categories" method="post" class="space-y-4">
-        <div class="grid gap-3">
-          <label for="name" class="text-sm font-medium">Naam</label>
-          <input id="name" name="name" class="rounded-2xl border px-4 py-3 outline-none focus:ring-2 focus:ring-slate-400" placeholder="Eten/drinken" required />
-        </div>
-        <div class="grid gap-3">
-          <label for="slug" class="text-sm font-medium">Slug</label>
-          <input id="slug" name="slug" class="rounded-2xl border px-4 py-3 outline-none focus:ring-2 focus:ring-slate-400" placeholder="eten-drinken" required />
-        </div>
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="grid gap-3">
-            <label for="icon" class="text-sm font-medium">Icoon</label>
-            <input id="icon" name="icon" class="rounded-2xl border px-4 py-3 outline-none focus:ring-2 focus:ring-slate-400" placeholder="Salad" />
-          </div>
-          <div class="grid gap-3">
-            <label for="color" class="text-sm font-medium">Kleur</label>
-            <input id="color" name="color" class="rounded-2xl border px-4 py-3 outline-none focus:ring-2 focus:ring-slate-400" placeholder="slate" />
-          </div>
-        </div>
-        <div class="grid gap-3">
-          <label for="type" class="text-sm font-medium">Type</label>
-          <select id="type" name="type" class="rounded-2xl border px-4 py-3 outline-none focus:ring-2 focus:ring-slate-400" required>
-            <option value="expense">Uitgaven</option>
-            <option value="income">Inkomsten</option>
-            <option value="saving">Sparen</option>
-            <option value="uncategorized">Ongecategoriseerd</option>
-          </select>
-        </div>
-      </Form>
+            <div class="space-y-4">
+                <div class="rounded-xl border border-slate-200/70 bg-gray-800 p-4">
+                    <div class="flex items-center gap-3">
+                        <div :class="`${dynamicBackgroundColor(formData.color, true)} rounded-full p-2`">
+                            <Icon :name="formData.icon" :class="`${dynamicTextColor(formData.color)} h-5 w-5`" />
+                        </div>
+                        <div class="flex flex-col">
+                            <div class="text-sm font-medium">{{ formData.name || 'Categorie naam' }}</div>
+                        </div>
+                    </div>
+                </div>
 
-      <DialogFooter class="mt-4 gap-2">
-        <DialogClose as-child>
-          <Button variant="secondary" @click="close">Annuleren</Button>
-        </DialogClose>
-        <Button form="create-category-form" type="submit">Opslaan</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+                <Form id="create-category-form" action="/categories" method="post" class="grid gap-4 sm:grid-cols-2">
+                    <div class="space-y-2">
+                        <label for="name" class="text-sm font-medium">Naam</label>
+                        <input id="name" v-model="formData.name" name="name" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" required />
+                    </div>
+
+                    <div class="space-y-2">
+                        <label for="slug" class="text-sm font-medium">Slug</label>
+                        <input id="slug" :value="slugPreview" class="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground outline-none" disabled />
+                        <div class="text-xs text-muted-foreground">Preview: {{ slugPreview || 'categorie-naam' }}</div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label for="type" class="text-sm font-medium">Type</label>
+                        <select id="type" v-model="formData.type" name="type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" required>
+                            <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label for="icon" class="text-sm font-medium">Icoon</label>
+                        <input type="hidden" name="icon" :value="formData.icon" />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button type="button" class="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+                                    <span class="flex items-center gap-2">
+                                        <Icon :name="formData.icon" class="h-4 w-4" />
+                                        {{ formData.icon }}
+                                    </span>
+                                    <ChevronDown class="h-4 w-4 text-muted-foreground" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" class="max-h-64 w-[var(--reka-dropdown-menu-trigger-width)]">
+                                <DropdownMenuItem v-for="icon in iconOptions" :key="icon" @click="formData.icon = icon">
+                                    <Icon :name="icon" class="h-4 w-4" />
+                                    <span class="flex-1">{{ icon }}</span>
+                                    <Check v-if="formData.icon === icon" class="h-4 w-4" />
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label for="color" class="text-sm font-medium">Kleur</label>
+                        <input type="hidden" name="color" :value="formData.color" />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button type="button" class="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+                                    <span class="flex items-center gap-2">
+                                        <span class="h-3 w-3 rounded-full border border-white/20" :style="{ backgroundColor: colorPreview[formData.color] ?? '#64748b' }" />
+                                        {{ formData.color }}
+                                    </span>
+                                    <ChevronDown class="h-4 w-4 text-muted-foreground" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" class="max-h-64 w-[var(--reka-dropdown-menu-trigger-width)]">
+                                <DropdownMenuItem v-for="color in colorOptions" :key="color" @click="formData.color = color">
+                                    <span class="h-3 w-3 rounded-full border border-white/20" :style="{ backgroundColor: colorPreview[color] ?? '#64748b' }" />
+                                    <span class="flex-1">{{ color }}</span>
+                                    <Check v-if="formData.color === color" class="h-4 w-4" />
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+
+                    <div class="space-y-3 sm:col-span-2 border-t pt-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-medium">Budgetten</label>
+                            <button type="button" class="cursor-pointer rounded-md border border-dashed border-muted-foreground px-3 py-2 text-xs text-muted-foreground hover:bg-green-900 hover:text-white" @click="addBudgetRow">
+                                <div class="flex items-center gap-1">
+                                    <Plus class="h-4 w-4" /> Voeg budget toe
+                                </div>
+                            </button>
+                        </div>
+
+                        <div v-if="formData.budgets.length === 0" class="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                            Nog geen budgetten.
+                        </div>
+
+                        <div v-for="(budget, index) in formData.budgets" :key="`new-${index}`" class="grid grid-cols-11 gap-2">
+                            <input v-model="budget.name" :name="`budgets[${index}][name]`" placeholder="Naam budget" class="col-span-5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                            <input v-model="budget.budget" :name="`budgets[${index}][budget]`" type="number" min="0" step="0.01" placeholder="0.00" class="col-span-5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                            <div class="col-span-1 flex items-center justify-end">
+                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-md text-red-400 hover:bg-red-950/40" @click="removeBudgetRow(index)">
+                                    <Trash2 class="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Form>
+            </div>
+
+            <DialogFooter class="mt-4 gap-2">
+                <DialogClose as-child>
+                    <Button variant="secondary" @click="close">Annuleren</Button>
+                </DialogClose>
+                <Button form="create-category-form" type="submit">Opslaan</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>

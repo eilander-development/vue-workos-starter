@@ -49,6 +49,12 @@ const mainNavItems: NavItem[] = [
         color: 'white',
     },
     {
+        title: 'ING Import',
+        href: '/imports/transactions',
+        icon: Banknote,
+        color: 'white',
+    },
+    {
         title: 'Categorieën',
         href: categories(),
         icon: Folder,

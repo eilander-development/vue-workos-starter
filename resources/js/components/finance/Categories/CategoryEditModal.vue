@@ -14,9 +14,10 @@ import {
     dynamicBackgroundColor,
     dynamicTextColor,
 } from '@/composables/colorVariants';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Form } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import { Plus, Trash2 } from 'lucide-vue-next';
+import { Check, ChevronDown, Plus, Trash2 } from 'lucide-vue-next';
 
 const props = defineProps<{
     open: boolean;
@@ -42,6 +43,14 @@ const formData = ref({
         budget: number | string;
     }>,
 });
+const slugPreview = computed(() =>
+    (formData.value.name || '')
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]/g, '')
+        .replace(/--+/g, '-'),
+);
 
 const colorOptions = [
     'red',
@@ -67,6 +76,14 @@ const colorOptions = [
     'neutral',
     'stone',
 ];
+const colorPreview: Record<string, string> = {
+    red: '#ef4444', orange: '#f97316', amber: '#f59e0b', yellow: '#eab308',
+    lime: '#84cc16', green: '#22c55e', emerald: '#10b981', teal: '#14b8a6',
+    cyan: '#06b6d4', sky: '#0ea5e9', blue: '#3b82f6', indigo: '#6366f1',
+    violet: '#8b5cf6', purple: '#a855f7', fuchsia: '#d946ef', pink: '#ec4899',
+    rose: '#f43f5e', slate: '#64748b', gray: '#6b7280', zinc: '#71717a',
+    neutral: '#737373', stone: '#78716c',
+};
 
 const iconOptions = [
     'Plus',
@@ -292,11 +309,11 @@ watch(
                         >
                         <input
                             id="slug"
-                            v-model="formData.slug"
-                            name="slug"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                            required
+                            :value="slugPreview"
+                            class="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground outline-none"
+                            disabled
                         />
+                        <div class="text-xs text-muted-foreground">Preview: {{ slugPreview || 'categorie-naam' }}</div>
                     </div>
 
                     <div class="space-y-2">
@@ -324,40 +341,50 @@ watch(
                         <label for="icon" class="text-sm font-medium"
                             >Icoon</label
                         >
-                        <select
-                            id="icon"
-                            v-model="formData.icon"
-                            name="icon"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                        >
-                            <option
-                                v-for="icon in iconOptions"
-                                :key="icon"
-                                :value="icon"
-                            >
-                                {{ icon }}
-                            </option>
-                        </select>
+                        <input type="hidden" name="icon" :value="formData.icon" />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button type="button" class="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+                                    <span class="flex items-center gap-2">
+                                        <Icon :name="formData.icon" class="h-4 w-4" />
+                                        {{ formData.icon }}
+                                    </span>
+                                    <ChevronDown class="h-4 w-4 text-muted-foreground" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" class="max-h-64 w-[var(--reka-dropdown-menu-trigger-width)]">
+                                <DropdownMenuItem v-for="icon in iconOptions" :key="icon" @click="formData.icon = icon">
+                                    <Icon :name="icon" class="h-4 w-4" />
+                                    <span class="flex-1">{{ icon }}</span>
+                                    <Check v-if="formData.icon === icon" class="h-4 w-4" />
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
                     <div class="space-y-2">
                         <label for="color" class="text-sm font-medium"
                             >Kleur</label
                         >
-                        <select
-                            id="color"
-                            v-model="formData.color"
-                            name="color"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                        >
-                            <option
-                                v-for="color in colorOptions"
-                                :key="color"
-                                :value="color"
-                            >
-                                {{ color }}
-                            </option>
-                        </select>
+                        <input type="hidden" name="color" :value="formData.color" />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button type="button" class="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+                                    <span class="flex items-center gap-2">
+                                        <span class="h-3 w-3 rounded-full border border-white/20" :style="{ backgroundColor: colorPreview[formData.color] ?? '#64748b' }" />
+                                        {{ formData.color }}
+                                    </span>
+                                    <ChevronDown class="h-4 w-4 text-muted-foreground" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" class="max-h-64 w-[var(--reka-dropdown-menu-trigger-width)]">
+                                <DropdownMenuItem v-for="color in colorOptions" :key="color" @click="formData.color = color">
+                                    <span class="h-3 w-3 rounded-full border border-white/20" :style="{ backgroundColor: colorPreview[color] ?? '#64748b' }" />
+                                    <span class="flex-1">{{ color }}</span>
+                                    <Check v-if="formData.color === color" class="h-4 w-4" />
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
                     <div class="space-y-3 sm:col-span-2 border-t pt-3">
@@ -384,7 +411,7 @@ watch(
                         <div
                             v-for="(budget, index) in formData.budgets"
                             :key="budget.id ?? `new-${index}`"
-                            class="grid grid-cols-12 gap-2"
+                            class="grid grid-cols-11 gap-2"
                         >
                             <input
                                 v-if="budget.id"
@@ -407,13 +434,13 @@ watch(
                                 placeholder="0.00"
                                 class="col-span-5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                             />
-                            <div class="col-span-2">
+                            <div class="col-span-1 flex items-center justify-end">
                                 <Form v-if="budget.id && props.category" :action="`/categories/${props.category.id}/budgets/${budget.id}`" method="delete">
-                                    <button type="submit" class="mt-1 cursor-pointer rounded-md px-2 py-2 text-red-400 hover:bg-red-950/40" onclick="return confirm('Weet je zeker dat je dit budget wilt verwijderen?')">
+                                    <button type="submit" class="flex h-9 w-9 items-center justify-center rounded-md text-red-400 hover:bg-red-950/40" onclick="return confirm('Weet je zeker dat je dit budget wilt verwijderen?')">
                                         <Trash2 class="h-4 w-4" />
                                     </button>
                                 </Form>
-                                <button v-else type="button" class="mt-1 cursor-pointer rounded-md px-2 py-2 text-red-400 hover:bg-red-950/40" @click="removeBudgetRow(index)">
+                                <button v-else type="button" class="flex h-9 w-9 items-center justify-center rounded-md text-red-400 hover:bg-red-950/40" @click="removeBudgetRow(index)">
                                     <Trash2 class="h-4 w-4" />
                                 </button>
                             </div>

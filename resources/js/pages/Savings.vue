@@ -38,7 +38,7 @@ const selectedCategory = page.props.selected;
                 <div class="flex gap-4">
                     <template v-for="budget in categories" :key="budget.id">
                         <!-- active: border-primary/50 -->
-                        <Link :href="`/expenses/${budget.slug}`" as="div">
+                        <Link :href="`/savings/${budget.slug}`" as="div">
                             <div :class="[selectedCategory.id == budget.id ? dynamicBackgroundColor(selectedCategory.color, true) : '']"
                                 class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px]">
                                 <Budget :budget="budget" />
@@ -51,7 +51,7 @@ const selectedCategory = page.props.selected;
                     <div class="hidden lg:block lg:col-span-3 space-y-4">
                         <template v-for="budget in categories" :key="budget.id">
                              <!-- active: border-primary/50 -->
-                            <Link :href="`/expenses/${budget.slug}`" as="div">
+                            <Link :href="`/savings/${budget.slug}`" as="div">
                                 <div :class="[selectedCategory.id == budget.id ? dynamicBackgroundColor(selectedCategory.color, true) : '']"
                                     class="rounded-lg border bg-card text-card-foreground shadow-sm transition-all hover:border-primary/50 cursor-pointer flex-shrink-0 w-[260px] sm:w-full">
                                    <Budget :budget="budget" />

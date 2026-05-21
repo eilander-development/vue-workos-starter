@@ -4,6 +4,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CategoriesController;
 use App\Http\Controllers\ExpensesController;
 use App\Http\Controllers\IncomeController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\SavingsController;
 use App\Http\Controllers\TransactionsController;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,9 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::get('/income/{category?}', [IncomeController::class, 'index'])->name('income');
     Route::get('/savings/{category?}', [SavingsController::class, 'index'])->name('savings');
     Route::get('/transactions', [TransactionsController::class, 'index'])->name('transactions');
+    Route::get('/imports/transactions', [ImportController::class, 'index'])->name('imports.transactions');
+    Route::post('/imports/transactions', [ImportController::class, 'import'])->name('imports.transactions.import');
+    Route::post('/imports/transactions/rules', [ImportController::class, 'storeRule'])->name('imports.transactions.rules.store');
     Route::post('/transactions/{transactionId}/assign', [TransactionsController::class, 'assign'])->name('transactions.assign');
     Route::get('/categories', [CategoriesController::class, 'index'])->name('categories');
     Route::post('/categories', [CategoriesController::class, 'store'])->name('categories.store');

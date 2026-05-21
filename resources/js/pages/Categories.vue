@@ -6,11 +6,17 @@ import Category from '@/components/Category.vue';
 import CategoryEditModal from '@/components/finance/Categories/CategoryEditModal.vue';
 import CreateCategoryModal from '@/components/finance/Categories/CreateCategoryModal.vue';
 import { categories, home } from '@/routes';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import { type BreadcrumbItem, type TransactionFilter } from '@/types';
 import Filters from '@/components/finance/Filters.vue';
 import { Form } from '@inertiajs/vue3';
-import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 
 const page = usePage();
 const categoriesData = computed(() =>
@@ -19,7 +25,7 @@ const categoriesData = computed(() =>
         : Object.values(page.props.categories ?? []),
 );
 
-const activeFilter = ref<TransactionFilter>('all');
+const activeFilter = ref<TransactionFilter>((page.props.activeFilter as TransactionFilter) || 'all');
 const editModalOpen = ref(false);
 const createModalOpen = ref(false);
 const activeCategory = ref<Record<string, any> | null>(null);
@@ -32,13 +38,7 @@ const typeLabels: Record<TransactionFilter, string> = {
     uncategorized: 'Ongecategoriseerd',
 };
 
-const filteredCategories = computed(() => {
-    if (activeFilter.value === 'all') {
-        return categoriesData.value;
-    }
-
-    return categoriesData.value.filter((category: any) => category.type === activeFilter.value);
-});
+const filteredCategories = computed(() => categoriesData.value);
 
 const syncActiveCategory = () => {
     if (!activeCategory.value?.id) {
@@ -79,6 +79,25 @@ const typeBadgeLabel = (type: string) => {
 };
 
 watch(categoriesData, syncActiveCategory);
+watch(
+    () => page.props.activeFilter,
+    (value) => {
+        activeFilter.value = (value as TransactionFilter) || 'all';
+    },
+);
+
+const onFilterChange = (value: TransactionFilter) => {
+    router.get(
+        '/categories',
+        { filter: value },
+        {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            only: ['categories', 'stats', 'activeFilter'],
+        },
+    );
+};
 </script>
 
 <template>
@@ -87,7 +106,7 @@ watch(categoriesData, syncActiveCategory);
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <Stats :categorieData="categoriesData" />
+                <Stats :stats="(page.props.stats as any)" />
             </div>
         </div>
         <main class="p-4">
@@ -112,13 +131,13 @@ watch(categoriesData, syncActiveCategory);
                     </button>
                 </div>
                 <div class="p-4">
-                    <Filters v-model:activeFilter="activeFilter"/>
+                    <Filters v-model:activeFilter="activeFilter" @change="onFilterChange" />
                 </div>
                 <div class="p-4 pt-0 sm:p-6 sm:pt-0">
                     <table class="w-full table-auto overflow-scroll text-md">
                         <tbody>
                             <tr
-                                class="border-b border-slate-900 transition-colors hover:bg-muted/50"
+                                class="group border-b border-slate-900 transition-colors hover:bg-muted/50"
                                 v-for="category in filteredCategories"
                                 :key="category.id"
                             >
@@ -135,26 +154,35 @@ watch(categoriesData, syncActiveCategory);
                                     <span class="rounded-full bg-slate-950 px-3 py-1 text-xs text-white">{{ typeBadgeLabel(category.type) }}</span>
                                 </td>
                                 <td class="p-2 text-right w-0">
-                                    <button  type="button" class="px-4 py-2 text-sm font-medium text-white transition cursor-pointer"
-                                        @click="openEditModal(category)">
-                                        <Pencil class="h-4 w-4" />
-                                    </button>
-                                </td>
-                                <td class="p-2 text-right w-0">
-                                    <Form :action="`/categories/${category.id}`" method="delete">
-                                        <button type="submit" class="px-2 py-2 text-sm font-medium text-red-400 transition cursor-pointer" onclick="return confirm('Weet je zeker dat je deze categorie wilt verwijderen?')">
-                                            <Trash2 class="h-4 w-4" />
-                                        </button>
-                                    </Form>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="p-2" colspan="4">
-                                    <button type="button" class="rounded-md border border-dashed border-muted-foreground px-3 py-2 text-xs text-muted-foreground hover:bg-green-900 hover:text-white cursor-pointer" @click="createModalOpen = true">
-                                        <div class="flex items-center gap-1">
-                                            <Plus class="h-4 w-4" /> Voeg categorie toe
-                                        </div>
-                                    </button>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger as-child>
+                                            <button
+                                                type="button"
+                                                class="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-muted group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100"
+                                                aria-label="Meer acties"
+                                            >
+                                                <EllipsisVertical class="h-4 w-4" />
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" class="w-40">
+                                            <DropdownMenuItem @click="openEditModal(category)">
+                                                <Pencil class="mr-2 h-4 w-4" />
+                                                Bewerken
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem as-child>
+                                                <Form :action="`/categories/${category.id}`" method="delete" class="w-full">
+                                                    <button
+                                                        type="submit"
+                                                        class="flex w-full items-center text-red-500"
+                                                        onclick="return confirm('Weet je zeker dat je deze categorie wilt verwijderen?')"
+                                                    >
+                                                        <Trash2 class="mr-2 h-4 w-4" />
+                                                        Verwijderen
+                                                    </button>
+                                                </Form>
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </td>
                             </tr>
                         </tbody>

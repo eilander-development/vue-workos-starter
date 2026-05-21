@@ -17,11 +17,12 @@ class SavingsController extends Controller
      */
     public function index(Request $request, $category = null): Response
     {
-        $categories = \App\Services\Categories::list();
+        $categories = array_values(\App\Services\Categories::list('saving'));
+        $selected = collect($categories)->firstWhere('slug', $category) ?? ($categories[0] ?? null);
 
         return Inertia::render('Savings', [
             'categories' => $categories,
-            'selected' => collect($categories)->firstWhere('slug', $category) ?? $categories[1],
+            'selected' => $selected,
         ]);
     }
 }

@@ -3,17 +3,30 @@
 namespace App\Http\Controllers;
 
 use App\Repositories\CategoryRepository;
+use App\Models\Category;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CategoriesController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $filter = $request->string('filter')->toString();
+        $allowedFilters = ['all', 'expense', 'income', 'saving', 'uncategorized'];
+        if (!in_array($filter, $allowedFilters, true)) {
+            $filter = 'all';
+        }
+
+        $categories = \App\Services\Categories::list($filter);
+        $allCategories = \App\Services\Categories::list('all');
+
         return Inertia::render('Categories', [
-            'categories' => \App\Services\Categories::list(),
+            'categories' => $categories,
+            'stats' => \App\Services\Categories::stats($allCategories),
+            'activeFilter' => $filter,
         ]);
     }
 
@@ -21,14 +34,38 @@ class CategoriesController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255', 'unique:categories,slug'],
             'type' => ['required', 'string', 'in:expense,income,saving,uncategorized'],
             'icon' => ['nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:50'],
+            'budgets' => ['nullable', 'array'],
+            'budgets.*.name' => ['nullable', 'string', 'max:255'],
+            'budgets.*.budget' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        $slug = $this->generateUniqueSlug($data['name']);
+
         $repository = new CategoryRepository();
-        $repository->createCategory($data);
+        $category = $repository->createCategory([
+            'name' => $data['name'],
+            'slug' => $slug,
+            'type' => $data['type'],
+            'icon' => $data['icon'] ?? null,
+            'color' => $data['color'] ?? null,
+        ]);
+
+        foreach ($data['budgets'] ?? [] as $budgetData) {
+            $name = trim((string) ($budgetData['name'] ?? ''));
+            $amount = $budgetData['budget'] ?? null;
+
+            if ($name === '' || $amount === null || $amount === '') {
+                continue;
+            }
+
+            $repository->createBudget($category->id, [
+                'name' => $name,
+                'budget' => $amount,
+            ]);
+        }
 
         return redirect()->route('categories');
     }
@@ -37,7 +74,6 @@ class CategoriesController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255', 'unique:categories,slug,' . $categoryId],
             'type' => ['required', 'string', 'in:expense,income,saving,uncategorized'],
             'icon' => ['nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:50'],
@@ -47,10 +83,12 @@ class CategoriesController extends Controller
             'budgets.*.budget' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        $slug = $this->generateUniqueSlug($data['name'], $categoryId);
+
         $repository = new CategoryRepository();
         $repository->updateCategory($categoryId, [
             'name' => $data['name'],
-            'slug' => $data['slug'],
+            'slug' => $slug,
             'type' => $data['type'],
             'icon' => $data['icon'] ?? null,
             'color' => $data['color'] ?? null,
@@ -106,5 +144,25 @@ class CategoriesController extends Controller
         $repository->deleteBudget($categoryId, $budgetId);
 
         return redirect()->route('categories');
+    }
+
+    private function generateUniqueSlug(string $name, ?int $ignoreCategoryId = null): string
+    {
+        $baseSlug = Str::slug($name);
+        $stem = $baseSlug !== '' ? $baseSlug : 'categorie';
+        $slug = $stem;
+        $counter = 1;
+
+        while (
+            Category::query()
+                ->when($ignoreCategoryId, fn ($query) => $query->where('id', '!=', $ignoreCategoryId))
+                ->where('slug', $slug)
+                ->exists()
+        ) {
+            $counter++;
+            $slug = $stem . '-' . $counter;
+        }
+
+        return $slug;
     }
 }
