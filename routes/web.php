@@ -21,6 +21,8 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::get('/imports/transactions', [ImportController::class, 'index'])->name('imports.transactions');
     Route::post('/imports/transactions', [ImportController::class, 'import'])->name('imports.transactions.import');
     Route::post('/imports/transactions/rules', [ImportController::class, 'storeRule'])->name('imports.transactions.rules.store');
+    Route::patch('/imports/transactions/rules/{rule}', [ImportController::class, 'updateRule'])->name('imports.transactions.rules.update');
+    Route::delete('/imports/transactions/rules/{rule}', [ImportController::class, 'destroyRule'])->name('imports.transactions.rules.destroy');
     Route::post('/transactions/{transactionId}/assign', [TransactionsController::class, 'assign'])->name('transactions.assign');
     Route::get('/categories', [CategoriesController::class, 'index'])->name('categories');
     Route::post('/categories', [CategoriesController::class, 'store'])->name('categories.store');
