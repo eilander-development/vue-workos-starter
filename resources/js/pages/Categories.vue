@@ -16,6 +16,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 
 const page = usePage();
@@ -29,6 +31,7 @@ const activeFilter = ref<TransactionFilter>((page.props.activeFilter as Transact
 const editModalOpen = ref(false);
 const createModalOpen = ref(false);
 const activeCategory = ref<Record<string, any> | null>(null);
+const deleteCategoryId = ref<number | null>(null);
 
 const typeLabels: Record<TransactionFilter, string> = {
     all: 'Alles',
@@ -72,6 +75,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 const openEditModal = (category: Record<string, any>) => {
     activeCategory.value = category;
     editModalOpen.value = true;
+};
+const openDeleteCategoryModal = (categoryId: number) => {
+    deleteCategoryId.value = categoryId;
 };
 
 const typeBadgeLabel = (type: string) => {
@@ -169,17 +175,9 @@ const onFilterChange = (value: TransactionFilter) => {
                                                 <Pencil class="mr-2 h-4 w-4" />
                                                 Bewerken
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem as-child>
-                                                <Form :action="`/categories/${category.id}`" method="delete" class="w-full">
-                                                    <button
-                                                        type="submit"
-                                                        class="flex w-full items-center text-red-500"
-                                                        onclick="return confirm('Weet je zeker dat je deze categorie wilt verwijderen?')"
-                                                    >
-                                                        <Trash2 class="mr-2 h-4 w-4" />
-                                                        Verwijderen
-                                                    </button>
-                                                </Form>
+                                            <DropdownMenuItem @click="openDeleteCategoryModal(category.id)">
+                                                <Trash2 class="mr-2 h-4 w-4 text-red-500" />
+                                                <span class="text-red-500">Verwijderen</span>
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -191,6 +189,20 @@ const onFilterChange = (value: TransactionFilter) => {
             </div>
             <CategoryEditModal :open="editModalOpen" :category="activeCategory" @update:open="(value) => editModalOpen = value" />
             <CreateCategoryModal :open="createModalOpen" @update:open="(value) => createModalOpen = value" />
+            <Dialog :open="deleteCategoryId !== null" @update:open="(open) => { if (!open) deleteCategoryId = null; }">
+                <DialogContent class="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Categorie verwijderen</DialogTitle>
+                        <DialogDescription>Weet je zeker dat je deze categorie wilt verwijderen?</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button type="button" variant="secondary" @click="deleteCategoryId = null">Annuleren</Button>
+                        <Form v-if="deleteCategoryId !== null" :action="`/categories/${deleteCategoryId}`" method="delete">
+                            <Button type="submit" variant="destructive">Verwijderen</Button>
+                        </Form>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </main>
     </AppLayout>
 </template>

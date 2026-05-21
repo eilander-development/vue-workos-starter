@@ -43,6 +43,7 @@ const formData = ref({
         budget: number | string;
     }>,
 });
+const deleteBudgetPayload = ref<{ categoryId: number; budgetId: number } | null>(null);
 const slugPreview = computed(() =>
     (formData.value.name || '')
         .toLowerCase()
@@ -224,6 +225,9 @@ const addBudgetRow = () => {
 
 const removeBudgetRow = (index: number) => {
     formData.value.budgets.splice(index, 1);
+};
+const openDeleteBudgetModal = (categoryId: number, budgetId: number) => {
+    deleteBudgetPayload.value = { categoryId, budgetId };
 };
 
 watch(
@@ -435,11 +439,9 @@ watch(
                                 class="col-span-5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                             />
                             <div class="col-span-1 flex items-center justify-end">
-                                <Form v-if="budget.id && props.category" :action="`/categories/${props.category.id}/budgets/${budget.id}`" method="delete">
-                                    <button type="submit" class="flex h-9 w-9 items-center justify-center rounded-md text-red-400 hover:bg-red-950/40" onclick="return confirm('Weet je zeker dat je dit budget wilt verwijderen?')">
-                                        <Trash2 class="h-4 w-4" />
-                                    </button>
-                                </Form>
+                                <button v-if="budget.id && props.category" type="button" class="flex h-9 w-9 items-center justify-center rounded-md text-red-400 hover:bg-red-950/40" @click="openDeleteBudgetModal(props.category.id, budget.id)">
+                                    <Trash2 class="h-4 w-4" />
+                                </button>
                                 <button v-else type="button" class="flex h-9 w-9 items-center justify-center rounded-md text-red-400 hover:bg-red-950/40" @click="removeBudgetRow(index)">
                                     <Trash2 class="h-4 w-4" />
                                 </button>
@@ -448,6 +450,25 @@ watch(
                     </div>
                 </Form>
             </div>
+
+            <Dialog :open="deleteBudgetPayload !== null" @update:open="(open) => { if (!open) deleteBudgetPayload = null; }">
+                <DialogContent class="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Budget verwijderen</DialogTitle>
+                        <DialogDescription>Weet je zeker dat je dit budget wilt verwijderen?</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button type="button" variant="secondary" @click="deleteBudgetPayload = null">Annuleren</Button>
+                        <Form
+                            v-if="deleteBudgetPayload"
+                            :action="`/categories/${deleteBudgetPayload.categoryId}/budgets/${deleteBudgetPayload.budgetId}`"
+                            method="delete"
+                        >
+                            <Button type="submit" variant="destructive">Verwijderen</Button>
+                        </Form>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <DialogFooter class="mt-4 gap-2">
                 <DialogClose as-child>

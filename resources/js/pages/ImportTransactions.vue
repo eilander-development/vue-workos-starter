@@ -5,27 +5,45 @@ import { home } from '@/routes';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ref, computed } from 'vue';
-import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
+import { EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 
 const page = usePage();
 const categories = Array.isArray(page.props.categories) ? page.props.categories : Object.values(page.props.categories ?? {});
-const budgetOptions = categories.flatMap((c: any) => (c.budgets ?? []).map((b: any) => ({ id: b.id, label: `${c.name} - ${b.name}` })));
+const categoryMap = computed(() => new Map(categories.map((c: any) => [c.id, c])));
+const budgetMap = computed(
+  () =>
+    new Map(
+      categories.flatMap((c: any) =>
+        (c.budgets ?? []).map((b: any) => [b.id, { ...b, categoryName: c.name }]),
+      ),
+    ),
+);
 const rules = Array.isArray(page.props.rules) ? page.props.rules : [];
 const result = page.props.result as any;
 
 const createOpen = ref(false);
 const editOpen = ref(false);
 const activeRule = ref<any | null>(null);
+const deleteRuleId = ref<number | null>(null);
 const ruleType = ref<'iban' | 'description'>('iban');
 const editType = ref<'iban' | 'description'>('iban');
 const matchPlaceholder = computed(() => (ruleType.value === 'iban' ? 'NL00BANK...' : 'Bijv. Albert Heijn'));
 const editPlaceholder = computed(() => (editType.value === 'iban' ? 'NL00BANK...' : 'Bijv. Albert Heijn'));
+const labelForCategory = (id: number) => categoryMap.value.get(id)?.name ?? `#${id}`;
+const labelForBudget = (id: number) => {
+  const budget = budgetMap.value.get(id);
+  return budget ? `${budget.name}` : `#${id}`;
+};
 
 const openEdit = (rule: any) => {
   activeRule.value = rule;
   editType.value = rule.type;
   editOpen.value = true;
+};
+const openDeleteRuleModal = (ruleId: number) => {
+  deleteRuleId.value = ruleId;
 };
 </script>
 
@@ -72,15 +90,30 @@ const openEdit = (rule: any) => {
               <tr v-for="rule in rules" :key="rule.id" class="group border-b border-slate-900 transition-colors hover:bg-muted/50">
                 <td class="p-2">{{ rule.type === 'iban' ? 'Rekeningnummer bevat' : 'Omschrijving bevat' }}</td>
                 <td class="p-2">{{ rule.match_value }}</td>
-                <td class="p-2">{{ rule.category_id }}</td>
-                <td class="p-2">{{ rule.budget_id }}</td>
+                <td class="p-2">{{ labelForCategory(rule.category_id) }}</td>
+                <td class="p-2">{{ labelForBudget(rule.budget_id) }}</td>
                 <td class="w-0 p-2 text-right">
-                  <button type="button" class="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-muted group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100" @click="openEdit(rule)"><Pencil class="h-4 w-4" /></button>
-                </td>
-                <td class="w-0 p-2 text-right">
-                  <Form :action="`/imports/transactions/rules/${rule.id}`" method="delete">
-                    <button type="submit" class="rounded-md p-1 text-red-400 opacity-0 transition hover:bg-red-950/40 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100" onclick="return confirm('Weet je zeker dat je deze regel wilt verwijderen?')"><Trash2 class="h-4 w-4" /></button>
-                  </Form>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <button
+                        type="button"
+                        class="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-muted group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100"
+                        aria-label="Meer acties"
+                      >
+                        <EllipsisVertical class="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-40">
+                      <DropdownMenuItem @click="openEdit(rule)">
+                        <Pencil class="mr-2 h-4 w-4" />
+                        Bewerken
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click="openDeleteRuleModal(rule.id)">
+                        <Trash2 class="mr-2 h-4 w-4 text-red-500" />
+                        <span class="text-red-500">Verwijderen</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </td>
               </tr>
             </tbody>
@@ -102,7 +135,9 @@ const openEdit = (rule: any) => {
             <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
           </select>
           <select name="budget_id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" required>
-            <option v-for="b in budgetOptions" :key="b.id" :value="b.id">{{ b.label }}</option>
+            <optgroup v-for="c in categories" :key="c.id" :label="c.name">
+              <option v-for="b in c.budgets ?? []" :key="b.id" :value="b.id">{{ b.name }}</option>
+            </optgroup>
           </select>
         </Form>
         <DialogFooter><Button form="create-rule-form" type="submit">Opslaan</Button></DialogFooter>
@@ -122,10 +157,26 @@ const openEdit = (rule: any) => {
             <option v-for="c in categories" :key="c.id" :value="c.id" :selected="c.id === activeRule.category_id">{{ c.name }}</option>
           </select>
           <select name="budget_id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" required>
-            <option v-for="b in budgetOptions" :key="b.id" :value="b.id" :selected="b.id === activeRule.budget_id">{{ b.label }}</option>
+            <optgroup v-for="c in categories" :key="c.id" :label="c.name">
+              <option v-for="b in c.budgets ?? []" :key="b.id" :value="b.id" :selected="b.id === activeRule.budget_id">{{ b.name }}</option>
+            </optgroup>
           </select>
         </Form>
         <DialogFooter><Button form="edit-rule-form" type="submit">Opslaan</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="deleteRuleId !== null" @update:open="(open) => { if (!open) deleteRuleId = null; }">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader class="space-y-2">
+          <DialogTitle>Koppelregel verwijderen</DialogTitle>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="secondary" @click="deleteRuleId = null">Annuleren</Button>
+          <Form v-if="deleteRuleId !== null" :action="`/imports/transactions/rules/${deleteRuleId}`" method="delete">
+            <Button type="submit" variant="destructive">Verwijderen</Button>
+          </Form>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   </AppLayout>
