@@ -1,0 +1,57 @@
+[
+    {
+        "id": 1,
+        "migration": "0001_01_01_000000_create_users_table",
+        "batch": 1
+    },
+    {
+        "id": 2,
+        "migration": "0001_01_01_000001_create_cache_table",
+        "batch": 1
+    },
+    {
+        "id": 3,
+        "migration": "0001_01_01_000002_create_jobs_table",
+        "batch": 1
+    },
+    {
+        "id": 4,
+        "migration": "2026_05_18_184534_create_transactions_table",
+        "batch": 2
+    },
+    {
+        "id": 5,
+        "migration": "2026_05_18_185132_create_categories_table",
+        "batch": 3
+    },
+    {
+        "id": 6,
+        "migration": "2026_05_18_185133_create_budgets_table",
+        "batch": 3
+    },
+    {
+        "id": 7,
+        "migration": "2026_05_19_000001_add_type_to_categories_table",
+        "batch": 4
+    },
+    {
+        "id": 8,
+        "migration": "2026_05_21_150000_add_import_fields_to_transactions_table",
+        "batch": 5
+    },
+    {
+        "id": 9,
+        "migration": "2026_05_21_150100_create_import_rules_table",
+        "batch": 5
+    },
+    {
+        "id": 10,
+        "migration": "2026_05_21_160000_update_transaction_types_based_on_amount",
+        "batch": 6
+    },
+    {
+        "id": 11,
+        "migration": "2026_05_21_151000_add_rule_id_to_transactions_table",
+        "batch": 7
+    }
+]

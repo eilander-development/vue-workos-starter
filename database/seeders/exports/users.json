@@ -1,0 +1,24 @@
+[
+    {
+        "id": 1,
+        "name": "Mark Eilander",
+        "email": "mark.eilander@outlook.com",
+        "email_verified_at": null,
+        "workos_id": "user_01KA5YWBFNKK7Z3HQ2P53ECX6H",
+        "remember_token": null,
+        "avatar": "",
+        "created_at": "2025-11-16 09:14:18",
+        "updated_at": "2025-11-16 09:14:38"
+    },
+    {
+        "id": 2,
+        "name": "Test User",
+        "email": "test@example.com",
+        "email_verified_at": "2026-05-18 18:47:34",
+        "workos_id": "fake-HNBoyeYDWt",
+        "remember_token": "tq9qCEP5oU",
+        "avatar": "",
+        "created_at": "2026-05-18 18:47:34",
+        "updated_at": "2026-05-18 18:47:34"
+    }
+]

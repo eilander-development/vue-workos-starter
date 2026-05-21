@@ -1,0 +1,74 @@
+[
+    {
+        "id": 6,
+        "type": "description",
+        "match_value": "BCK*PLUS",
+        "category_id": 1,
+        "budget_id": 2,
+        "created_at": "2026-05-21 19:36:38",
+        "updated_at": "2026-05-21 19:36:38"
+    },
+    {
+        "id": 7,
+        "type": "description",
+        "match_value": "BCK*SHELL",
+        "category_id": 2,
+        "budget_id": 9,
+        "created_at": "2026-05-21 19:44:52",
+        "updated_at": "2026-05-21 19:44:52"
+    },
+    {
+        "id": 8,
+        "type": "description",
+        "match_value": "Picnic",
+        "category_id": 1,
+        "budget_id": 2,
+        "created_at": "2026-05-21 19:45:28",
+        "updated_at": "2026-05-21 19:45:28"
+    },
+    {
+        "id": 9,
+        "type": "description",
+        "match_value": "De Friesland Zorgverzekeraar N.V.",
+        "category_id": 5,
+        "budget_id": 6,
+        "created_at": "2026-05-21 19:51:31",
+        "updated_at": "2026-05-21 19:51:31"
+    },
+    {
+        "id": 10,
+        "type": "description",
+        "match_value": "Inleg spaarrekening",
+        "category_id": 7,
+        "budget_id": 10,
+        "created_at": "2026-05-21 19:53:23",
+        "updated_at": "2026-05-21 19:53:23"
+    },
+    {
+        "id": 11,
+        "type": "description",
+        "match_value": "Oranje Spaarrekening",
+        "category_id": 7,
+        "budget_id": 10,
+        "created_at": "2026-05-21 19:53:41",
+        "updated_at": "2026-05-21 19:53:41"
+    },
+    {
+        "id": 12,
+        "type": "description",
+        "match_value": "STATIEGELD NEDERLAND",
+        "category_id": 6,
+        "budget_id": 11,
+        "created_at": "2026-05-21 19:56:01",
+        "updated_at": "2026-05-21 19:56:01"
+    },
+    {
+        "id": 13,
+        "type": "description",
+        "match_value": "DEFAM",
+        "category_id": 4,
+        "budget_id": 12,
+        "created_at": "2026-05-21 19:57:44",
+        "updated_at": "2026-05-21 19:57:44"
+    }
+]
