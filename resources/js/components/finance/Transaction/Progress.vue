@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/card';
 
 interface Props {
-    selectedCategory: Object,
+    selectedCategory: object,
 }
 
 const props = defineProps<Props>()

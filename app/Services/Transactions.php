@@ -19,39 +19,38 @@ class Transactions
      */
     public static function list(string $searchTerm, string $type, int $perPage = 100, int $page = 1) : LengthAwarePaginator
     {
-
-        if (Schema::hasTable('transactions')) {
-            $query = Transaction::query();
-
-            if (trim($searchTerm) !== '') {
-                $query->where('description', 'like', '%' . $searchTerm . '%');
-            }
-
-            if (trim($type) !== '') {
-                if (in_array($type, [self::$income, self::$expense, self::$saving], true)) {
-                    $query->where('type', $type);
-                }
-                if ($type === 'uncategorized') {
-                    $query->whereNull('type');
-                }
-            }
-
-            $transactions = $query->orderByDesc('date')
-                ->paginate($perPage, ['*'], 'page', $page)
-                ->through(function (Transaction $transaction) {
-                    return [
-                        'id' => $transaction->id,
-                        'amount' => (float) $transaction->amount,
-                        'categoryId' => $transaction->category_id,
-                        'budgetId' => $transaction->budget_id,
-                        'type' => $transaction->type,
-                        'description' => $transaction->description,
-                        'date' => $transaction->date->format('d-m-Y'),
-                    ];
-                });
+        if (! Schema::hasTable('transactions')) {
+            return new LengthAwarePaginator([], 0, $perPage, $page);
         }
 
-        return $transactions;
+        $query = Transaction::query();
+
+        if (trim($searchTerm) !== '') {
+            $query->where('description', 'like', '%' . $searchTerm . '%');
+        }
+
+        if (trim($type) !== '') {
+            if (in_array($type, [self::$income, self::$expense, self::$saving], true)) {
+                $query->where('type', $type);
+            }
+            if ($type === 'uncategorized') {
+                $query->whereNull('type');
+            }
+        }
+
+        return $query->orderByDesc('date')
+            ->paginate($perPage, ['*'], 'page', $page)
+            ->through(function (Transaction $transaction) {
+                return [
+                    'id' => $transaction->id,
+                    'amount' => (float) $transaction->amount,
+                    'categoryId' => $transaction->category_id,
+                    'budgetId' => $transaction->budget_id,
+                    'type' => $transaction->type,
+                    'description' => $transaction->description,
+                    'date' => $transaction->date?->format('d-m-Y') ?? '',
+                ];
+            });
     }
 }
 

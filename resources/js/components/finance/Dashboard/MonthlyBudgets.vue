@@ -10,8 +10,8 @@ import {
 import Category from '@/components/Category.vue';
 
 interface Props {
-    monthlyExpenses: Object,
-    categories: Object,
+    monthlyExpenses: object,
+    categories: object,
 }
 
 const props = defineProps<Props>()

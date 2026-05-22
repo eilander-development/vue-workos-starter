@@ -13,6 +13,8 @@ import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import debounce from 'lodash/debounce';
 import { Button } from '@/components/ui/button';
+import NotificationBanner from '@/components/NotificationBanner.vue';
+import { useNotification } from '@/composables/useNotification';
 import {
     Dialog,
     DialogClose,
@@ -106,6 +108,7 @@ const ruleBudgetId = ref<number | null>(null);
 const ruleTransactionIban = ref('');
 const ruleTransactionDescription = ref('');
 const ruleSaveLoading = ref(false);
+const { notification, showNotification } = useNotification();
 
 const openAssignDialog = (transaction: Record<string, any>) => {
     selectedTransaction.value = transaction;
@@ -138,8 +141,10 @@ const deleteTransaction = async () => {
         selectedTransaction.value = null;
 
         fetchTransactions();
+        showNotification('Transactie succesvol verwijderd.', 'success');
     } catch (error) {
         console.error('Kon transactie niet verwijderen:', error);
+        showNotification('Kon transactie niet verwijderen.', 'error');
     }
 };
 
@@ -189,8 +194,10 @@ const handleCategoryAssigned = async (payload: {
         ruleType.value = iban ? 'iban' : 'description';
         ruleMatchValue.value = iban || description;
         createRuleDialogOpen.value = true;
+        showNotification('Transactiegegevens zijn opgeslagen.', 'success');
     } catch (error) {
         console.error('Kon de transactie niet opslaan:', error);
+        showNotification('Kon de transactie niet opslaan.', 'error');
     }
 };
 
@@ -253,6 +260,7 @@ const fetchMatchingTransactions = async (ruleId: number | null, page = 1) => {
         matchingPagination.value = response.data.pagination ?? matchingPagination.value;
     } catch (error) {
         console.error('Kon gekoppelde transacties niet ophalen:', error);
+        showNotification('Kon gekoppelde transacties niet ophalen.', 'error');
     }
 };
 
@@ -281,6 +289,10 @@ const saveImportRule = async () => {
             matchingRuleId.value = rule.id;
         }
 
+        if (rule) {
+            showNotification('Koppelregel succesvol aangemaakt.', 'success');
+        }
+
         if (matches.length) {
             matchingTransactions.value = matches;
             matchingPagination.value = response.data.pagination ?? matchingPagination.value;
@@ -288,6 +300,7 @@ const saveImportRule = async () => {
         }
     } catch (error) {
         console.error('Kon de koppelregel niet aanmaken:', error);
+        showNotification('Kon de koppelregel niet aanmaken.', 'error');
     } finally {
         ruleSaveLoading.value = false;
         closeCreateRuleDialog();
@@ -305,8 +318,10 @@ const applyRuleToMatchingTransactions = async () => {
         });
         showSimilarTransactionsDialog.value = false;
         fetchTransactions();
+        showNotification('Vergelijkbare transacties succesvol gekoppeld.', 'success');
     } catch (error) {
         console.error('Kon de vergelijkbare transacties niet koppelen:', error);
+        showNotification('Kon de vergelijkbare transacties niet koppelen.', 'error');
     }
 };
 
@@ -332,6 +347,7 @@ const goToPage = (pageNumber: number) => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <main class="p-4 h-full">
+            <NotificationBanner v-if="notification" :type="notification.type" :message="notification.message" />
             <div class="rounded-lg border bg-card text-card-foreground shadow-sm h-full">
                 <div class="flex flex-col space-y-1.5 p-4 sm:p-6 ">
                     <div
@@ -364,7 +380,6 @@ const goToPage = (pageNumber: number) => {
                             <input
                                 class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 pl-9 text-xs ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:text-sm md:text-sm"
                                 placeholder="Zoeken..."
-                                value=""
                                 :disabled="isLoading"
                                 v-model="searchTerm"
                                 @input="debouncedSearch"

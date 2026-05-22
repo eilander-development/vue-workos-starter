@@ -8,7 +8,7 @@ import {
 import VueApexCharts from 'vue3-apexcharts'
 
 interface Props {
-    yearlyExpensesChart: Object|Array
+    yearlyExpensesChart: object|Array
 }
 
 const props = defineProps<Props>()

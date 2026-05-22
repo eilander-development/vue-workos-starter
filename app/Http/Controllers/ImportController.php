@@ -67,7 +67,7 @@ class ImportController extends Controller
             ]);
         }
 
-        return back();
+        return back()->with('success', 'Koppelregel succesvol aangemaakt.');
     }
 
     public function updateRule(Request $request, int $ruleId): RedirectResponse
@@ -80,14 +80,16 @@ class ImportController extends Controller
         ]);
         $rule = ImportRule::findOrFail($ruleId);
         $rule->update($data);
-        return back();
+
+        return back()->with('success', 'Koppelregel succesvol bijgewerkt.');
     }
 
     public function destroyRule(int $ruleId): RedirectResponse
     {
         $rule = ImportRule::findOrFail($ruleId);
         $rule->delete();
-        return back();
+
+        return back()->with('success', 'Koppelregel succesvol verwijderd.');
     }
 
     public function ruleTransactions(Request $request, int $ruleId): JsonResponse
@@ -293,7 +295,9 @@ class ImportController extends Controller
             $stats['imported']++;
         }
 
-        return redirect('/imports/transactions')->with('result', $stats);
+        return redirect('/imports/transactions')
+            ->with('result', $stats)
+            ->with('success', 'Transacties succesvol geïmporteerd.');
     }
 
     private function normalizeDate(?string $date): string

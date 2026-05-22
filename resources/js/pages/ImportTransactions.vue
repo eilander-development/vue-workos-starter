@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DialogClose, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import NotificationBanner from '@/components/NotificationBanner.vue';
+import { useNotification } from '@/composables/useNotification';
 import { ref, computed } from 'vue';
 import { EllipsisVertical, Eye, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 
@@ -29,7 +31,20 @@ const rules = computed(() =>
         ? rulesMeta
         : [],
 );
-const result = computed(() => page.props.result ?? (page.props.flash as any)?.result);
+const flash = (page.props.flash as any) ?? {};
+const result = computed(() => page.props.result ?? flash.result);
+const { notification, showNotification } = useNotification();
+
+if (flash.success) {
+  showNotification(flash.success, 'success');
+} else if (flash.error) {
+  showNotification(flash.error, 'error');
+} else if (result.value?.total !== undefined) {
+  showNotification(
+    `Import voltooid: ${result.value.imported} van ${result.value.total} transacties.`,
+    'success',
+  );
+}
 
 const createOpen = ref(false);
 const editOpen = ref(false);
@@ -102,6 +117,7 @@ const fetchRuleTransactions = async (ruleId: number | null, page = 1) => {
     ruleTransactionsPagination.value = response.data.pagination ?? ruleTransactionsPagination.value;
   } catch (error) {
     console.error('Kon gekoppelde transacties niet ophalen:', error);
+    showNotification('Kon gekoppelde transacties niet ophalen.', 'error');
   }
 };
 
@@ -126,6 +142,7 @@ const fetchSimilarRuleTransactions = async (ruleId: number | null, page = 1) => 
     similarRuleTransactionsPagination.value = response.data.pagination ?? similarRuleTransactionsPagination.value;
   } catch (error) {
     console.error('Kon vergelijkbare transacties niet ophalen:', error);
+    showNotification('Kon vergelijkbare transacties niet ophalen.', 'error');
   }
 };
 
@@ -143,15 +160,11 @@ const applyTransactionRule = async (transactionId: number) => {
     );
 
     await fetchSimilarRuleTransactions(ruleId, similarRuleTransactionsPagination.value.current_page);
+    showNotification('Transactie succesvol gekoppeld.', 'success');
   } catch (error) {
     console.error('Kon transactie niet koppelen:', error);
+    showNotification('Kon transactie niet koppelen.', 'error');
   }
-};
-
-const openSimilarRuleTransactions = async (rule: any) => {
-  selectedRuleForTransactions.value = rule;
-  similarRuleTransactionsOpen.value = true;
-  await fetchSimilarRuleTransactions(rule.id);
 };
 </script>
 
@@ -159,6 +172,7 @@ const openSimilarRuleTransactions = async (rule: any) => {
   <Head title="ING Import" />
   <AppLayout :breadcrumbs="[{ title: 'Home', href: home().url }, { title: 'ING Import', href: '/imports/transactions' }]">
     <main class="space-y-4 p-4">
+      <NotificationBanner v-if="notification" :type="notification.type" :message="notification.message" />
       <Card class="rounded-md shadow-xl">
         <CardContent>
           <h2 class="mb-3 text-base font-semibold">Importeer ING CSV</h2>
@@ -189,9 +203,9 @@ const openSimilarRuleTransactions = async (rule: any) => {
         <CardContent>
           <div class="mb-3 flex items-center justify-between">
             <h2 class="text-base font-semibold">Koppelregels</h2>
-            <button type="button" class="rounded-md border border-dashed border-muted-foreground px-3 py-2 text-xs text-muted-foreground hover:bg-green-900 hover:text-white" @click="createOpen = true">
-              <div class="flex items-center gap-1"><Plus class="h-4 w-4" /> Regel toevoegen</div>
-            </button>
+            <Button type="button" variant="outline" size="sm" class="flex items-center gap-1" @click="createOpen = true">
+              <Plus class="h-4 w-4" /> Regel toevoegen
+            </Button>
           </div>
           <table class="w-full table-auto text-sm">
             <tbody>

@@ -2,7 +2,7 @@
 import Category from '@/components/Category.vue';
 
 interface Props {
-    budget: Object,
+    budget: object,
 }
 
 const props = defineProps<Props>()

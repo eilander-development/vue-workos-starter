@@ -3,7 +3,7 @@ import { Card, CardContent} from '@/components/ui/card';
 import { TrendingUp, TrendingDown, ChartPie, PiggyBank } from 'lucide-vue-next';
 
 interface Props {
-    stats: Object
+    stats: object
 }
 
 const props = defineProps<Props>()

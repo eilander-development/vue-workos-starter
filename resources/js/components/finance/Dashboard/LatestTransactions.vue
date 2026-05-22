@@ -6,8 +6,8 @@ import { customScrollbar } from '@/composables/scrollbar';
 import Category from '@/components/Category.vue';
 
 interface Props {
-    latestTransactions: Object;
-    categories: Object;
+    latestTransactions: object;
+    categories: object;
 }
 
 const props = defineProps<Props>();
