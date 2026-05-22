@@ -75,6 +75,12 @@ const mainNavItems: NavItem[] = [
         icon: Banknote,
         color: 'white',
     },
+    {
+        title: 'GoCardless',
+        href: '/gocardless',
+        icon: Wallet,
+        color: 'white',
+    },
 ];
 
 const footerNavItems: NavItem[] = [

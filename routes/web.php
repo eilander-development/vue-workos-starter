@@ -27,6 +27,13 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::get('/imports/transactions/rules/{rule}/similar-transactions', [ImportController::class, 'similarRuleTransactions'])->name('imports.transactions.rules.similar_transactions');
     Route::post('/imports/transactions/rules/{rule}/transactions/{transaction}/apply', [ImportController::class, 'applyRuleToTransaction'])->name('imports.transactions.rules.transactions.apply');
     Route::post('/imports/transactions/rules/{rule}/apply', [ImportController::class, 'applyRule'])->name('imports.transactions.rules.apply');
+    Route::get('/plaid', [App\Http\Controllers\PlaidController::class, 'index'])->name('plaid.index');
+    Route::get('/plaid/link-token', [App\Http\Controllers\PlaidController::class, 'linkToken'])->name('plaid.link_token');
+    Route::post('/plaid/settings', [App\Http\Controllers\PlaidController::class, 'saveSettings'])->name('plaid.settings.save');
+    Route::post('/plaid/connect', [App\Http\Controllers\PlaidController::class, 'connect'])->name('plaid.connect');
+    Route::post('/plaid/refresh', [App\Http\Controllers\PlaidController::class, 'refresh'])->name('plaid.refresh');
+    Route::get('/gocardless', [App\Http\Controllers\GoCardlessController::class, 'index'])->name('gocardless.index');
+    Route::post('/gocardless/connect', [App\Http\Controllers\GoCardlessController::class, 'connect'])->name('gocardless.connect');
     Route::post('/transactions/{transactionId}/assign', [TransactionsController::class, 'assign'])->name('transactions.assign');
     Route::delete('/transactions/{transaction}', [TransactionsController::class, 'destroy'])->name('transactions.destroy');
     Route::get('/categories', [CategoriesController::class, 'index'])->name('categories');
