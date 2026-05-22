@@ -19,45 +19,31 @@ class GoCardless
         return trim($apiKey);
     }
 
-    public function environment(): string
-    {
-        $environment = config('services.gocardless.environment');
-
-        if (is_string($environment) && trim($environment) !== '') {
-            return trim($environment);
-        }
-
-        $apiKey = $this->getApiKey();
-
-        return str_starts_with($apiKey, 'live_') ? 'production' : 'sandbox';
-    }
-
     public function baseUrl(): string
     {
-        return match ($this->environment()) {
-            'production' => 'https://api.gocardless.com',
-            default => 'https://api-sandbox.gocardless.com',
-        };
+        return rtrim((string) config('services.gocardless.base_url', 'https://api.gocardless.com'), '/');
     }
 
     public function fetchMerchant(): array
     {
-        $response = $this->request('GET', '/merchants');
+        $response = $this->request('GET', '/creditors');
+        $creditors = $response->json('creditors', []);
 
-        $merchants = $response->json('merchants', []);
-
-        if (! is_array($merchants) || count($merchants) === 0) {
-            throw new RuntimeException('Geen GoCardless-merchant gevonden. Controleer je API-key.');
+        if (! is_array($creditors) || count($creditors) === 0) {
+            throw new RuntimeException('Geen GoCardless-crediteur gevonden. Controleer je live access token en account.');
         }
 
-        return $merchants[0];
+        return $creditors[0];
     }
 
     protected function request(string $method, string $path, array $data = []): Response
     {
         $apiKey = $this->getApiKey();
 
-        $builder = Http::withBasicAuth($apiKey, '')
+        $builder = Http::withToken($apiKey)
+            ->withHeaders([
+                'GoCardless-Version' => (string) config('services.gocardless.version', '2015-07-06'),
+            ])
             ->accept('application/json')
             ->retry(2, 100);
 

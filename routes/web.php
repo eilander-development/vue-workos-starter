@@ -39,5 +39,11 @@ Route::middleware([ 'auth', ValidateSessionWithWorkOS::class,])->group(function 
     Route::delete('/categories/{category}/budgets/{budget}', [CategoriesController::class, 'destroyBudget'])->name('categories.budgets.destroy');
 });
 
+Route::middleware(['auth'])->group(function () {
+    Route::get('/truelayer', [App\Http\Controllers\TrueLayerController::class, 'index'])->name('truelayer.index');
+    Route::get('/truelayer/connect', [App\Http\Controllers\TrueLayerController::class, 'redirect'])->name('truelayer.connect');
+    Route::get('/truelayer/callback', [App\Http\Controllers\TrueLayerController::class, 'callback'])->name('truelayer.callback');
+});
+
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

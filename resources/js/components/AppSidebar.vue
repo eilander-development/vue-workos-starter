@@ -81,6 +81,12 @@ const mainNavItems: NavItem[] = [
         icon: Wallet,
         color: 'white',
     },
+    {
+        title: 'TrueLayer',
+        href: '/truelayer',
+        icon: Wallet,
+        color: 'white',
+    },
 ];
 
 const footerNavItems: NavItem[] = [
