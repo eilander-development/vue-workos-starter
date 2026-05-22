@@ -2,21 +2,21 @@
 
 namespace App\Services;
 
+use App\Services\Concerns\ValidatesServiceConfig;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class GoCardless
 {
+    use ValidatesServiceConfig;
+
     public function getApiKey(): string
     {
-        $apiKey = config('services.gocardless.api_key');
-
-        if (! is_string($apiKey) || trim($apiKey) === '') {
-            throw new RuntimeException('GoCardless toegangstoken ontbreekt. Voeg GO_CARDLESS_ACCESS_TOKEN toe aan je .env.');
-        }
-
-        return trim($apiKey);
+        return $this->requiredConfigString(
+            'services.gocardless.api_key',
+            'GoCardless toegangstoken ontbreekt. Voeg GO_CARDLESS_ACCESS_TOKEN toe aan je .env.'
+        );
     }
 
     public function baseUrl(): string

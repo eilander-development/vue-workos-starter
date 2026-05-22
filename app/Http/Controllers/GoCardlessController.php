@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesApiErrors;
 use App\Services\GoCardless;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -9,6 +10,8 @@ use Inertia\Inertia;
 
 class GoCardlessController extends Controller
 {
+    use HandlesApiErrors;
+
     public function index(Request $request, GoCardless $goCardless): \Inertia\Response
     {
         $merchant = null;
@@ -32,9 +35,7 @@ class GoCardlessController extends Controller
 
             return response()->json(['merchant' => $merchant]);
         } catch (\Throwable $exception) {
-            return response()->json([
-                'message' => $exception->getMessage(),
-            ], 422);
+            return $this->apiErrorResponse($exception);
         }
     }
 }

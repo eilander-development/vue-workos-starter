@@ -2,39 +2,26 @@
 
 namespace App\Services;
 
+use App\Services\Concerns\ValidatesServiceConfig;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
 
 class TrueLayer
 {
+    use ValidatesServiceConfig;
+
     public function clientId(): string
     {
-        $value = (string) config('services.truelayer.client_id', '');
-        if (trim($value) === '') {
-            throw new RuntimeException('TRUELAYER_CLIENT_ID ontbreekt in .env.');
-        }
-
-        return $value;
+        return $this->requiredConfigString('services.truelayer.client_id', 'TRUELAYER_CLIENT_ID ontbreekt in .env.');
     }
 
     public function clientSecret(): string
     {
-        $value = (string) config('services.truelayer.client_secret', '');
-        if (trim($value) === '') {
-            throw new RuntimeException('TRUELAYER_CLIENT_SECRET ontbreekt in .env.');
-        }
-
-        return $value;
+        return $this->requiredConfigString('services.truelayer.client_secret', 'TRUELAYER_CLIENT_SECRET ontbreekt in .env.');
     }
 
     public function redirectUri(): string
     {
-        $value = (string) config('services.truelayer.redirect_uri', '');
-        if (trim($value) === '') {
-            throw new RuntimeException('TRUELAYER_REDIRECT_URI ontbreekt in .env.');
-        }
-
-        return $value;
+        return $this->requiredConfigString('services.truelayer.redirect_uri', 'TRUELAYER_REDIRECT_URI ontbreekt in .env.');
     }
 
     public function authUrl(string $state): string
