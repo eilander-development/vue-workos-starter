@@ -77,7 +77,7 @@ const connectGoCardless = async () => {
 
           <div class="mt-4 flex flex-wrap gap-2">
             <Link href="/imports/transactions">
-              <Button type="button" variant="outline">Ga naar ING import</Button>
+              <Button type="button" variant="outline">Ga naar transacties import</Button>
             </Link>
           </div>
         </CardContent>
