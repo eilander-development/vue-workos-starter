@@ -12,12 +12,11 @@ class GoCardlessController extends Controller
     public function index(Request $request, GoCardless $goCardless): \Inertia\Response
     {
         $merchant = null;
-        $configured = true;
 
         try {
             $merchant = $goCardless->fetchMerchant();
         } catch (\Throwable $exception) {
-            $configured = $exception instanceof \RuntimeException && str_contains($exception->getMessage(), 'ontbreekt') === false;
+            // Alleen status ophalen; configuratie komt uit env.
         }
 
         return Inertia::render('GoCardlessIntegration', [

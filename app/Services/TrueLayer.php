@@ -44,7 +44,6 @@ class TrueLayer
             'client_id' => $this->clientId(),
             'redirect_uri' => $this->redirectUri(),
             'scope' => 'accounts balance transactions cards offline_access',
-            'providers' => 'uk-ob-all uk-oauth-all',
             'state' => $state,
         ]);
 
@@ -96,4 +95,3 @@ class TrueLayer
         return $response->json();
     }
 }
-

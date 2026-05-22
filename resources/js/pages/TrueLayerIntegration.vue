@@ -3,6 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import NotificationBanner from '@/components/NotificationBanner.vue';
 import { home } from '@/routes';
 
 const page = usePage();
@@ -13,6 +14,8 @@ const props = page.props as any;
   <Head title="TrueLayer koppeling" />
   <AppLayout :breadcrumbs="[{ title: 'Home', href: home().url }, { title: 'TrueLayer', href: '/truelayer' }]">
     <main class="space-y-4 p-4">
+      <NotificationBanner v-if="props.error" type="error" :message="props.error" />
+
       <Card class="rounded-md shadow-xl">
         <CardContent>
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

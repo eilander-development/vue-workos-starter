@@ -43,7 +43,7 @@ class TrueLayerController extends Controller
             'balance' => $balance,
             'transactions' => $transactions,
             'configured' => (bool) config('services.truelayer.client_id') && (bool) config('services.truelayer.client_secret'),
-            'error' => $error,
+            'error' => $error ?? session('error'),
         ]);
     }
 
@@ -62,7 +62,14 @@ class TrueLayerController extends Controller
             'state' => ['required', 'string'],
         ]);
 
-        if ($request->input('state') !== $request->session()->get('truelayer_oauth_state')) {
+        $rawState = (string) $request->input('state');
+        $state = $rawState;
+        $decodedState = json_decode($rawState, true);
+        if (is_array($decodedState) && isset($decodedState['state']) && is_string($decodedState['state'])) {
+            $state = $decodedState['state'];
+        }
+
+        if ($state !== $request->session()->get('truelayer_oauth_state')) {
             return redirect('/truelayer')->with('error', 'Ongeldige state ontvangen van TrueLayer.');
         }
 
@@ -78,4 +85,3 @@ class TrueLayerController extends Controller
         return redirect('/truelayer');
     }
 }
-
