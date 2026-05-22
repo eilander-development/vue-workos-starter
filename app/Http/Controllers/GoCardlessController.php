@@ -20,12 +20,9 @@ class GoCardlessController extends Controller
             $configured = $exception instanceof \RuntimeException && str_contains($exception->getMessage(), 'ontbreekt') === false;
         }
 
-        $connection = $request->user()->plaidConnections()->latest()->first();
-
         return Inertia::render('GoCardlessIntegration', [
             'gocardlessMerchant' => $merchant,
             'gocardlessConfigured' => (bool) config('services.gocardless.api_key'),
-            'plaidConnection' => $connection ? $connection->only(['id', 'item_id', 'institution_name']) : null,
         ]);
     }
 

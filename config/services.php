@@ -41,13 +41,6 @@ return [
         'redirect_url' => env('WORKOS_REDIRECT_URL'),
     ],
 
-    'plaid' => [
-        'client_id' => env('PLAID_CLIENT_ID'),
-        'secret' => env('PLAID_SECRET'),
-        'environment' => env('PLAID_ENVIRONMENT', 'sandbox'),
-        'webhook' => env('PLAID_WEBHOOK_URL'),
-    ],
-
     'gocardless' => [
         'api_key' => env('GO_CARDLESS_ACCESS_TOKEN', env('API_KEY_GO_CARDLESS')),
         'environment' => env('GO_CARDLESS_ENVIRONMENT', 'sandbox'),
