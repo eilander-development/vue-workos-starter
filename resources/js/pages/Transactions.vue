@@ -13,6 +13,9 @@ import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import debounce from 'lodash/debounce';
 import { Button } from '@/components/ui/button';
+import { MoneyAmount } from '@/components/ui/money-amount';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { TypeBadge } from '@/components/ui/type-badge';
 import NotificationBanner from '@/components/NotificationBanner.vue';
 import { useNotification } from '@/composables/useNotification';
 import {
@@ -348,7 +351,7 @@ const goToPage = (pageNumber: number) => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <main class="p-4 h-full">
             <NotificationBanner v-if="notification" :type="notification.type" :message="notification.message" />
-            <div class="rounded-lg border bg-card text-card-foreground shadow-sm h-full">
+            <div class="flex h-full flex-col rounded-lg border bg-card text-card-foreground shadow-sm">
                 <div class="flex flex-col space-y-1.5 p-4 sm:p-6 ">
                     <div
                         class="text-base font-medium tracking-tight sm:text-lg"
@@ -392,10 +395,10 @@ const goToPage = (pageNumber: number) => {
                         />
                     </div>
                 </div>
-                <div class="p-4 pt-0 sm:p-6 sm:pt-0">
+                <div class="flex-1 p-0">
                     <div class="-mx-4 overflow-x-auto sm:mx-0">
                         <div class="inline-block min-w-full px-4 align-middle sm:px-0" >
-                            <div :class="`${customScrollbar} relative max-h-140 w-full overflow-y-auto`" >
+                            <div :class="`${customScrollbar} relative h-[calc(100vh-24rem)] min-h-[20rem] w-full overflow-y-auto`" >
                                 <table
                                     class="w-full table-auto overflow-scroll text-sm"
                                 >
@@ -405,7 +408,7 @@ const goToPage = (pageNumber: number) => {
                                         >
                                             <th
                                                 class="h-10 px-4 text-left align-middle font-medium text-muted-foreground"
-                                            >   
+                                            >
                                                 Categorie
                                             </th>
                                             <th
@@ -470,38 +473,12 @@ const goToPage = (pageNumber: number) => {
                                                 {{ transaction.description }}
                                             </td>
                                             <td class="p-2">
-                                                <span
-                                                    :class="[
-                                                        'inline-flex items-center rounded-full px-2 py-1 text-[11px] font-semibold uppercase',
-                                                        transaction.type === 'income' ? 'bg-emerald-900 text-emerald-100' :
-                                                        transaction.type === 'expense' ? 'bg-rose-900 text-rose-100' :
-                                                        'bg-slate-800 text-slate-100',
-                                                    ]"
-                                                >
-                                                    {{
-                                                        transaction.type === 'income' ? 'Inkomen' :
-                                                        transaction.type === 'expense' ? 'Uitgave' :
-                                                        transaction.type === 'saving' ? 'Sparen' :
-                                                        'Onbekend'
-                                                    }}
-                                                </span>
+                                                <TypeBadge :type="transaction.type" />
                                             </td>
                                             <td class="p-2 text-right">
-                                                <span :class="transaction.amount > 0 ? 'rounded-md bg-green-800 p-2 py-1 text-white': ''">
-                                                    {{
-                                                        new Intl.NumberFormat(
-                                                            'nl-NL',
-                                                            {
-                                                                style: 'currency',
-                                                                currency: 'EUR',
-                                                            },
-                                                        ).format(
-                                                            transaction.amount,
-                                                        )
-                                                    }}
-                                                </span>
+                                                <MoneyAmount :amount="transaction.amount" :highlight-positive="true" />
                                             </td>
-                                            <td class="p-2 text-right">
+                                            <td class="w-2 p-2 text-right">
                                                 <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-150 ease-in-out inline-flex justify-end">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger as-child>
@@ -535,30 +512,14 @@ const goToPage = (pageNumber: number) => {
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center justify-between border-t border-slate-900 bg-muted px-4 py-3 text-sm text-muted-foreground">
-                        <div>
-                            Toon {{ displayPagination.from }} - {{ displayPagination.to }} van {{ displayPagination.total }} transacties
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button
-                                type="button"
-                                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                                @click="goToPage(currentPage - 1)"
-                                :disabled="currentPage <= 1"
-                            >
-                                Vorige
-                            </button>
-                            <button
-                                type="button"
-                                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                                @click="goToPage(currentPage + 1)"
-                                :disabled="currentPage >= lastPage"
-                            >
-                                Volgende
-                            </button>
-                        </div>
-                    </div>
                 </div>
+                <TablePagination
+                    class="rounded-b-md"
+                    :pagination="displayPagination"
+                    item-label="transacties"
+                    @previous="goToPage(currentPage - 1)"
+                    @next="goToPage(currentPage + 1)"
+                />
             </div>
             <Dialog :open="showDialogOpen" @update:open="(value) => showDialogOpen = value">
                 <DialogContent class="sm:max-w-lg">

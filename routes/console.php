@@ -1,10 +1,9 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
-use App\Models\Budget;
 use App\Models\Category;
 use App\Models\Transaction;
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Artisan;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -28,8 +27,9 @@ Artisan::command('transactions:sample {--count=10} {--dry-run}', function () {
     $incomeBudget = $incomeCategory->budgets()->firstOrCreate(['name' => 'Salaris'], ['budget' => 3200]);
     $savingBudget = $savingCategory->budgets()->firstOrCreate(['name' => 'Noodfonds'], ['budget' => 600]);
 
-    if (!$expenseCategory || !$expenseBudget) {
+    if (! $expenseCategory || ! $expenseBudget) {
         $this->error('Geen expense category/budget gevonden. Seed eerst categorieën.');
+
         return;
     }
 
@@ -51,7 +51,7 @@ Artisan::command('transactions:sample {--count=10} {--dry-run}', function () {
 
         $category = $type === 'expense' ? $expenseCategory : ($type === 'income' ? $incomeCategory : $savingCategory);
         $budget = $type === 'expense' ? $expenseBudget : ($type === 'income' ? $incomeBudget : $savingBudget);
-        $description = $descriptions[$type][array_rand($descriptions[$type])] . ' #' . now()->format('ymd') . '-' . str_pad((string) ($i + 1), 3, '0', STR_PAD_LEFT);
+        $description = $descriptions[$type][array_rand($descriptions[$type])].' #'.now()->format('ymd').'-'.str_pad((string) ($i + 1), 3, '0', STR_PAD_LEFT);
 
         $data = [
             'amount' => (float) $amount,
@@ -66,6 +66,7 @@ Artisan::command('transactions:sample {--count=10} {--dry-run}', function () {
 
         if ($dryRun) {
             $this->line(json_encode($data));
+
             continue;
         }
 

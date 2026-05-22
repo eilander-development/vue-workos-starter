@@ -5,8 +5,8 @@
         "slug": "eten-drinken",
         "icon": "Salad",
         "color": "red",
-        "created_at": "2026-05-18 18:54:57",
-        "updated_at": "2026-05-18 18:54:57",
+        "created_at": "2026-05-21 07:27:56",
+        "updated_at": "2026-05-21 07:27:56",
         "type": "expense"
     },
     {
@@ -15,8 +15,8 @@
         "slug": "vervoer",
         "icon": "Car",
         "color": "yellow",
-        "created_at": "2026-05-18 18:54:57",
-        "updated_at": "2026-05-19 19:15:07",
+        "created_at": "2026-05-21 07:27:56",
+        "updated_at": "2026-05-21 07:27:56",
         "type": "expense"
     },
     {
@@ -25,8 +25,8 @@
         "slug": "huisdieren",
         "icon": "Cat",
         "color": "indigo",
-        "created_at": "2026-05-18 19:25:55",
-        "updated_at": "2026-05-18 19:25:55",
+        "created_at": "2026-05-21 07:27:56",
+        "updated_at": "2026-05-21 07:27:56",
         "type": "expense"
     },
     {
@@ -35,8 +35,8 @@
         "slug": "woning",
         "icon": "House",
         "color": "green",
-        "created_at": "2026-05-18 19:25:55",
-        "updated_at": "2026-05-18 19:25:55",
+        "created_at": "2026-05-21 07:27:56",
+        "updated_at": "2026-05-21 07:27:56",
         "type": "expense"
     },
     {
@@ -45,28 +45,48 @@
         "slug": "verzekeringen",
         "icon": "ShieldAlert",
         "color": "orange",
-        "created_at": "2026-05-18 19:25:55",
-        "updated_at": "2026-05-18 19:25:55",
+        "created_at": "2026-05-21 07:27:56",
+        "updated_at": "2026-05-21 07:27:56",
         "type": "expense"
     },
     {
         "id": 6,
-        "name": "Inkomsten",
-        "slug": "inkomsten",
-        "icon": "Euro",
+        "name": "Werk",
+        "slug": "werk",
+        "icon": "Plus",
         "color": "green",
-        "created_at": "2026-05-21 18:09:43",
-        "updated_at": "2026-05-21 18:09:43",
+        "created_at": "2026-05-21 10:55:18",
+        "updated_at": "2026-05-21 10:55:18",
         "type": "income"
     },
     {
         "id": 7,
+        "name": "Belasting",
+        "slug": "belasting",
+        "icon": "DollarSign",
+        "color": "blue",
+        "created_at": "2026-05-21 10:57:09",
+        "updated_at": "2026-05-21 10:57:09",
+        "type": "income"
+    },
+    {
+        "id": 8,
+        "name": "Inkomsten",
+        "slug": "inkomsten",
+        "icon": "Euro",
+        "color": "green",
+        "created_at": "2026-05-21 10:59:03",
+        "updated_at": "2026-05-21 10:59:03",
+        "type": "income"
+    },
+    {
+        "id": 9,
         "name": "Sparen",
         "slug": "sparen",
         "icon": "PiggyBank",
         "color": "blue",
-        "created_at": "2026-05-21 18:09:43",
-        "updated_at": "2026-05-21 18:09:43",
+        "created_at": "2026-05-21 10:59:03",
+        "updated_at": "2026-05-21 10:59:03",
         "type": "saving"
     }
 ]

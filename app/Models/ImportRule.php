@@ -25,4 +25,3 @@ class ImportRule extends Model
         return $this->hasMany(Transaction::class, 'rule_id');
     }
 }
-

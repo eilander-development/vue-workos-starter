@@ -6,14 +6,25 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import VueApexCharts from 'vue3-apexcharts'
+import { computed } from 'vue';
 
 interface Props {
-    yearlyExpensesChart: object|Array
+    yearlyExpensesChart: object|Array;
 }
 
 const props = defineProps<Props>()
 
-const chartOptions = {
+const visibleSeries = computed(() => (props.yearlyExpensesChart as any)?.series ?? []);
+
+const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('nl-NL', {
+        style: 'currency',
+        currency: 'EUR',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(Number(value ?? 0));
+
+const chartOptions = computed(() => ({
     chart: {
         type: 'bar',
         height: 350,
@@ -26,10 +37,17 @@ const chartOptions = {
         }
     },
     dataLabels: {
-      enabled: false,
+      enabled: true,
+      formatter: (value: number) => formatCurrency(value),
+      style: {
+          fontSize: '11px',
+          fontWeight: 600,
+      },
     },
     legend: {
-      show: false,
+      show: true,
+      position: 'top',
+      horizontalAlign: 'right',
     },
     tooltip: {
       shared: true,
@@ -38,6 +56,9 @@ const chartOptions = {
       theme: 'dark',
       style: {
         fontFamily: "Inter, sans-serif",
+      },
+      y: {
+        formatter: (value: number) => formatCurrency(value),
       },
         x: {
             show: true,
@@ -101,12 +122,14 @@ const chartOptions = {
                 colors: 'var(--color-gray-400)',
                 fontFamily: "Inter, sans-serif",
             },
+            formatter: (value: number) => formatCurrency(value),
         },
     },
     fill: {
       opacity: 1,
     },
-};
+    colors: ['#10b981', '#ef4444'],
+}));
 
 </script>
 
@@ -116,7 +139,7 @@ const chartOptions = {
             <CardTitle>Inkomen vs uitgaven</CardTitle>
         </CardHeader>
         <CardContent>
-            <VueApexCharts height="350" :options="chartOptions" :series="props.yearlyExpensesChart.series"/>
+            <VueApexCharts height="350" :options="chartOptions" :series="visibleSeries"/>
         </CardContent>
     </Card>
 </template>

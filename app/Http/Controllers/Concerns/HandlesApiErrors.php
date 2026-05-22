@@ -14,4 +14,3 @@ trait HandlesApiErrors
         ], $status);
     }
 }
-

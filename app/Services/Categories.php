@@ -3,51 +3,59 @@
 namespace App\Services;
 
 use App\Models\Category;
-use Illuminate\Support\Facades\Schema;
+use Carbon\CarbonInterface;
 
 class Categories
 {
-    public static function list(string $filter = 'all') : array
+    public function list(string $filter = 'all', ?CarbonInterface $startDate = null): array
     {
-        return Category::with(['budgets.transactions'])
+        return Category::with(['budgets.transactions' => function ($query) use ($startDate) {
+            if ($startDate !== null) {
+                $query->whereDate('date', '>=', $startDate->toDateString());
+            }
+        }])
             ->when($filter !== 'all', fn ($query) => $query->where('type', $filter))
             ->orderBy('name')
             ->get()
             ->map(function (Category $category) {
-                return self::categoryFromModel($category);
+                return $this->categoryFromModel($category);
             })
             ->keyBy('id')
             ->toArray();
     }
 
-    public static function stats(array $categories): array
+    public function stats(array $categories): array
     {
         $categoryCount = count($categories);
         $budgetCount = collect($categories)->sum(fn ($category) => count($category['budgets'] ?? []));
-        $totalBudget = collect($categories)->sum('budget');
-        $totalSpend = collect($categories)->sum('spend');
         $expenseCategories = collect($categories)->where('type', 'expense');
         $incomeCategories = collect($categories)->where('type', 'income');
         $savingCategories = collect($categories)->where('type', 'saving');
+        $expenseBudget = (float) $expenseCategories->sum('budget');
+        $expenseSpend = (float) $expenseCategories->sum('spend');
+        $incomeBudget = (float) $incomeCategories->sum('budget');
+        $incomeSpend = (float) $incomeCategories->sum('spend');
+        $savingBudget = (float) $savingCategories->sum('budget');
+        $savingSpend = (float) $savingCategories->sum('spend');
 
         return [
             'categoryCount' => $categoryCount,
             'budgetCount' => $budgetCount,
-            'totalBudget' => (float) $totalBudget,
-            'totalSpend' => (float) $totalSpend,
-            'expenseBudget' => (float) $expenseCategories->sum('budget'),
-            'expenseSpend' => (float) $expenseCategories->sum('spend'),
-            'incomeBudget' => (float) $incomeCategories->sum('budget'),
-            'incomeSpend' => (float) $incomeCategories->sum('spend'),
-            'savingBudget' => (float) $savingCategories->sum('budget'),
-            'savingSpend' => (float) $savingCategories->sum('spend'),
+            'totalBudget' => $expenseBudget,
+            'totalSpend' => $expenseSpend,
+            'expenseBudget' => $expenseBudget,
+            'expenseSpend' => $expenseSpend,
+            'incomeBudget' => $incomeBudget,
+            'incomeSpend' => $incomeSpend,
+            'savingBudget' => $savingBudget,
+            'savingSpend' => $savingSpend,
         ];
     }
 
     /**
      * Convert an Eloquent category model into the same array shape used by the application.
      */
-    private static function categoryFromModel(Category $category): array
+    private function categoryFromModel(Category $category): array
     {
         $budgets = $category->budgets->map(function ($budget) {
             $isExpenseCategory = $budget->category?->type === 'expense';

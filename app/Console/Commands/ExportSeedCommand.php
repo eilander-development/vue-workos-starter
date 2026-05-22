@@ -9,12 +9,13 @@ use Illuminate\Support\Facades\File;
 class ExportSeedCommand extends Command
 {
     protected $signature = 'db:export-seed {table?} {--path=database/seeders/exports} {--force}';
+
     protected $description = 'Export table(s) to JSON seed files for later import';
 
     public function handle()
     {
         $table = $this->argument('table');
-        $path = rtrim($this->option('path'), "/\\");
+        $path = rtrim($this->option('path'), '/\\');
 
         if (! File::exists($path)) {
             File::makeDirectory($path, 0755, true);
@@ -28,7 +29,7 @@ class ExportSeedCommand extends Command
             $driver = DB::getDriverName();
             if ($driver === 'mysql') {
                 $rows = DB::select('SHOW TABLES');
-                $key = 'Tables_in_' . DB::getDatabaseName();
+                $key = 'Tables_in_'.DB::getDatabaseName();
                 foreach ($rows as $r) {
                     $obj = (array) $r;
                     $tables[] = $obj[$key];
@@ -43,7 +44,8 @@ class ExportSeedCommand extends Command
                     }
                 }
             } else {
-                $this->error('No table provided and automatic table discovery not supported for driver: ' . $driver);
+                $this->error('No table provided and automatic table discovery not supported for driver: '.$driver);
+
                 return 1;
             }
         }
@@ -55,11 +57,11 @@ class ExportSeedCommand extends Command
                     return (array) $r;
                 })->all();
 
-                $file = $path . DIRECTORY_SEPARATOR . $t . '.json';
+                $file = $path.DIRECTORY_SEPARATOR.$t.'.json';
                 File::put($file, json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-                $this->info("Wrote {$file} (" . count($rows) . " rows)");
+                $this->info("Wrote {$file} (".count($rows).' rows)');
             } catch (\Exception $e) {
-                $this->error("Failed to export table {$t}: " . $e->getMessage());
+                $this->error("Failed to export table {$t}: ".$e->getMessage());
             }
         }
 
@@ -123,25 +125,27 @@ class ExportedSeeder extends Seeder
 PHP;
 
             File::put($seederPath, $seederContents);
-            $this->info('Generated seeder: ' . $seederPath);
+            $this->info('Generated seeder: '.$seederPath);
         }
 
         $this->info('Export complete.');
+
         return 0;
     }
 
     private function makeSeederPathExpression(string $path): string
     {
         if ($this->isAbsolutePath($path)) {
-            return "'" . addslashes($path) . "'";
+            return "'".addslashes($path)."'";
         }
 
         if (str_starts_with($path, 'database/') || str_starts_with($path, 'database\\')) {
             $relative = preg_replace('#^database[\\/]#', '', $path);
-            return "database_path('" . addslashes($relative) . "')";
+
+            return "database_path('".addslashes($relative)."')";
         }
 
-        return "base_path('" . addslashes($path) . "')";
+        return "base_path('".addslashes($path)."')";
     }
 
     private function isAbsolutePath(string $path): bool

@@ -2,10 +2,11 @@
 
 namespace App\Repositories;
 
+use App\Contracts\Repositories\CategoryRepositoryInterface;
 use App\Models\Budget;
 use App\Models\Category;
 
-class CategoryRepository
+class CategoryRepository implements CategoryRepositoryInterface
 {
     public function createCategory(array $data): Category
     {
@@ -16,8 +17,6 @@ class CategoryRepository
     {
         $category = Category::findOrFail($categoryId);
         $category->update($data);
-
-        
 
         return $category;
     }

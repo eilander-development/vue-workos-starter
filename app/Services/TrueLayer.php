@@ -34,7 +34,7 @@ class TrueLayer
             'state' => $state,
         ]);
 
-        return 'https://auth.truelayer.com/?' . $query;
+        return 'https://auth.truelayer.com/?'.$query;
     }
 
     public function exchangeCode(string $code): array
@@ -48,7 +48,7 @@ class TrueLayer
         ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('TrueLayer token exchange mislukt: ' . $response->body());
+            throw new RuntimeException('TrueLayer token exchange mislukt: '.$response->body());
         }
 
         return $response->json();
@@ -61,22 +61,22 @@ class TrueLayer
 
     public function balances(string $accessToken, string $accountId): array
     {
-        return $this->dataApiGet($accessToken, '/data/v1/accounts/' . $accountId . '/balance');
+        return $this->dataApiGet($accessToken, '/data/v1/accounts/'.$accountId.'/balance');
     }
 
     public function transactions(string $accessToken, string $accountId): array
     {
-        return $this->dataApiGet($accessToken, '/data/v1/accounts/' . $accountId . '/transactions');
+        return $this->dataApiGet($accessToken, '/data/v1/accounts/'.$accountId.'/transactions');
     }
 
     protected function dataApiGet(string $accessToken, string $path): array
     {
         $response = Http::withToken($accessToken)
             ->accept('application/json')
-            ->get('https://api.truelayer.com' . $path);
+            ->get('https://api.truelayer.com'.$path);
 
         if (! $response->successful()) {
-            throw new RuntimeException('TrueLayer API-fout: ' . $response->body());
+            throw new RuntimeException('TrueLayer API-fout: '.$response->body());
         }
 
         return $response->json();

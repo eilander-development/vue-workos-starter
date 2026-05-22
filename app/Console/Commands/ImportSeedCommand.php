@@ -9,20 +9,23 @@ use Illuminate\Support\Facades\File;
 class ImportSeedCommand extends Command
 {
     protected $signature = 'db:import-seed {--path=database/seeders/exports} {--truncate}';
+
     protected $description = 'Import JSON seed files from a folder into the database';
 
     public function handle()
     {
-        $path = rtrim($this->option('path'), "/\\");
+        $path = rtrim($this->option('path'), '/\\');
 
         if (! File::exists($path)) {
-            $this->error('Path does not exist: ' . $path);
+            $this->error('Path does not exist: '.$path);
+
             return 1;
         }
 
         $files = File::files($path);
         if (empty($files)) {
-            $this->info('No files found in: ' . $path);
+            $this->info('No files found in: '.$path);
+
             return 0;
         }
 
@@ -36,7 +39,7 @@ class ImportSeedCommand extends Command
 
             foreach ($files as $file) {
                 $table = pathinfo($file->getFilename(), PATHINFO_FILENAME);
-                $this->info('Importing ' . $table);
+                $this->info('Importing '.$table);
                 $content = File::get($file->getPathname());
                 $rows = json_decode($content, true);
                 if (! is_array($rows) || empty($rows)) {
@@ -60,11 +63,13 @@ class ImportSeedCommand extends Command
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->error('Import failed: ' . $e->getMessage());
+            $this->error('Import failed: '.$e->getMessage());
+
             return 1;
         }
 
         $this->info('Import complete.');
+
         return 0;
     }
 }

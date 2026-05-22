@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Budget;
 use App\Models\Category;
 use App\Models\Transaction;
 use Illuminate\Database\Seeder;
@@ -44,7 +43,7 @@ class TransactionSeeder extends Seeder
         ];
 
         foreach ($transactions as $transaction) {
-            if (($transaction['type'] !== null) && (!$transaction['category'] || !$transaction['budget'])) {
+            if (($transaction['type'] !== null) && (! $transaction['category'] || ! $transaction['budget'])) {
                 continue;
             }
 

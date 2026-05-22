@@ -28,4 +28,3 @@ class ImportRuleSeeder extends Seeder
         }
     }
 }
-

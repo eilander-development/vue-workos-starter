@@ -22,36 +22,36 @@
     {
         "id": 5,
         "migration": "2026_05_18_185132_create_categories_table",
-        "batch": 3
+        "batch": 2
     },
     {
         "id": 6,
         "migration": "2026_05_18_185133_create_budgets_table",
-        "batch": 3
+        "batch": 2
     },
     {
         "id": 7,
         "migration": "2026_05_19_000001_add_type_to_categories_table",
-        "batch": 4
+        "batch": 2
     },
     {
         "id": 8,
         "migration": "2026_05_21_150000_add_import_fields_to_transactions_table",
-        "batch": 5
+        "batch": 3
     },
     {
         "id": 9,
         "migration": "2026_05_21_150100_create_import_rules_table",
-        "batch": 5
+        "batch": 3
     },
     {
         "id": 10,
-        "migration": "2026_05_21_160000_update_transaction_types_based_on_amount",
-        "batch": 6
+        "migration": "2026_05_21_151000_add_rule_id_to_transactions_table",
+        "batch": 4
     },
     {
-        "id": 11,
-        "migration": "2026_05_21_151000_add_rule_id_to_transactions_table",
-        "batch": 7
+        "id": 13,
+        "migration": "2026_05_22_130000_add_unique_index_to_transactions_source_hash",
+        "batch": 5
     }
 ]

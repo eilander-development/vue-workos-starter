@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\Repositories\TransactionRepositoryInterface;
+use App\Http\Requests\Transactions\AssignTransactionRequest;
 use App\Models\Transaction;
-use App\Repositories\TransactionRepository;
+use App\Services\Categories;
+use App\Services\Transactions;
+use App\Support\PaginationData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -11,27 +15,26 @@ use Inertia\Response;
 
 class TransactionsController extends Controller
 {
+    public function __construct(
+        protected TransactionRepositoryInterface $transactionRepository,
+        protected Categories $categoriesService,
+        protected Transactions $transactionsService,
+    ) {}
+
     /**
      * Show the user's profile settings page.
      */
     public function index(Request $request): Response|JsonResponse
     {
         $pageNumber = $request->integer('page', 1);
-        $transactions = \App\Services\Transactions::list(
+        $transactions = $this->transactionsService->list(
             searchTerm: $request->input('search') ?? '',
             type: $request->input('type') ?? '',
             perPage: 100,
             page: $pageNumber,
         );
 
-        $payload = [
-            'current_page' => $transactions->currentPage(),
-            'last_page' => $transactions->lastPage(),
-            'per_page' => $transactions->perPage(),
-            'total' => $transactions->total(),
-            'from' => $transactions->firstItem(),
-            'to' => $transactions->lastItem(),
-        ];
+        $payload = PaginationData::fromPaginator($transactions);
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -43,24 +46,17 @@ class TransactionsController extends Controller
 
         return Inertia::render('Transactions', [
             'filters' => $request->only(['search', 'type']),
-            'categories' => \App\Services\Categories::list(),
+            'categories' => $this->categoriesService->list(),
             'transactions' => $transactions->items(),
             'pagination' => $payload,
         ]);
     }
 
-    public function assign(Request $request, int $transactionId): JsonResponse
+    public function assign(AssignTransactionRequest $request, int $transactionId): JsonResponse
     {
-        $data = $request->validate([
-            'categoryId' => ['required', 'integer'],
-            'budgetId' => ['required', 'integer'],
-            'type' => ['required', 'string', 'in:expense,income,saving'],
-            'icon' => ['required', 'string'],
-            'color' => ['required', 'string'],
-        ]);
+        $data = $request->validated();
 
-        $repository = new TransactionRepository();
-        $transaction = $repository->saveTransaction($transactionId, [
+        $transaction = $this->transactionRepository->saveTransaction($transactionId, [
             'category_id' => $data['categoryId'],
             'budget_id' => $data['budgetId'],
             'type' => $data['type'],

@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Repositories\CategoryRepository;
+use App\Contracts\Repositories\CategoryRepositoryInterface;
+use App\Http\Requests\Categories\StoreBudgetRequest;
+use App\Http\Requests\Categories\StoreCategoryRequest;
+use App\Http\Requests\Categories\UpdateCategoryRequest;
 use App\Models\Category;
+use App\Services\Categories;
+use App\Services\ReportingPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -12,24 +17,31 @@ use Inertia\Response;
 
 class CategoriesController extends Controller
 {
+    public function __construct(
+        protected CategoryRepositoryInterface $categoryRepository,
+        protected Categories $categoriesService,
+        protected ReportingPeriod $reportingPeriod,
+    ) {}
+
     public function index(Request $request): Response
     {
         $filter = $request->string('filter')->toString();
         $allowedFilters = ['all', 'expense', 'income', 'saving', 'uncategorized'];
-        if (!in_array($filter, $allowedFilters, true)) {
+        if (! in_array($filter, $allowedFilters, true)) {
             $filter = 'all';
         }
 
         $pageNumber = max(1, (int) $request->input('page', 1));
-        $categories = \App\Services\Categories::list($filter);
-        $allCategories = \App\Services\Categories::list('all');
+        $startDate = $this->reportingPeriod->startOfCurrentMonthFromDay(20);
+        $categories = $this->categoriesService->list($filter, $startDate);
+        $allCategories = $this->categoriesService->list('all', $startDate);
 
         $paginatedCategories = array_values(array_slice($categories, ($pageNumber - 1) * 100, 100));
         $totalCategories = count($categories);
 
         return Inertia::render('Categories', [
             'categories' => $paginatedCategories,
-            'stats' => \App\Services\Categories::stats($allCategories),
+            'stats' => $this->categoriesService->stats($allCategories),
             'activeFilter' => $filter,
             'pagination' => [
                 'current_page' => $pageNumber,
@@ -42,22 +54,13 @@ class CategoriesController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreCategoryRequest $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'type' => ['required', 'string', 'in:expense,income,saving,uncategorized'],
-            'icon' => ['nullable', 'string', 'max:255'],
-            'color' => ['nullable', 'string', 'max:50'],
-            'budgets' => ['nullable', 'array'],
-            'budgets.*.name' => ['nullable', 'string', 'max:255'],
-            'budgets.*.budget' => ['nullable', 'numeric', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         $slug = $this->generateUniqueSlug($data['name']);
 
-        $repository = new CategoryRepository();
-        $category = $repository->createCategory([
+        $category = $this->categoryRepository->createCategory([
             'name' => $data['name'],
             'slug' => $slug,
             'type' => $data['type'],
@@ -73,7 +76,7 @@ class CategoriesController extends Controller
                 continue;
             }
 
-            $repository->createBudget($category->id, [
+            $this->categoryRepository->createBudget($category->id, [
                 'name' => $name,
                 'budget' => $amount,
             ]);
@@ -82,23 +85,13 @@ class CategoriesController extends Controller
         return redirect()->route('categories');
     }
 
-    public function update(Request $request, int $categoryId): RedirectResponse
+    public function update(UpdateCategoryRequest $request, int $categoryId): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'type' => ['required', 'string', 'in:expense,income,saving,uncategorized'],
-            'icon' => ['nullable', 'string', 'max:255'],
-            'color' => ['nullable', 'string', 'max:50'],
-            'budgets' => ['nullable', 'array'],
-            'budgets.*.id' => ['nullable', 'integer'],
-            'budgets.*.name' => ['nullable', 'string', 'max:255'],
-            'budgets.*.budget' => ['nullable', 'numeric', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         $slug = $this->generateUniqueSlug($data['name'], $categoryId);
 
-        $repository = new CategoryRepository();
-        $repository->updateCategory($categoryId, [
+        $this->categoryRepository->updateCategory($categoryId, [
             'name' => $data['name'],
             'slug' => $slug,
             'type' => $data['type'],
@@ -119,41 +112,35 @@ class CategoriesController extends Controller
                 'budget' => $amount,
             ];
 
-            if (!empty($budgetData['id'])) {
-                $repository->updateBudget($categoryId, (int) $budgetData['id'], $payload);
+            if (! empty($budgetData['id'])) {
+                $this->categoryRepository->updateBudget($categoryId, (int) $budgetData['id'], $payload);
             } else {
-                $repository->createBudget($categoryId, $payload);
+                $this->categoryRepository->createBudget($categoryId, $payload);
             }
         }
 
         return redirect()->route('categories');
     }
 
-    public function storeBudget(Request $request, int $categoryId): RedirectResponse
+    public function storeBudget(StoreBudgetRequest $request, int $categoryId): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'budget' => ['required', 'numeric', 'min:0'],
-        ]);
+        $data = $request->validated();
 
-        $repository = new CategoryRepository();
-        $repository->createBudget($categoryId, $data);
+        $this->categoryRepository->createBudget($categoryId, $data);
 
         return redirect()->route('categories');
     }
 
     public function destroy(int $categoryId): RedirectResponse
     {
-        $repository = new CategoryRepository();
-        $repository->deleteCategory($categoryId);
+        $this->categoryRepository->deleteCategory($categoryId);
 
         return redirect()->route('categories');
     }
 
     public function destroyBudget(int $categoryId, int $budgetId): RedirectResponse
     {
-        $repository = new CategoryRepository();
-        $repository->deleteBudget($categoryId, $budgetId);
+        $this->categoryRepository->deleteBudget($categoryId, $budgetId);
 
         return redirect()->route('categories');
     }
@@ -172,7 +159,7 @@ class CategoriesController extends Controller
                 ->exists()
         ) {
             $counter++;
-            $slug = $stem . '-' . $counter;
+            $slug = $stem.'-'.$counter;
         }
 
         return $slug;

@@ -15,6 +15,13 @@ pest()->extend(Tests\TestCase::class)
     ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
     ->in('Feature');
 
+pest()
+    ->beforeEach(function () {
+        $this->withoutMiddleware(\Laravel\WorkOS\Http\Middleware\ValidateSessionWithWorkOS::class);
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+    })
+    ->in('Feature');
+
 /*
 |--------------------------------------------------------------------------
 | Expectations

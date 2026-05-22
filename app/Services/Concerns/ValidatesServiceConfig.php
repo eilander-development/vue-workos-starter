@@ -17,4 +17,3 @@ trait ValidatesServiceConfig
         return trim($value);
     }
 }
-

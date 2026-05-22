@@ -2,22 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Http\RedirectResponse;
+use App\Services\Categories;
+use App\Services\ReportingPeriod;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Laravel\WorkOS\Http\Requests\AuthKitAccountDeletionRequest;
 
 class ExpensesController extends Controller
 {
+    public function __construct(
+        protected Categories $categoriesService,
+        protected ReportingPeriod $reportingPeriod,
+    ) {}
+
     /**
      * Show the user's profile settings page.
      */
     public function index(Request $request, $category = null): Response
     {
-        $categories = array_values(\App\Services\Categories::list('expense'));
+        $categories = array_values($this->categoriesService->list('expense', $this->reportingPeriod->startOfCurrentMonthFromDay(20)));
         $selected = collect($categories)->firstWhere('slug', $category) ?? ($categories[0] ?? null);
 
         return Inertia::render('Expenses', [

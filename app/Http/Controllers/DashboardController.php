@@ -2,31 +2,43 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Http\RedirectResponse;
+use App\Services\Categories;
+use App\Services\Dashboard;
+use App\Services\ReportingPeriod;
+use App\Support\PaginationData;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Laravel\WorkOS\Http\Requests\AuthKitAccountDeletionRequest;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        protected Categories $categoriesService,
+        protected Dashboard $dashboardService,
+        protected ReportingPeriod $reportingPeriod,
+    ) {}
+
     /**
      * Show the user's profile settings page.
      */
     public function index(Request $request): Response
     {
+        $transactions = $this->dashboardService->latestTransactions(
+            page: $request->integer('transactions_page', 1),
+            perPage: 100
+        );
+
         return Inertia::render('Dashboard', [
-            'categories' => \App\Services\Categories::list(),
-            'stats' => \App\Services\Dashboard::stats(),
-            'latestTransactions' => \App\Services\Dashboard::latestTransactions(),
+            'categories' => $this->categoriesService->list('all', $this->reportingPeriod->startDate()),
+            'stats' => $this->dashboardService->stats(),
+            'latestTransactions' => $transactions->items(),
+            'latestTransactionsPagination' => PaginationData::fromPaginator($transactions),
             'monthlyExpenses' => [
-                'spend' => \App\Services\Dashboard::monthlyExpensesSpend(),
-                'budgets' => \App\Services\Dashboard::monthlyExpensesBudgets(),
+                'spend' => $this->dashboardService->monthlyExpensesSpend(),
+                'budgets' => $this->dashboardService->monthlyExpensesBudgets(),
             ],
             'yearlyExpensesChart' => [
-                'series' => \App\Services\Dashboard::yearlyExpensesChartSeries()
+                'series' => $this->dashboardService->yearlyExpensesChartSeries(),
             ],
         ]);
     }

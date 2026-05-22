@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { TypeBadge } from '@/components/ui/type-badge';
 import { EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 
 const page = usePage();
@@ -32,14 +34,6 @@ const editModalOpen = ref(false);
 const createModalOpen = ref(false);
 const activeCategory = ref<Record<string, any> | null>(null);
 const deleteCategoryId = ref<number | null>(null);
-
-const typeLabels: Record<TransactionFilter, string> = {
-    all: 'Alles',
-    expense: 'Uitgaven',
-    income: 'Inkomsten',
-    saving: 'Sparen',
-    uncategorized: 'Ongecategoriseerd',
-};
 
 const filteredCategories = computed(() => categoriesData.value);
 const currentPage = ref(page.props.pagination?.current_page ?? 1);
@@ -80,10 +74,6 @@ const openEditModal = (category: Record<string, any>) => {
 };
 const openDeleteCategoryModal = (categoryId: number) => {
     deleteCategoryId.value = categoryId;
-};
-
-const typeBadgeLabel = (type: string) => {
-    return typeLabels[type] ?? type;
 };
 
 watch(categoriesData, syncActiveCategory);
@@ -180,7 +170,7 @@ const goToPage = (pageNumber: number) => {
                                     />
                                 </td>
                                 <td class="p-2 text-right">
-                                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs text-white">{{ typeBadgeLabel(category.type) }}</span>
+                                    <TypeBadge :type="category.type" income-label="Inkomsten" expense-label="Uitgaven" />
                                 </td>
                                 <td class="p-2 text-right w-0">
                                     <DropdownMenu>
@@ -209,29 +199,13 @@ const goToPage = (pageNumber: number) => {
                         </tbody>
                     </table>
                 </div>
-                <div class="flex items-center justify-between rounded-b-md border-t border-slate-900 bg-muted px-4 py-3 text-sm text-muted-foreground">
-                    <div>
-                        Toon {{ page.props.pagination?.from ?? 0 }} - {{ page.props.pagination?.to ?? 0 }} van {{ page.props.pagination?.total ?? 0 }} categorieën
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button
-                            type="button"
-                            class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                            @click="goToPage((page.props.pagination?.current_page ?? 1) - 1)"
-                            :disabled="(page.props.pagination?.current_page ?? 1) <= 1"
-                        >
-                            Vorige
-                        </button>
-                        <button
-                            type="button"
-                            class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                            @click="goToPage((page.props.pagination?.current_page ?? 1) + 1)"
-                            :disabled="(page.props.pagination?.current_page ?? 1) >= (page.props.pagination?.last_page ?? 1)"
-                        >
-                            Volgende
-                        </button>
-                    </div>
-                </div>
+                <TablePagination
+                    class="rounded-b-md"
+                    :pagination="(page.props.pagination as any)"
+                    item-label="categorieën"
+                    @previous="goToPage((page.props.pagination?.current_page ?? 1) - 1)"
+                    @next="goToPage((page.props.pagination?.current_page ?? 1) + 1)"
+                />
             </div>
             <CategoryEditModal :open="editModalOpen" :category="activeCategory" @update:open="(value) => editModalOpen = value" />
             <CreateCategoryModal :open="createModalOpen" @update:open="(value) => createModalOpen = value" />

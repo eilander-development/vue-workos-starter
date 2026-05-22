@@ -47,7 +47,7 @@ class GoCardless
             ->accept('application/json')
             ->retry(2, 100);
 
-        $url = $this->baseUrl() . $path;
+        $url = $this->baseUrl().$path;
         $response = match (strtoupper($method)) {
             'POST' => $builder->post($url, $data),
             'PUT' => $builder->put($url, $data),
@@ -58,7 +58,7 @@ class GoCardless
 
         if (! $response->successful()) {
             $message = $response->json('error.message') ?? $response->body();
-            throw new RuntimeException('GoCardless API-fout: ' . $message);
+            throw new RuntimeException('GoCardless API-fout: '.$message);
         }
 
         return $response;

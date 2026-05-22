@@ -4,23 +4,76 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { customScrollbar } from '@/composables/scrollbar';
 
 import Category from '@/components/Category.vue';
+import { MoneyAmount } from '@/components/ui/money-amount';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { TypeBadge } from '@/components/ui/type-badge';
+import { computed } from 'vue';
+import { router } from '@inertiajs/vue3';
 
 interface Props {
-    latestTransactions: object;
-    categories: object;
+    latestTransactions: any[];
+    categories: Record<number, any>;
+    filterType?: 'all' | 'expense' | 'income' | 'saving';
+    pagination: {
+        current_page: number;
+        last_page: number;
+        per_page: number;
+        total: number;
+        from: number;
+        to: number;
+    };
 }
 
 const props = defineProps<Props>();
+
+const budgetLabelForTransaction = (transaction: Record<string, any>) => {
+    if (!transaction?.categoryId || !transaction?.budgetId) {
+        return null;
+    }
+
+    const category = props.categories[transaction.categoryId];
+    return (
+        category?.budgets?.find(
+            (budget: any) => budget.id === transaction.budgetId,
+        )?.name ?? null
+    );
+};
+
+const filteredTransactions = computed(() =>
+    props.latestTransactions.filter((transaction) => {
+        if ((props.filterType ?? 'all') === 'all') return true;
+        const categoryType =
+            props.categories[transaction.categoryId]?.type ?? null;
+        return categoryType === props.filterType;
+    }),
+);
+
+const goToPage = (pageNumber: number) => {
+    if (pageNumber < 1 || pageNumber > (props.pagination?.last_page ?? 1)) {
+        return;
+    }
+
+    router.get(
+        '/dashboard',
+        { transactions_page: pageNumber },
+        {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            only: ['latestTransactions', 'latestTransactionsPagination'],
+        },
+    );
+};
 </script>
 
 <template>
-    <Card class="rounded-md shadow-xl">
+    <Card class="flex h-full flex-col rounded-md shadow-xl">
         <CardHeader>
             <CardTitle>Laatste transacties</CardTitle>
         </CardHeader>
-        <CardContent class="p-0">
+        <CardContent class="flex-1 p-0">
             <div
-                :class="`${customScrollbar} relative max-h-110 w-full overflow-y-auto`"
+                :class="`${customScrollbar} relative h-[calc(100%-27px)] w-full overflow-y-auto`"
             >
                 <table class="w-full table-auto overflow-scroll text-sm">
                     <thead>
@@ -43,6 +96,11 @@ const props = defineProps<Props>();
                                 Omschrijving
                             </th>
                             <th
+                                class="h-10 px-2 text-left align-middle font-medium text-muted-foreground"
+                            >
+                                Type
+                            </th>
+                            <th
                                 class="h-10 px-2 text-right align-middle font-medium text-muted-foreground"
                             >
                                 Bedrag
@@ -51,53 +109,70 @@ const props = defineProps<Props>();
                     </thead>
                     <tbody>
                         <tr
-                            class="border-b border-slate-900 transition-colors hover:bg-muted/50"
-                            v-for="transaction in latestTransactions"
+                            class="group border-b border-slate-900 transition-colors hover:bg-muted/50"
+                            v-for="transaction in filteredTransactions"
                             :key="transaction.id"
                         >
                             <td class="p-2">
-                                <Category
-                                    :color="
-                                        categories[transaction.categoryId].color
-                                    "
-                                    :icon="
-                                        categories[transaction.categoryId].icon
-                                    "
-                                    :slug="
-                                        categories[transaction.categoryId].slug
-                                    "
-                                    :budget="
-                                        categories[transaction.categoryId]
-                                            .budgets[0].name
-                                    "
-                                    :category="
-                                        categories[transaction.categoryId]
-                                            .name
-                                    "
-                                />
+                                <template v-if="transaction.categoryId">
+                                    <Category
+                                        :color="
+                                            categories[transaction.categoryId]
+                                                ? categories[
+                                                      transaction.categoryId
+                                                  ].color
+                                                : null
+                                        "
+                                        :icon="
+                                            categories[transaction.categoryId]
+                                                ? categories[
+                                                      transaction.categoryId
+                                                  ].icon
+                                                : null
+                                        "
+                                        :slug="
+                                            categories[transaction.categoryId]
+                                                ? categories[
+                                                      transaction.categoryId
+                                                  ].slug
+                                                : null
+                                        "
+                                        :budget="
+                                            budgetLabelForTransaction(
+                                                transaction,
+                                            )
+                                        "
+                                        :category="
+                                            categories[transaction.categoryId]
+                                                ? categories[
+                                                      transaction.categoryId
+                                                  ].category
+                                                : null
+                                        "
+                                    />
+                                </template>
                             </td>
                             <td class="p-2">{{ transaction.date }}</td>
                             <td class="p-2">{{ transaction.description }}</td>
+                            <td class="p-2">
+                                <TypeBadge :type="transaction.type" />
+                            </td>
                             <td class="p-2 text-right">
-                                <span
-                                    :class="
-                                        transaction.amount > 0
-                                            ? 'rounded-md bg-green-800 p-2 py-1 text-white'
-                                            : ''
-                                    "
-                                >
-                                    {{
-                                        new Intl.NumberFormat('nl-NL', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        }).format(transaction.amount)
-                                    }}
-                                </span>
+                                <MoneyAmount
+                                    :amount="transaction.amount"
+                                    :highlight-positive="true"
+                                />
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+            <TablePagination
+                :pagination="props.pagination"
+                item-label="transacties"
+                @previous="goToPage((props.pagination?.current_page ?? 1) - 1)"
+                @next="goToPage((props.pagination?.current_page ?? 1) + 1)"
+            />
         </CardContent>
     </Card>
 </template>

@@ -66,6 +66,16 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
+    {
+        title: 'GoCardless',
+        href: '/gocardless',
+        icon: Folder,
+    },
+    {
+        title: 'TrueLayer',
+        href: '/truelayer',
+        icon: Folder,
+    },
 ];
 
 const rightNavItems: NavItem[] = [
