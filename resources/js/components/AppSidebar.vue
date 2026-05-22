@@ -76,12 +76,6 @@ const mainNavItems: NavItem[] = [
         color: 'white',
     },
     {
-        title: 'GoCardless',
-        href: '/gocardless',
-        icon: Wallet,
-        color: 'white',
-    },
-    {
         title: 'TrueLayer',
         href: '/truelayer',
         icon: Wallet,

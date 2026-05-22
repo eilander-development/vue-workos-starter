@@ -47,10 +47,4 @@ return [
         'redirect_uri' => env('TRUELAYER_REDIRECT_URI', env('TRUELAYER_CALLBACK_URL')),
     ],
 
-    'gocardless' => [
-        'api_key' => env('GO_CARDLESS_ACCESS_TOKEN', env('API_KEY_GO_CARDLESS')),
-        'base_url' => env('GO_CARDLESS_BASE_URL', 'https://api.gocardless.com'),
-        'version' => env('GO_CARDLESS_VERSION', '2015-07-06'),
-    ],
-
 ];

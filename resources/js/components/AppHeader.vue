@@ -67,11 +67,6 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
-        title: 'GoCardless',
-        href: '/gocardless',
-        icon: Folder,
-    },
-    {
         title: 'TrueLayer',
         href: '/truelayer',
         icon: Folder,
