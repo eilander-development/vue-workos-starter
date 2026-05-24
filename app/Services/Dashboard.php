@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class Dashboard
@@ -110,6 +111,10 @@ class Dashboard
 
     private function periodTransactionsQuery()
     {
-        return $this->reportingPeriod->applyToTransactionQuery(Transaction::query());
+        $now = CarbonImmutable::now();
+
+        return Transaction::query()
+            ->whereYear('date', $now->year)
+            ->whereMonth('date', $now->month);
     }
 }

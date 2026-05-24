@@ -22,7 +22,32 @@ class ImportSeedCommand extends Command
             return 1;
         }
 
-        $files = File::files($path);
+        $files = collect(File::files($path))
+            ->sortBy(function ($file) {
+                $order = [
+                    'users' => 1,
+                    'categories' => 2,
+                    'budgets' => 3,
+                    'import_rules' => 4,
+                    'transactions' => 5,
+                    'plaid_settings' => 6,
+                    'plaid_connections' => 7,
+                    'sessions' => 8,
+                    'jobs' => 9,
+                    'job_batches' => 10,
+                    'failed_jobs' => 11,
+                    'cache' => 12,
+                    'cache_locks' => 13,
+                    'migrations' => 14,
+                ];
+
+                $table = pathinfo($file->getFilename(), PATHINFO_FILENAME);
+
+                return $order[$table] ?? 999;
+            })
+            ->values()
+            ->all();
+
         if (empty($files)) {
             $this->info('No files found in: '.$path);
 

@@ -59,13 +59,18 @@ class Categories
     {
         $budgets = $category->budgets->map(function ($budget) {
             $isExpenseCategory = $budget->category?->type === 'expense';
+            $isSavingCategory = $budget->category?->type === 'saving';
+            $filteredTransactions = $budget->transactions
+                ->filter(fn ($transaction) => $isExpenseCategory
+                    ? (float) $transaction->amount < 0
+                    : ($isSavingCategory ? true : (float) $transaction->amount > 0))
+                ->sortByDesc('date')
+                ->values();
             $spend = $isExpenseCategory
-                ? $budget->transactions
-                    ->filter(fn ($transaction) => (float) $transaction->amount < 0)
-                    ->sum(fn ($transaction) => abs((float) $transaction->amount))
-                : $budget->transactions
-                    ->filter(fn ($transaction) => (float) $transaction->amount > 0)
-                    ->sum(fn ($transaction) => (float) $transaction->amount);
+                ? $filteredTransactions->sum(fn ($transaction) => abs((float) $transaction->amount))
+                : ($isSavingCategory
+                    ? $filteredTransactions->sum(fn ($transaction) => abs((float) $transaction->amount))
+                    : $filteredTransactions->sum(fn ($transaction) => (float) $transaction->amount));
             $remaining = (float) $budget->budget - $spend;
             $unpaid = $remaining > 0 ? $remaining : 0;
             $overdue = $remaining > 0 ? 0 : abs($remaining);
@@ -78,6 +83,17 @@ class Categories
                 'remaining' => $remaining,
                 'unpaid' => $unpaid,
                 'overdue' => $overdue,
+                'payments' => $filteredTransactions->count(),
+                'transactions' => $filteredTransactions->map(function ($transaction) use ($budget) {
+                    return [
+                        'id' => $transaction->id,
+                        'date' => optional($transaction->date)?->format('d-m-Y'),
+                        'description' => $transaction->description,
+                        'amount' => (float) $transaction->amount,
+                        'type' => $transaction->type,
+                        'budget' => $budget->name,
+                    ];
+                })->toArray(),
             ];
         })->toArray();
 
@@ -90,6 +106,11 @@ class Categories
         $totalBudget = collect($budgets)->sum('budget');
         $totalSpend = collect($budgets)->sum('spend');
         $remaining = $totalBudget - $totalSpend;
+        $transactions = collect($budgets)
+            ->flatMap(fn ($budget) => $budget['transactions'] ?? [])
+            ->sortByDesc(fn ($transaction) => $transaction['date'] ?? '')
+            ->values()
+            ->toArray();
 
         return [
             'id' => $category->id,
@@ -105,6 +126,7 @@ class Categories
             'remaining' => $remaining,
             'unpaid' => collect($budgets)->sum('unpaid'),
             'overdue' => collect($budgets)->sum('overdue'),
+            'transactions' => $transactions,
         ];
     }
 }

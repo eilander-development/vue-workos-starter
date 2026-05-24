@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import axios from 'axios';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Stats from '@/components/finance/Categories/Stats.vue';
 import Category from '@/components/Category.vue';
@@ -34,6 +35,17 @@ const editModalOpen = ref(false);
 const createModalOpen = ref(false);
 const activeCategory = ref<Record<string, any> | null>(null);
 const deleteCategoryId = ref<number | null>(null);
+const statsTransactionsOpen = ref(false);
+const statsTransactionsType = ref<'expense' | 'income' | 'saving'>('expense');
+const statsTransactions = ref<any[]>([]);
+const statsTransactionsPagination = ref({
+    current_page: 1,
+    last_page: 1,
+    per_page: 100,
+    total: 0,
+    from: 0,
+    to: 0,
+});
 
 const filteredCategories = computed(() => categoriesData.value);
 const currentPage = ref(page.props.pagination?.current_page ?? 1);
@@ -117,6 +129,26 @@ const goToPage = (pageNumber: number) => {
         },
     );
 };
+
+const fetchStatsTransactions = async (type: 'expense' | 'income' | 'saving', pageNumber = 1) => {
+    try {
+        const response = await axios.get('/transactions', {
+            params: { type, page: pageNumber },
+            headers: { Accept: 'application/json' },
+        });
+
+        statsTransactions.value = response.data.transactions ?? [];
+        statsTransactionsPagination.value = response.data.pagination ?? statsTransactionsPagination.value;
+    } catch (error) {
+        console.error('Kon statistiektransacties niet ophalen:', error);
+    }
+};
+
+const openStatsTransactions = async (type: 'expense' | 'income' | 'saving') => {
+    statsTransactionsType.value = type;
+    statsTransactionsOpen.value = true;
+    await fetchStatsTransactions(type, 1);
+};
 </script>
 
 <template>
@@ -125,7 +157,7 @@ const goToPage = (pageNumber: number) => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <Stats :stats="(page.props.stats as any)" />
+                <Stats :stats="(page.props.stats as any)" @open-transactions="openStatsTransactions" />
             </div>
         </div>
         <main class="p-4">
@@ -220,6 +252,62 @@ const goToPage = (pageNumber: number) => {
                         <Form v-if="deleteCategoryId !== null" :action="`/categories/${deleteCategoryId}`" method="delete">
                             <Button type="submit" variant="destructive">Verwijderen</Button>
                         </Form>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog :open="statsTransactionsOpen" @update:open="(open) => { statsTransactionsOpen = open; }">
+                <DialogContent class="sm:max-w-5xl">
+                    <DialogHeader>
+                        <DialogTitle>Transacties</DialogTitle>
+                        <DialogDescription>
+                            Overzicht van {{ statsTransactionsType === 'expense' ? 'uitgaven' : statsTransactionsType === 'income' ? 'inkomsten' : 'spaartransacties' }}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div class="max-h-[60vh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/20">
+                        <table class="w-full table-auto text-sm">
+                            <thead class="sticky top-0 bg-slate-950">
+                                <tr class="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                                    <th class="p-2">Categorie</th>
+                                    <th class="p-2">Datum</th>
+                                    <th class="p-2">Omschrijving</th>
+                                    <th class="p-2">Type</th>
+                                    <th class="p-2 text-right">Bedrag</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="transaction in statsTransactions" :key="transaction.id" class="border-b border-slate-800">
+                                    <td class="p-2">{{ transaction.categoryId ? (categoriesData.find((c: any) => c.id === transaction.categoryId)?.category ?? 'Onbekend') : 'Onbekend' }}</td>
+                                    <td class="p-2">{{ transaction.date }}</td>
+                                    <td class="p-2">{{ transaction.description }}</td>
+                                    <td class="p-2"><TypeBadge :type="transaction.type" /></td>
+                                    <td class="p-2 text-right">{{ new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(transaction.amount) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex items-center justify-between border-t border-slate-800 px-4 py-3 text-sm text-muted-foreground">
+                        <div>Toon {{ statsTransactionsPagination.from }} - {{ statsTransactionsPagination.to }} van {{ statsTransactionsPagination.total }} transacties</div>
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="fetchStatsTransactions(statsTransactionsType, statsTransactionsPagination.current_page - 1)"
+                                :disabled="statsTransactionsPagination.current_page <= 1"
+                            >
+                                Vorige
+                            </button>
+                            <button
+                                type="button"
+                                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="fetchStatsTransactions(statsTransactionsType, statsTransactionsPagination.current_page + 1)"
+                                :disabled="statsTransactionsPagination.current_page >= statsTransactionsPagination.last_page"
+                            >
+                                Volgende
+                            </button>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="secondary" @click="statsTransactionsOpen = false">Sluiten</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

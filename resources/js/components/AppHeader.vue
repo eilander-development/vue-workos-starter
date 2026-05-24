@@ -66,11 +66,6 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
-    {
-        title: 'TrueLayer',
-        href: '/truelayer',
-        icon: Folder,
-    },
 ];
 
 const rightNavItems: NavItem[] = [

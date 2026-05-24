@@ -200,75 +200,10 @@ const applyTransactionRule = async (transactionId: number) => {
       </Card>
 
       <Card class="rounded-md shadow-xl">
-        <CardContent>
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-base font-semibold">Koppelregels</h2>
-            <Button type="button" variant="outline" size="sm" class="flex items-center gap-1" @click="createOpen = true">
-              <Plus class="h-4 w-4" /> Regel toevoegen
-            </Button>
-          </div>
-          <table class="w-full table-auto text-sm">
-            <tbody>
-              <tr v-for="rule in rules" :key="rule.id" class="group border-b border-slate-900 transition-colors hover:bg-muted/50">
-                <td class="p-2">{{ rule.type === 'iban' ? 'Rekeningnummer bevat' : 'Omschrijving bevat' }}</td>
-                <td class="p-2">{{ rule.match_value }}</td>
-                <td class="p-2">{{ labelForCategory(rule.category_id) }}</td>
-                <td class="p-2">{{ labelForBudget(rule.budget_id) }}</td>
-                <td class="w-0 p-2 text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <button
-                        type="button"
-                        class="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-muted group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100"
-                        aria-label="Meer acties"
-                      >
-                        <EllipsisVertical class="h-4 w-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-40">
-                      <DropdownMenuItem @click="openRuleTransactions(rule)">
-                        <Eye class="mr-2 h-4 w-4" />
-                        Transacties
-                      </DropdownMenuItem>
-                      <DropdownMenuItem @click="openSimilarRuleTransactions(rule)">
-                        <Eye class="mr-2 h-4 w-4" />
-                        Vergelijkbare transacties
-                      </DropdownMenuItem>
-                      <DropdownMenuItem @click="openEdit(rule)">
-                        <Pencil class="mr-2 h-4 w-4" />
-                        Bewerken
-                      </DropdownMenuItem>
-                      <DropdownMenuItem @click="openDeleteRuleModal(rule.id)">
-                        <Trash2 class="mr-2 h-4 w-4 text-red-500" />
-                        <span class="text-red-500">Verwijderen</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="rulesMeta && !Array.isArray(rulesMeta)" class="flex items-center justify-between border-t border-slate-900 bg-muted px-4 py-3 text-sm text-muted-foreground">
-            <div>
-              Toon {{ rulesMeta.from ?? 0 }} - {{ rulesMeta.to ?? 0 }} van {{ rulesMeta.total ?? 0 }} regels
-            </div>
-            <div class="flex items-center gap-2">
-              <a
-                :href="rulesMeta.prev_page_url || '#'"
-                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted"
-                :class="{ 'pointer-events-none opacity-50': !rulesMeta.prev_page_url }"
-              >
-                Vorige
-              </a>
-              <a
-                :href="rulesMeta.next_page_url || '#'"
-                class="rounded-md border border-input bg-background px-3 py-1 text-xs transition hover:bg-muted"
-                :class="{ 'pointer-events-none opacity-50': !rulesMeta.next_page_url }"
-              >
-                Volgende
-              </a>
-            </div>
-          </div>
+        <CardContent class="py-6">
+          <p class="text-sm text-muted-foreground">
+            Koppelregels zijn verplaatst naar <a href="/imports/rules" class="underline">de aparte pagina</a>.
+          </p>
         </CardContent>
       </Card>
     </main>

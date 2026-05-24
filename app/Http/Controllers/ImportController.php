@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Import\StoreImportRuleRequest;
 use App\Http\Requests\Import\UpdateImportRuleRequest;
+use App\Http\Requests\Import\ReassignMatchedRuleBudgetRequest;
 use App\Models\Category;
 use App\Models\ImportRule;
 use App\Models\Transaction;
 use App\Services\Categories;
 use App\Services\CsvTransactionImporter;
+use App\Services\ImportRuleMatcherQuery;
 use App\Support\PaginationData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -21,14 +23,22 @@ class ImportController extends Controller
     public function __construct(
         protected Categories $categoriesService,
         protected CsvTransactionImporter $csvTransactionImporter,
+        protected ImportRuleMatcherQuery $importRuleMatcherQuery,
     ) {}
 
     public function index(): Response
     {
         return Inertia::render('ImportTransactions', [
             'categories' => $this->categoriesService->list(),
-            'rules' => ImportRule::query()->latest()->paginate(100),
             'result' => session('result'),
+        ]);
+    }
+
+    public function rulesIndex(): Response
+    {
+        return Inertia::render('ImportRules', [
+            'categories' => $this->categoriesService->list(),
+            'rules' => ImportRule::query()->latest()->paginate(100),
         ]);
     }
 
@@ -52,7 +62,7 @@ class ImportController extends Controller
         }
 
         if ($request->wantsJson()) {
-            $matchedTransactions = $this->createRuleMatchQuery($rule)
+            $matchedTransactions = $this->importRuleMatcherQuery->forRule($rule)
                 ->orderByDesc('date')
                 ->paginate(100, ['*'], 'page', $request->integer('page', 1));
 
@@ -114,7 +124,7 @@ class ImportController extends Controller
     public function similarRuleTransactions(Request $request, int $ruleId): JsonResponse
     {
         $rule = ImportRule::findOrFail($ruleId);
-        $transactions = $this->createRuleMatchQuery($rule)
+        $transactions = $this->importRuleMatcherQuery->forRule($rule, true)
             ->with(['category', 'budget'])
             ->orderByDesc('date')
             ->paginate(100, ['*'], 'page', $request->integer('page', 1));
@@ -142,19 +152,11 @@ class ImportController extends Controller
     public function applyRuleToTransaction(Request $request, int $ruleId, int $transactionId): JsonResponse
     {
         $rule = ImportRule::findOrFail($ruleId);
-        $transaction = $this->createRuleMatchQuery($rule)
+        $transaction = $this->importRuleMatcherQuery->forRule($rule)
             ->where('id', $transactionId)
             ->firstOrFail();
 
-        $category = Category::find($rule->category_id);
-        $transaction->update([
-            'category_id' => $rule->category_id,
-            'budget_id' => $rule->budget_id,
-            'rule_id' => $rule->id,
-            'type' => $category?->type,
-            'icon' => $category?->icon,
-            'color' => $category?->color,
-        ]);
+        $transaction->update($this->ruleAssignmentData($rule));
 
         return response()->json([
             'transaction' => [
@@ -169,32 +171,49 @@ class ImportController extends Controller
     public function applyRule(Request $request, int $ruleId): JsonResponse
     {
         $rule = ImportRule::findOrFail($ruleId);
+        $updated = $this->importRuleMatcherQuery->forRule($rule)->update($this->ruleAssignmentData($rule));
+
+        return response()->json(['updated' => $updated]);
+    }
+
+    public function applyRuleToAllMatches(Request $request, int $ruleId): JsonResponse
+    {
+        $rule = ImportRule::findOrFail($ruleId);
+        $updated = $this->importRuleMatcherQuery->forRule($rule, false)->update($this->ruleAssignmentData($rule));
+
+        return response()->json(['updated' => $updated]);
+    }
+
+    public function reassignMatchedRuleBudget(ReassignMatchedRuleBudgetRequest $request, int $ruleId): JsonResponse
+    {
+        $data = $request->validated();
+        $rule = ImportRule::findOrFail($ruleId);
+        $rule->update([
+            'budget_id' => $data['budget_id'],
+        ]);
+        $assignmentData = $this->ruleAssignmentData($rule, $data['budget_id']);
+
+        // Werk ook reeds gekoppelde transacties van deze regel bij,
+        // zodat de "Transacties voor koppelregel" direct het nieuwe budget toont.
+        $rule->transactions()->update($assignmentData);
+
+        $updated = $this->importRuleMatcherQuery->forRule($rule)->update($assignmentData);
+
+        return response()->json(['updated' => $updated]);
+    }
+
+    private function ruleAssignmentData(ImportRule $rule, ?int $budgetId = null): array
+    {
         $category = Category::find($rule->category_id);
-        $updateData = [
+
+        return [
             'category_id' => $rule->category_id,
-            'budget_id' => $rule->budget_id,
+            'budget_id' => $budgetId ?? $rule->budget_id,
             'rule_id' => $rule->id,
             'type' => $category?->type,
             'icon' => $category?->icon,
             'color' => $category?->color,
         ];
-
-        $updated = $this->createRuleMatchQuery($rule)->update($updateData);
-
-        return response()->json(['updated' => $updated]);
-    }
-
-    private function createRuleMatchQuery(ImportRule $rule)
-    {
-        return Transaction::query()
-            ->whereNull('category_id')
-            ->whereNull('rule_id')
-            ->when($rule->type === 'iban', function ($query) use ($rule) {
-                return $query->whereNotNull('counterparty_iban')
-                    ->where('counterparty_iban', 'like', '%'.$rule->match_value.'%');
-            }, function ($query) use ($rule) {
-                return $query->where('description', 'like', '%'.$rule->match_value.'%');
-            });
     }
 
     public function import(Request $request): RedirectResponse

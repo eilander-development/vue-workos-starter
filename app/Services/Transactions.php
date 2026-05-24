@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\DTOs\TransactionDTO;
 use App\Models\Transaction;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Schema;
@@ -23,14 +24,24 @@ class Transactions
      *
      * @return array The list of transactions.
      */
-    public function list(string $searchTerm, string $type, int $perPage = 100, int $page = 1): LengthAwarePaginator
+    public function list(
+        string $searchTerm,
+        string $type,
+        ?int $budgetId = null,
+        ?string $sourceType = null,
+        int $perPage = 100,
+        int $page = 1,
+        bool $applyReportingPeriod = true,
+    ): LengthAwarePaginator
     {
         if (! Schema::hasTable('transactions')) {
             return new LengthAwarePaginator([], 0, $perPage, $page);
         }
 
         $query = Transaction::query();
-        $query->whereDate('date', '>=', $this->reportingPeriod->startOfCurrentMonthFromDay(20)->toDateString());
+        if ($applyReportingPeriod) {
+            $query->whereDate('date', '>=', $this->reportingPeriod->startOfCurrentMonthFromDay(20)->toDateString());
+        }
 
         if (trim($searchTerm) !== '') {
             $query->where('description', 'like', '%'.$searchTerm.'%');
@@ -44,19 +55,17 @@ class Transactions
                 $query->whereNull('type');
             }
         }
+        if ($budgetId) {
+            $query->where('budget_id', $budgetId);
+        }
+        if ($sourceType && in_array($sourceType, ['csv', 'api'], true)) {
+            $query->where('source_type', $sourceType);
+        }
 
         return $query->orderByDesc('date')
             ->paginate($perPage, ['*'], 'page', $page)
             ->through(function (Transaction $transaction) {
-                return [
-                    'id' => $transaction->id,
-                    'amount' => (float) $transaction->amount,
-                    'categoryId' => $transaction->category_id,
-                    'budgetId' => $transaction->budget_id,
-                    'type' => $transaction->type,
-                    'description' => $transaction->description,
-                    'date' => $transaction->date?->format('d-m-Y') ?? '',
-                ];
+                return TransactionDTO::fromModel($transaction)->toArray();
             });
     }
 }

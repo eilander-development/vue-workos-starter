@@ -24,6 +24,9 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const emit = defineEmits<{
+    openTransactions: [type: 'expense' | 'income' | 'saving'];
+}>();
 const currency = (value: number) =>
     new Intl.NumberFormat('nl-NL', {
         style: 'currency',
@@ -83,7 +86,7 @@ const currency = (value: number) =>
             </div>
         </CardContent>
     </Card>
-    <Card class="rounded-md shadow-xl">
+    <Card class="rounded-md shadow-xl cursor-pointer hover:bg-muted/50" @click="emit('openTransactions', 'expense')">
         <CardContent class="flex items-center gap-3 sm:gap-4">
             <div
                 class="rounded-full bg-red-600/10 p-2 text-primary-foreground sm:p-3"
@@ -111,7 +114,7 @@ const currency = (value: number) =>
             </div>
         </CardContent>
     </Card>
-    <Card class="rounded-md shadow-xl">
+    <Card class="rounded-md shadow-xl cursor-pointer hover:bg-muted/50" @click="emit('openTransactions', 'income')">
         <CardContent class="flex items-center gap-3 sm:gap-4">
             <div class="rounded-full bg-green-600/10 p-2 text-primary-foreground sm:p-3">
                 <TrendingUp class="h-6 w-6 text-green-600" />
@@ -133,7 +136,7 @@ const currency = (value: number) =>
             </div>
         </CardContent>
     </Card>
-    <Card class="rounded-md shadow-xl">
+    <Card class="rounded-md shadow-xl cursor-pointer hover:bg-muted/50" @click="emit('openTransactions', 'saving')">
         <CardContent class="flex items-center gap-3 sm:gap-4">
             <div class="rounded-full bg-green-600/10 p-2 text-primary-foreground sm:p-3">
                 <PiggyBank class="h-6 w-6 text-green-600" />

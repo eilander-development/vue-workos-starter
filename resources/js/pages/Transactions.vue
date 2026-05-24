@@ -88,6 +88,14 @@ const displayPagination = computed(() => {
 });
 const activeFilter = ref<TransactionFilter>(page.props.filters?.type || 'all');
 const searchTerm = ref<string>(page.props.filters?.search || '');
+const selectedBudgetId = ref<string>(page.props.filters?.budget_id ? String(page.props.filters.budget_id) : 'all');
+const selectedSourceType = ref<string>(page.props.filters?.source_type || 'all');
+const bulkDialogOpen = ref(false);
+const bulkPrefix = ref('');
+const bulkFromBudgetId = ref<string>('');
+const bulkToBudgetId = ref<string>('');
+const bulkLoading = ref(false);
+const bulkSourceDeleteLoading = ref(false);
 const assignDialogOpen = ref(false);
 const selectedTransaction = ref<Record<string, any> | null>(null);
 const showDialogOpen = ref(false);
@@ -112,6 +120,16 @@ const ruleTransactionIban = ref('');
 const ruleTransactionDescription = ref('');
 const ruleSaveLoading = ref(false);
 const { notification, showNotification } = useNotification();
+const budgetOptions = computed(() => Object.values(categories).flatMap((category: any) =>
+    (category.budgets ?? []).map((budget: any) => ({
+        id: String(budget.id),
+        label: `${category.category ?? category.name} · ${budget.name}`,
+        category: category.category ?? category.name,
+        budget: budget.name,
+        color: category.color,
+        icon: category.icon,
+    }))
+));
 
 const openAssignDialog = (transaction: Record<string, any>) => {
     selectedTransaction.value = transaction;
@@ -184,7 +202,7 @@ const handleCategoryAssigned = async (payload: {
         transaction.color = payload.color;
 
         const description = transaction.description ?? '';
-        const iban = transaction.counterpartyIban ?? '';
+        const iban = transaction.counterpartyIban ?? transaction.counterparty_iban ?? '';
 
         if (!description && !iban) {
             return;
@@ -220,6 +238,8 @@ const {
         params: {
             search: searchTerm.value,
             type: activeFilter.value,
+            budget_id: selectedBudgetId.value === 'all' ? undefined : Number(selectedBudgetId.value),
+            source_type: selectedSourceType.value === 'all' ? undefined : selectedSourceType.value,
             page: currentPage.value,
         },
         headers: { Accept: 'application/json' },
@@ -243,6 +263,51 @@ const onFilterChange = () => {
     currentPage.value = 1;
     pagination.value.current_page = 1;
     fetchTransactions();
+};
+const onBudgetFilterChange = () => {
+    currentPage.value = 1;
+    pagination.value.current_page = 1;
+    fetchTransactions();
+};
+const onSourceFilterChange = () => {
+    currentPage.value = 1;
+    pagination.value.current_page = 1;
+    fetchTransactions();
+};
+const deleteBySource = async () => {
+    if (selectedSourceType.value === 'all') return;
+    if (!confirm(`Weet je zeker dat je alle ${selectedSourceType.value.toUpperCase()} transacties wilt verwijderen?`)) return;
+    bulkSourceDeleteLoading.value = true;
+    try {
+        const response = await axios.delete('/transactions/source', {
+            data: { source_type: selectedSourceType.value },
+            headers: { Accept: 'application/json' },
+        });
+        showNotification(`${response.data.deleted} transacties verwijderd.`, 'success');
+        fetchTransactions();
+    } catch (error) {
+        showNotification('Verwijderen op bron is mislukt.', 'error');
+    } finally {
+        bulkSourceDeleteLoading.value = false;
+    }
+};
+const applyBulkReassign = async () => {
+    if (!bulkPrefix.value.trim() || !bulkFromBudgetId.value || !bulkToBudgetId.value) return;
+    bulkLoading.value = true;
+    try {
+        const response = await axios.post('/transactions/bulk-reassign-budget', {
+            description_prefix: bulkPrefix.value.trim(),
+            from_budget_id: Number(bulkFromBudgetId.value),
+            to_budget_id: Number(bulkToBudgetId.value),
+        });
+        showNotification(`${response.data.updated} transacties bijgewerkt.`, 'success');
+        bulkDialogOpen.value = false;
+        fetchTransactions();
+    } catch (error) {
+        showNotification('Bulk wijziging mislukt.', 'error');
+    } finally {
+        bulkLoading.value = false;
+    }
 };
 
 const matchPlaceholder = computed(() => (ruleType.value === 'iban' ? 'NL00BANK...' : 'Bijv. Albert Heijn'));
@@ -393,6 +458,37 @@ const goToPage = (pageNumber: number) => {
                             @change="onFilterChange"
                             :isLoading="isLoading"
                         />
+                        <div class="min-w-[240px]">
+                            <select
+                                v-model="selectedBudgetId"
+                                @change="onBudgetFilterChange"
+                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option value="all">Alle budgetten</option>
+                                <option v-for="budget in budgetOptions" :key="budget.id" :value="budget.id">
+                                    {{ budget.label }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="min-w-[180px]">
+                            <select
+                                v-model="selectedSourceType"
+                                @change="onSourceFilterChange"
+                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option value="all">Alle bronnen</option>
+                                <option value="csv">CSV</option>
+                                <option value="api">API</option>
+                            </select>
+                        </div>
+                        <Button variant="outline" @click="bulkDialogOpen = true">Bulk wijzigen</Button>
+                        <Button
+                            variant="destructive"
+                            :disabled="selectedSourceType === 'all' || bulkSourceDeleteLoading"
+                            @click="deleteBySource"
+                        >
+                            {{ bulkSourceDeleteLoading ? 'Verwijderen...' : `Verwijder alles (${selectedSourceType.toUpperCase()})` }}
+                        </Button>
                     </div>
                 </div>
                 <div class="flex-1 p-0">
@@ -767,6 +863,32 @@ const goToPage = (pageNumber: number) => {
                 :categories="categories"
                 @assigned="handleCategoryAssigned"
             />
+
+            <Dialog :open="bulkDialogOpen" @update:open="(value) => bulkDialogOpen = value">
+                <DialogContent class="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Budget bulk wijzigen</DialogTitle>
+                        <DialogDescription>Werk budgetten bij op basis van omschrijving-prefix.</DialogDescription>
+                    </DialogHeader>
+                    <div class="space-y-3">
+                        <input v-model="bulkPrefix" placeholder="Bijv. Naar Oranje" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                        <select v-model="bulkFromBudgetId" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                            <option value="" disabled>Van budget</option>
+                            <option v-for="budget in budgetOptions" :key="`from-${budget.id}`" :value="budget.id">{{ budget.label }}</option>
+                        </select>
+                        <select v-model="bulkToBudgetId" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                            <option value="" disabled>Naar budget</option>
+                            <option v-for="budget in budgetOptions" :key="`to-${budget.id}`" :value="budget.id">{{ budget.label }}</option>
+                        </select>
+                    </div>
+                    <DialogFooter>
+                        <DialogClose as-child><Button variant="secondary">Annuleren</Button></DialogClose>
+                        <Button :disabled="bulkLoading || !bulkPrefix.trim() || !bulkFromBudgetId || !bulkToBudgetId || bulkFromBudgetId === bulkToBudgetId" @click="applyBulkReassign">
+                            {{ bulkLoading ? 'Bezig...' : 'Toepassen' }}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </main>
     </AppLayout>
 </template>

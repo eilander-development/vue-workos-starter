@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\Repositories\TransactionRepositoryInterface;
 use App\Http\Requests\Transactions\AssignTransactionRequest;
+use App\Http\Requests\Transactions\BulkReassignBudgetRequest;
 use App\Models\Transaction;
 use App\Services\Categories;
 use App\Services\Transactions;
@@ -30,26 +31,41 @@ class TransactionsController extends Controller
         $transactions = $this->transactionsService->list(
             searchTerm: $request->input('search') ?? '',
             type: $request->input('type') ?? '',
+            budgetId: $request->integer('budget_id') ?: null,
+            sourceType: $request->input('source_type') ?: null,
             perPage: 100,
             page: $pageNumber,
+            applyReportingPeriod: false,
         );
 
         $payload = PaginationData::fromPaginator($transactions);
 
         if ($request->wantsJson()) {
             return response()->json([
-                'filters' => $request->only(['search', 'type']),
+                'filters' => $request->only(['search', 'type', 'budget_id', 'source_type']),
                 'transactions' => $transactions->items(),
                 'pagination' => $payload,
             ]);
         }
 
         return Inertia::render('Transactions', [
-            'filters' => $request->only(['search', 'type']),
+            'filters' => $request->only(['search', 'type', 'budget_id', 'source_type']),
             'categories' => $this->categoriesService->list(),
             'transactions' => $transactions->items(),
             'pagination' => $payload,
         ]);
+    }
+
+    public function bulkReassignBudget(BulkReassignBudgetRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        $updated = Transaction::query()
+            ->where('budget_id', $data['from_budget_id'])
+            ->where('description', 'like', trim($data['description_prefix']).'%')
+            ->update(['budget_id' => $data['to_budget_id']]);
+
+        return response()->json(['updated' => $updated]);
     }
 
     public function assign(AssignTransactionRequest $request, int $transactionId): JsonResponse
@@ -79,5 +95,18 @@ class TransactionsController extends Controller
         $transaction->delete();
 
         return response()->json([], 204);
+    }
+
+    public function destroyBySource(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'source_type' => ['required', 'in:csv,api'],
+        ]);
+
+        $deleted = Transaction::query()
+            ->where('source_type', $data['source_type'])
+            ->delete();
+
+        return response()->json(['deleted' => $deleted]);
     }
 }

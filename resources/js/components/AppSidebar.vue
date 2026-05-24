@@ -18,6 +18,7 @@ import {
     savings,
     transactions,
     categories,
+    enabled_banking,
 } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
@@ -64,21 +65,21 @@ const mainNavItems: NavItem[] = [
         color: 'white',
     },
     {
+        title: 'EnableBanking',
+        href: enabled_banking(),
+        icon: Wallet,
+        color: 'white',
+    },
+    {
         title: 'Categorieën',
         href: categories(),
         icon: Folder,
         color: 'white',
     },
     {
-        title: 'ING Import',
-        href: '/imports/transactions',
+        title: 'Koppelregels',
+        href: '/imports/rules',
         icon: Banknote,
-        color: 'white',
-    },
-    {
-        title: 'TrueLayer',
-        href: '/truelayer',
-        icon: Wallet,
         color: 'white',
     },
 ];

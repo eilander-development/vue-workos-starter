@@ -41,10 +41,14 @@ return [
         'redirect_url' => env('WORKOS_REDIRECT_URL'),
     ],
 
-    'truelayer' => [
-        'client_id' => env('TRUELAYER_CLIENT_ID'),
-        'client_secret' => env('TRUELAYER_CLIENT_SECRET'),
-        'redirect_uri' => env('TRUELAYER_REDIRECT_URI', env('TRUELAYER_CALLBACK_URL')),
+    'enablebanking' => [
+        'base_uri' => env('ENABLED_BANKING_BASE_URI', 'https://api.enablebanking.com'),
+        'application_id' => env('ENABLED_BANKING_APPLICATION_ID'),
+        'keypath' => base_path(env('ENABLED_BANKING_KEYPATH')),
+        'redirect_uri' => env('ENABLED_BANKING_REDIRECT_URL'),
+        'scope' => env('ENABLED_BANKING_SCOPE', 'accounts transactions'),
     ],
+
+    // TrueLayer configuration removed
 
 ];

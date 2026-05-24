@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ImportRule;
 use App\Models\Transaction;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class CsvTransactionImporter
 {
@@ -37,6 +38,7 @@ class CsvTransactionImporter
         $iIban = $idx(['tegenrekening']);
         $iAfBij = $idx(['af bij']);
         $rules = ImportRule::with('category')->get();
+        $hasSourceTypeColumn = Schema::hasColumn('transactions', 'source_type');
 
         $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0];
 
@@ -48,7 +50,7 @@ class CsvTransactionImporter
             $date = $iDate !== false ? trim((string) ($row[$iDate] ?? '')) : '';
             $amountRaw = $iAmount !== false ? trim((string) ($row[$iAmount] ?? '0')) : '0';
             $afBij = $iAfBij !== false ? mb_strtolower(trim((string) ($row[$iAfBij] ?? ''))) : null;
-            $description = $iDesc !== false ? trim((string) ($row[$iDesc] ?? '')) : '';
+            $description = $this->normalizeDescription($iDesc !== false ? trim((string) ($row[$iDesc] ?? '')) : '');
             $iban = $iIban !== false ? trim((string) ($row[$iIban] ?? '')) : null;
             $amount = (float) str_replace([','], ['.'], preg_replace('/[^0-9,\.-]/', '', $amountRaw));
             if ($afBij === 'af') {
@@ -73,6 +75,9 @@ class CsvTransactionImporter
                 'date' => $this->normalizeDate($date),
                 'type' => $amount < 0 ? 'expense' : ($amount > 0 ? 'income' : null),
             ];
+            if ($hasSourceTypeColumn) {
+                $payload['source_type'] = 'csv';
+            }
 
             if ($matchedRule) {
                 $payload = $this->transactionRuleEnricher->enrich($payload, $matchedRule);
@@ -105,5 +110,10 @@ class CsvTransactionImporter
         }
 
         return date('Y-m-d', strtotime($value));
+    }
+
+    private function normalizeDescription(string $description): string
+    {
+        return preg_replace('/^Naam:\s*/iu', '', $description) ?? $description;
     }
 }
