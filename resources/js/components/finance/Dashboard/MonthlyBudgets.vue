@@ -47,7 +47,7 @@ const filteredBudgets = computed(() =>
                 <template v-for="budget in filteredBudgets" :key="`${budget.slug}-${budget.type}`">
                     <div class="space-y-3">
                         <div class="flex items-center gap-3">
-                            <Category :color="budget.color" :icon="budget.icon" :slug="budget.slug" :category="budget.name" category-font="font-medium" />
+                            <Category :color="budget.color" :icon="budget.icon" :slug="budget.slug" :category="budget.name" :type="budget.type" category-font="font-medium" />
                             <span class="ml-auto text-sm text-muted-foreground"><span class="text-xs">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.spend) }}</span> / <span class="font-bold">{{ new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(budget.budget) }}</span></span>
                         </div>
                         <div class="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-secondary">
