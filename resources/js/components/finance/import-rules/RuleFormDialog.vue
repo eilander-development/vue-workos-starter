@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Form } from '@inertiajs/vue3';
+import { Form, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { useNotification } from '@/composables/useNotification';
 
 const props = defineProps<{
   open: boolean;
@@ -16,6 +18,15 @@ const emit = defineEmits<{
   updateOpen: [value: boolean];
   updateType: [value: 'iban' | 'description'];
 }>();
+
+const isSubmitting = ref(false);
+const { showSuccess } = useNotification();
+
+const handleSuccess = () => {
+  showSuccess(props.mode === 'create' ? 'Koppelregel aangemaakt.' : 'Koppelregel opgeslagen.');
+  emit('updateOpen', false);
+  router.reload({ only: ['rules'], preserveScroll: true });
+};
 </script>
 
 <template>
@@ -31,6 +42,9 @@ const emit = defineEmits<{
         action="/imports/transactions/rules"
         method="post"
         class="grid gap-3"
+        @start="isSubmitting = true"
+        @finish="isSubmitting = false"
+        @success="handleSuccess"
       >
         <select :value="ruleType" @change="emit('updateType', ($event.target as HTMLSelectElement).value as 'iban' | 'description')" name="type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
           <option value="iban">Rekeningnummer bevat</option>
@@ -53,6 +67,9 @@ const emit = defineEmits<{
         :action="`/imports/transactions/rules/${activeRule.id}`"
         method="patch"
         class="grid gap-3"
+        @start="isSubmitting = true"
+        @finish="isSubmitting = false"
+        @success="handleSuccess"
       >
         <select :value="ruleType" @change="emit('updateType', ($event.target as HTMLSelectElement).value as 'iban' | 'description')" name="type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
           <option value="iban">Rekeningnummer bevat</option>
@@ -70,7 +87,9 @@ const emit = defineEmits<{
       </Form>
 
       <DialogFooter>
-        <Button :form="mode === 'create' ? 'rule-create-form' : 'rule-edit-form'" type="submit">Opslaan</Button>
+        <Button :form="mode === 'create' ? 'rule-create-form' : 'rule-edit-form'" type="submit" :disabled="isSubmitting">
+          {{ isSubmitting ? 'Opslaan...' : 'Opslaan' }}
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

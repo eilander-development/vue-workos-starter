@@ -7,6 +7,8 @@ import { Head } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { useNotification } from '@/composables/useNotification';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import { customScrollbar } from '@/composables/scrollbar';
 import {
     Dialog,
     DialogContent,
@@ -48,6 +50,7 @@ const transactions = ref<Record<string, any>[]>([]);
 const loadingBalance = ref(false);
 const loadingTransactions = ref(false);
 const importingTransactions = ref(false);
+const disconnectConfirmOpen = ref(false);
 const importStatsOpen = ref(false);
 const importStats = ref<{ total: number; imported: number; duplicates: number; matched: number; unmatched: number } | null>(null);
 const connecting = ref(false);
@@ -229,10 +232,6 @@ const accountOptions = computed(() =>
  * Verbreekt de actieve bankkoppeling en wist de opgeslagen data
  */
 const disconnectBank = async () => {
-    if (!confirm('Weet je zeker dat je de bankkoppeling wilt verbreken?')) {
-        return;
-    }
-
     try {
         await axios.post('/enabled-banking/disconnect');
         
@@ -245,6 +244,7 @@ const disconnectBank = async () => {
         props.hasActiveConnection = false;
         
         showNotification('Succes', 'De bankkoppeling is succesvol verbroken.', 'success');
+        disconnectConfirmOpen.value = false;
 
         setTimeout(() => {
             window.location.href = '/enabled-banking';
@@ -335,7 +335,7 @@ onMounted(() => {
                             
                             <button 
                                 type="button" 
-                                @click="disconnectBank"
+                                @click="disconnectConfirmOpen = true"
                                 class="text-xs font-semibold text-red-600 hover:text-red-800 hover:underline focus:outline-none transition-colors ml-4"
                             >
                                 Verbinding verbreken
@@ -424,7 +424,7 @@ onMounted(() => {
                     Geen transacties geladen. Klik op "Haal transacties op" nadat je een rekening geselecteerd hebt.
                 </div>
 
-                <div v-else class="-mx-4 overflow-x-auto sm:mx-0">
+                <div v-else :class="`${customScrollbar} -mx-4 overflow-x-auto sm:mx-0`">
                     <div class="inline-block min-w-full px-4 align-middle sm:px-0">
                     <table class="w-full table-auto text-sm">
                         <thead>
@@ -470,6 +470,15 @@ onMounted(() => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <ConfirmDialog
+                :open="disconnectConfirmOpen"
+                title="Bankkoppeling verbreken"
+                description="Weet je zeker dat je de actieve bankkoppeling wilt verbreken?"
+                confirm-text="Verbreken"
+                confirm-variant="destructive"
+                @update:open="(value) => disconnectConfirmOpen = value"
+                @confirm="disconnectBank"
+            />
         </main>
     </AppLayout>
 </template>

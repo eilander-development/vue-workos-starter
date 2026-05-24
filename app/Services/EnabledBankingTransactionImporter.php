@@ -23,7 +23,8 @@ class EnabledBankingTransactionImporter
             $stats['total']++;
             $date = $row['posted_at'] ?? $row['date'] ?? now()->format('Y-m-d');
             $description = $this->normalizeDescription(trim((string) ($row['description'] ?? $row['merchant'] ?? 'Banktransactie')));
-            $iban = $row['counterparty_iban']
+            $iban = $row['counterpart_iban']
+                ?? $row['counterparty_iban']
                 ?? data_get($row, 'raw.creditor_account.iban')
                 ?? data_get($row, 'raw.debtor_account.iban');
             $amount = (float) ($row['amount'] ?? 0);

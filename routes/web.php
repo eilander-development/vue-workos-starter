@@ -15,6 +15,9 @@ use Laravel\WorkOS\Http\Middleware\ValidateSessionWithWorkOS;
 Route::middleware(['auth', ValidateSessionWithWorkOS::class])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('home');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/yearly-expenses-chart', [DashboardController::class, 'yearlyExpensesChart'])->name('dashboard.yearly_expenses_chart');
+    Route::get('/dashboard/data', [DashboardController::class, 'dashboardData'])->name('dashboard.data');
+    Route::post('/dashboard/dynamic-budgets', [DashboardController::class, 'storeDynamicBudgets'])->name('dashboard.dynamic_budgets.store');
     Route::get('/expenses/{category?}', [ExpensesController::class, 'index'])->name('expenses');
     Route::get('/income/{category?}', [IncomeController::class, 'index'])->name('income');
     Route::get('/savings/{category?}', [SavingsController::class, 'index'])->name('savings');

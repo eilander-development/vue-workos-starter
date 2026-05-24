@@ -63,6 +63,7 @@ const selectedCategory = computed(() =>
   categoryItems.value.find((category) => category.id === selectedCategoryId.value),
 );
 const budgetItems = computed(() => selectedCategory.value?.budgets || []);
+const hasCategorySelected = computed(() => selectedCategoryId.value !== null);
 
 const resetSelection = () => {
   selectedCategoryId.value = null;
@@ -129,7 +130,7 @@ const handleAssign = () => {
 
 <template>
   <Dialog :open="props.open" @update:open="(value) => emit('update:open', value)">
-    <DialogContent class="sm:max-w-lg">
+    <DialogContent class="!overflow-visible sm:max-w-lg">
       <DialogHeader class="space-y-3">
         <DialogTitle>Transactie koppelen</DialogTitle>
         <DialogDescription>
@@ -162,10 +163,13 @@ const handleAssign = () => {
           <select
             v-model="selectedBudgetId"
             class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-            :disabled="!selectedCategoryId"
+            :disabled="!hasCategorySelected"
           >
-            <option value="" disabled selected>
+            <option v-if="!hasCategorySelected" :value="null" disabled>
               Selecteer eerst een categorie
+            </option>
+            <option v-else-if="budgetItems.length === 0" :value="null" disabled>
+              Geen budgetten beschikbaar
             </option>
             <option
               v-for="budget in budgetItems"

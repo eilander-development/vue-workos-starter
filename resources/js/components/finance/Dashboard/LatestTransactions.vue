@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
 import { customScrollbar } from '@/composables/scrollbar';
-
 import Category from '@/components/Category.vue';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { TypeBadge } from '@/components/ui/type-badge';
 import { computed } from 'vue';
-import { router } from '@inertiajs/vue3';
 
 interface Props {
     latestTransactions: any[];
@@ -22,9 +19,11 @@ interface Props {
         from: number;
         to: number;
     };
+    month?: string;
 }
 
 const props = defineProps<Props>();
+const emit = defineEmits<{ (e: 'page-change', page: number): void }>();
 
 const budgetLabelForTransaction = (transaction: Record<string, any>) => {
     if (!transaction?.categoryId || !transaction?.budgetId) {
@@ -53,16 +52,7 @@ const goToPage = (pageNumber: number) => {
         return;
     }
 
-    router.get(
-        '/dashboard',
-        { transactions_page: pageNumber },
-        {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-            only: ['latestTransactions', 'latestTransactionsPagination'],
-        },
-    );
+    emit('page-change', pageNumber);
 };
 </script>
 

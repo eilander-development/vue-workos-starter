@@ -26,6 +26,7 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
     openTransactions: [type: 'expense' | 'income' | 'saving'];
+    openBudgets: [type: 'all' | 'expense' | 'income' | 'saving'];
 }>();
 const currency = (value: number) =>
     new Intl.NumberFormat('nl-NL', {
@@ -35,7 +36,7 @@ const currency = (value: number) =>
 </script>
 
 <template>
-    <Card class="rounded-md shadow-xl">
+    <Card class="rounded-md shadow-xl cursor-pointer hover:bg-muted/50" @click="emit('openBudgets', 'all')">
         <CardContent class="flex items-center gap-3 sm:gap-4">
             <div
                 class="rounded-full bg-gray-600/10 p-2 text-primary-foreground sm:p-3"
@@ -52,7 +53,7 @@ const currency = (value: number) =>
             </div>
         </CardContent>
     </Card>
-    <Card class="rounded-md shadow-xl">
+    <Card class="rounded-md shadow-xl cursor-pointer hover:bg-muted/50" @click="emit('openBudgets', 'all')">
         <CardContent class="flex items-center gap-3 sm:gap-4">
             <div
                 class="rounded-full bg-gray-600/10 p-2 text-primary-foreground sm:p-3"
@@ -69,7 +70,7 @@ const currency = (value: number) =>
             </div>
         </CardContent>
     </Card>
-    <Card class="rounded-md shadow-xl">
+    <Card class="rounded-md shadow-xl cursor-pointer hover:bg-muted/50" @click="emit('openBudgets', 'expense')">
         <CardContent class="flex items-center gap-3 sm:gap-4">
             <div
                 class="rounded-full bg-yellow-600/10 p-2 text-primary-foreground sm:p-3"
@@ -81,7 +82,7 @@ const currency = (value: number) =>
                     Gebudgetteerde uitgaven
                 </p>
                 <p class="text-lg font-bold sm:text-xl md:text-2xl">
-                    {{ currency(props.stats.totalBudget) }}
+                    {{ currency(props.stats.expenseBudget) }}
                 </p>
             </div>
         </CardContent>
@@ -98,12 +99,12 @@ const currency = (value: number) =>
                     Uitgegeven tot nu toe
                 </p>
                 <p class="text-lg font-bold sm:text-xl md:text-2xl">
-                    {{ currency(props.stats.totalSpend) }}
+                    {{ currency(props.stats.expenseSpend) }}
                 </p>
             </div>
         </CardContent>
     </Card>
-    <Card class="rounded-md shadow-xl">
+    <Card class="rounded-md shadow-xl cursor-pointer hover:bg-muted/50" @click="emit('openBudgets', 'income')">
         <CardContent class="flex items-center gap-3 sm:gap-4">
             <div class="rounded-full bg-yellow-600/10 p-2 text-primary-foreground sm:p-3">
                 <TrendingUp class="h-6 w-6 text-yellow-600" />
@@ -125,7 +126,7 @@ const currency = (value: number) =>
             </div>
         </CardContent>
     </Card>
-    <Card class="rounded-md shadow-xl">
+    <Card class="rounded-md shadow-xl cursor-pointer hover:bg-muted/50" @click="emit('openBudgets', 'saving')">
         <CardContent class="flex items-center gap-3 sm:gap-4">
             <div class="rounded-full bg-yellow-600/10 p-2 text-primary-foreground sm:p-3">
                 <PiggyBank class="h-6 w-6 text-yellow-600" />

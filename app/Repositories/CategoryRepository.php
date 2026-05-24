@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\Contracts\Repositories\CategoryRepositoryInterface;
 use App\Models\Budget;
 use App\Models\Category;
+use App\Models\Transaction;
 
 class CategoryRepository implements CategoryRepositoryInterface
 {
@@ -40,6 +41,8 @@ class CategoryRepository implements CategoryRepositoryInterface
     public function deleteCategory(int $categoryId): void
     {
         $category = Category::findOrFail($categoryId);
+        $budgetIds = $category->budgets()->pluck('id');
+        Transaction::query()->whereIn('budget_id', $budgetIds)->update(['budget_id' => null]);
         $category->budgets()->delete();
         $category->delete();
     }
@@ -48,6 +51,7 @@ class CategoryRepository implements CategoryRepositoryInterface
     {
         $category = Category::findOrFail($categoryId);
         $budget = $category->budgets()->findOrFail($budgetId);
+        Transaction::query()->where('budget_id', $budget->id)->update(['budget_id' => null]);
         $budget->delete();
     }
 }

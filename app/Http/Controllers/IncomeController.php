@@ -20,10 +20,13 @@ class IncomeController extends Controller
      */
     public function index(Request $request, $category = null): Response
     {
-        $categories = array_values($this->categoriesService->list('income', $this->reportingPeriod->startOfCurrentMonthFromDay(20)));
+        $month = (string) ($request->query('month') ?? $this->reportingPeriod->defaultPickerMonth());
+        [$startDate, $endDate] = $this->reportingPeriod->periodForMonth($month, $this->reportingPeriod->configuredStartDay());
+        $categories = array_values($this->categoriesService->list('income', $startDate, $endDate));
         $selected = collect($categories)->firstWhere('slug', $category) ?? ($categories[0] ?? null);
 
         return Inertia::render('Income', [
+            'month' => $month,
             'categories' => $categories,
             'selected' => $selected,
         ]);

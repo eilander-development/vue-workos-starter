@@ -6,7 +6,6 @@ import { home } from '@/routes';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import NotificationBanner from '@/components/NotificationBanner.vue';
 import { useNotification } from '@/composables/useNotification';
 import { ref, computed } from 'vue';
 import { Plus } from 'lucide-vue-next';
@@ -25,7 +24,7 @@ const rulesMeta = page.props.rules as any;
 const rules = computed(() => Array.isArray(rulesMeta?.data) ? rulesMeta.data : Array.isArray(rulesMeta) ? rulesMeta : []);
 const flash = (page.props.flash as any) ?? {};
 const result = computed(() => page.props.result ?? flash.result);
-const { notification, showNotification } = useNotification();
+const { showNotification } = useNotification();
 
 if (flash.success) showNotification(flash.success, 'success');
 else if (flash.error) showNotification(flash.error, 'error');
@@ -35,6 +34,7 @@ const createOpen = ref(false);
 const editOpen = ref(false);
 const activeRule = ref<any | null>(null);
 const deleteRuleId = ref<number | null>(null);
+const deletingRule = ref(false);
 const selectedRuleForTransactions = ref<any | null>(null);
 const ruleTransactionsOpen = ref(false);
 const ruleTransactions = ref<any[]>([]);
@@ -119,13 +119,31 @@ const applyRuleToAnotherBudget = async () => {
     showNotification('Omzetten van matched transacties is mislukt.', 'error');
   }
 };
+
+const deleteRule = () => {
+  if (deleteRuleId.value === null || deletingRule.value) return;
+
+  deletingRule.value = true;
+  const ruleId = deleteRuleId.value;
+
+  router.delete(`/imports/transactions/rules/${ruleId}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      deleteRuleId.value = null;
+      showNotification('Koppelregel succesvol verwijderd.', 'success');
+      router.reload({ only: ['rules'] });
+    },
+    onFinish: () => {
+      deletingRule.value = false;
+    },
+  });
+};
 </script>
 
 <template>
   <Head title="Koppelregels" />
   <AppLayout :breadcrumbs="[{ title: 'Home', href: home().url }, { title: 'Koppelregels', href: '/imports/rules' }]">
     <main class="space-y-4 p-4">
-      <NotificationBanner v-if="notification" :type="notification.type" :message="notification.message" />
 
       <Card class="rounded-md shadow-xl">
         <CardContent>
@@ -197,10 +215,10 @@ const applyRuleToAnotherBudget = async () => {
       <DialogContent class="sm:max-w-md">
         <DialogHeader class="space-y-2"><DialogTitle>Koppelregel verwijderen</DialogTitle></DialogHeader>
         <DialogFooter>
-          <Button type="button" variant="secondary" @click="deleteRuleId = null">Annuleren</Button>
-          <Form v-if="deleteRuleId !== null" :action="`/imports/transactions/rules/${deleteRuleId}`" method="delete">
-            <Button type="submit" variant="destructive">Verwijderen</Button>
-          </Form>
+          <Button type="button" variant="secondary" :disabled="deletingRule" @click="deleteRuleId = null">Annuleren</Button>
+          <Button type="button" variant="destructive" :disabled="deletingRule" @click="deleteRule">
+            {{ deletingRule ? 'Verwijderen...' : 'Verwijderen' }}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

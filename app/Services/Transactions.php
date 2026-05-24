@@ -40,7 +40,7 @@ class Transactions
 
         $query = Transaction::query();
         if ($applyReportingPeriod) {
-            $query->whereDate('date', '>=', $this->reportingPeriod->startOfCurrentMonthFromDay(20)->toDateString());
+            $query->whereDate('date', '>=', $this->reportingPeriod->startOfCurrentMonthFromDay($this->reportingPeriod->configuredStartDay())->toDateString());
         }
 
         if (trim($searchTerm) !== '') {
@@ -52,7 +52,7 @@ class Transactions
                 $query->where('type', $type);
             }
             if ($type === 'uncategorized') {
-                $query->whereNull('type');
+                $query->whereNull('category_id');
             }
         }
         if ($budgetId) {

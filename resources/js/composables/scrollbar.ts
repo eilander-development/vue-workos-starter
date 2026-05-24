@@ -1,4 +1,9 @@
 export const customScrollbar = [
+    // Firefox / standards-based fallback
+    "[scrollbar-width:thin]",
+    "[scrollbar-color:#94a3b8_transparent]",
+    "dark:[scrollbar-color:#0f172a_transparent]",
+
     // Basic sizing - thin but not too thin
     "[&::-webkit-scrollbar]:w-1.5",
     "[&::-webkit-scrollbar]:h-1.5",

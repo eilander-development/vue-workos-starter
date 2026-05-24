@@ -6,7 +6,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import VueApexCharts from 'vue3-apexcharts'
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 interface Props {
     yearlyExpensesChart: object|Array;
@@ -14,7 +14,8 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const visibleSeries = computed(() => (props.yearlyExpensesChart as any)?.series ?? []);
+const visibleSeries = ref<any[]>((props.yearlyExpensesChart as any)?.series ?? []);
+const isLoading = ref(false);
 
 const formatCurrency = (value: number) =>
     new Intl.NumberFormat('nl-NL', {
@@ -131,6 +132,22 @@ const chartOptions = computed(() => ({
     colors: ['#10b981', '#ef4444'],
 }));
 
+const loadYearlySeries = async () => {
+    isLoading.value = true;
+    try {
+        const year = new Date().getFullYear();
+        const response = await fetch(`/dashboard/yearly-expenses-chart?year=${year}`, {
+            headers: { Accept: 'application/json' },
+        });
+        const data = await response.json();
+        visibleSeries.value = data?.series ?? [];
+    } finally {
+        isLoading.value = false;
+    }
+};
+
+onMounted(loadYearlySeries);
+
 </script>
 
 <template>
@@ -139,6 +156,7 @@ const chartOptions = computed(() => ({
             <CardTitle>Inkomen vs uitgaven</CardTitle>
         </CardHeader>
         <CardContent>
+            <div v-if="isLoading" class="text-sm text-muted-foreground">Grafiek laden...</div>
             <VueApexCharts height="350" :options="chartOptions" :series="visibleSeries"/>
         </CardContent>
     </Card>

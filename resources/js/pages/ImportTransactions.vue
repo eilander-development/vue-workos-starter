@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import axios from 'axios';
-import { Head, Form, usePage } from '@inertiajs/vue3';
+import { Head, Form, usePage, router } from '@inertiajs/vue3';
 import { home } from '@/routes';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DialogClose, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import NotificationBanner from '@/components/NotificationBanner.vue';
 import { useNotification } from '@/composables/useNotification';
+import { customScrollbar } from '@/composables/scrollbar';
 import { ref, computed } from 'vue';
 import { EllipsisVertical, Eye, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 
@@ -33,7 +33,7 @@ const rules = computed(() =>
 );
 const flash = (page.props.flash as any) ?? {};
 const result = computed(() => page.props.result ?? flash.result);
-const { notification, showNotification } = useNotification();
+const { showNotification } = useNotification();
 
 if (flash.success) {
   showNotification(flash.success, 'success');
@@ -48,6 +48,9 @@ if (flash.success) {
 
 const createOpen = ref(false);
 const editOpen = ref(false);
+const isCreatingRule = ref(false);
+const isUpdatingRule = ref(false);
+const isDeletingRule = ref(false);
 const activeRule = ref<any | null>(null);
 const deleteRuleId = ref<number | null>(null);
 const selectedRuleForTransactions = ref<any | null>(null);
@@ -88,6 +91,19 @@ const openEdit = (rule: any) => {
 };
 const openDeleteRuleModal = (ruleId: number) => {
   deleteRuleId.value = ruleId;
+};
+
+const handleRuleSaved = (mode: 'create' | 'edit') => {
+  showNotification(mode === 'create' ? 'Koppelregel aangemaakt.' : 'Koppelregel opgeslagen.', 'success');
+  if (mode === 'create') createOpen.value = false;
+  if (mode === 'edit') editOpen.value = false;
+  router.reload({ only: ['rules'], preserveScroll: true });
+};
+
+const handleRuleDeleted = () => {
+  showNotification('Koppelregel verwijderd.', 'success');
+  deleteRuleId.value = null;
+  router.reload({ only: ['rules'], preserveScroll: true });
 };
 
 const closeRuleTransactions = () => {
@@ -172,7 +188,6 @@ const applyTransactionRule = async (transactionId: number) => {
   <Head title="ING Import" />
   <AppLayout :breadcrumbs="[{ title: 'Home', href: home().url }, { title: 'ING Import', href: '/imports/transactions' }]">
     <main class="space-y-4 p-4">
-      <NotificationBanner v-if="notification" :type="notification.type" :message="notification.message" />
       <Card class="rounded-md shadow-xl">
         <CardContent>
           <h2 class="mb-3 text-base font-semibold">Importeer ING CSV</h2>
@@ -211,7 +226,7 @@ const applyTransactionRule = async (transactionId: number) => {
     <Dialog :open="createOpen" @update:open="(value) => (createOpen = value)">
       <DialogContent class="sm:max-w-lg">
         <DialogHeader class="space-y-3"><DialogTitle>Koppelregel toevoegen</DialogTitle></DialogHeader>
-        <Form id="create-rule-form" action="/imports/transactions/rules" method="post" class="grid gap-3">
+        <Form id="create-rule-form" action="/imports/transactions/rules" method="post" class="grid gap-3" @start="isCreatingRule = true" @finish="isCreatingRule = false" @success="handleRuleSaved('create')">
           <select v-model="ruleType" name="type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
             <option value="iban">Rekeningnummer bevat</option>
             <option value="description">Omschrijving bevat</option>
@@ -226,14 +241,14 @@ const applyTransactionRule = async (transactionId: number) => {
             </optgroup>
           </select>
         </Form>
-        <DialogFooter><Button form="create-rule-form" type="submit">Opslaan</Button></DialogFooter>
+        <DialogFooter><Button form="create-rule-form" type="submit" :disabled="isCreatingRule">{{ isCreatingRule ? 'Opslaan...' : 'Opslaan' }}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
 
     <Dialog :open="editOpen" @update:open="(value) => (editOpen = value)">
       <DialogContent class="sm:max-w-lg">
         <DialogHeader class="space-y-3"><DialogTitle>Koppelregel wijzigen</DialogTitle></DialogHeader>
-        <Form v-if="activeRule" id="edit-rule-form" :action="`/imports/transactions/rules/${activeRule.id}`" method="patch" class="grid gap-3">
+        <Form v-if="activeRule" id="edit-rule-form" :action="`/imports/transactions/rules/${activeRule.id}`" method="patch" class="grid gap-3" @start="isUpdatingRule = true" @finish="isUpdatingRule = false" @success="handleRuleSaved('edit')">
           <select v-model="editType" name="type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
             <option value="iban">Rekeningnummer bevat</option>
             <option value="description">Omschrijving bevat</option>
@@ -248,7 +263,7 @@ const applyTransactionRule = async (transactionId: number) => {
             </optgroup>
           </select>
         </Form>
-        <DialogFooter><Button form="edit-rule-form" type="submit">Opslaan</Button></DialogFooter>
+        <DialogFooter><Button form="edit-rule-form" type="submit" :disabled="isUpdatingRule">{{ isUpdatingRule ? 'Opslaan...' : 'Opslaan' }}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
 
@@ -258,9 +273,9 @@ const applyTransactionRule = async (transactionId: number) => {
           <DialogTitle>Koppelregel verwijderen</DialogTitle>
         </DialogHeader>
         <DialogFooter>
-          <Button type="button" variant="secondary" @click="deleteRuleId = null">Annuleren</Button>
-          <Form v-if="deleteRuleId !== null" :action="`/imports/transactions/rules/${deleteRuleId}`" method="delete">
-            <Button type="submit" variant="destructive">Verwijderen</Button>
+          <Button type="button" variant="secondary" :disabled="isDeletingRule" @click="deleteRuleId = null">Annuleren</Button>
+          <Form v-if="deleteRuleId !== null" :action="`/imports/transactions/rules/${deleteRuleId}`" method="delete" @start="isDeletingRule = true" @finish="isDeletingRule = false" @success="handleRuleDeleted">
+            <Button type="submit" variant="destructive" :disabled="isDeletingRule">{{ isDeletingRule ? 'Verwijderen...' : 'Verwijderen' }}</Button>
           </Form>
         </DialogFooter>
       </DialogContent>
@@ -275,7 +290,7 @@ const applyTransactionRule = async (transactionId: number) => {
           </DialogDescription>
         </DialogHeader>
 
-        <div class="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20">
+        <div :class="`${customScrollbar} max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20`">
           <table class="w-full table-auto text-sm">
             <thead class="sticky top-0 bg-slate-950">
               <tr class="text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -343,7 +358,7 @@ const applyTransactionRule = async (transactionId: number) => {
           </DialogDescription>
         </DialogHeader>
 
-        <div class="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20">
+        <div :class="`${customScrollbar} max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20`">
           <table class="w-full table-auto text-sm">
             <thead class="sticky top-0 bg-slate-950">
               <tr class="text-left text-xs uppercase tracking-wide text-muted-foreground">

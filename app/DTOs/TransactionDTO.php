@@ -12,6 +12,7 @@ class TransactionDTO
     public ?string $posted_at;
     public ?string $reference;
     public ?string $merchant;
+    public ?string $counterpart_iban;
     public ?string $type;
     public ?string $date;
     public ?int $categoryId;
@@ -29,6 +30,7 @@ class TransactionDTO
         $this->posted_at = $data['postedAt'] ?? $data['posted_at'] ?? null;
         $this->reference = $data['reference'] ?? null;
         $this->merchant = $data['merchantName'] ?? $data['counterparty'] ?? null;
+        $this->counterpart_iban = $data['counterpart_iban'] ?? $data['counterparty_iban'] ?? null;
         $this->type = $data['type'] ?? null;
         $this->date = $data['date'] ?? $data['posted_at'] ?? $data['postedAt'] ?? null;
         $this->categoryId = isset($data['categoryId']) ? (int) $data['categoryId'] : null;
@@ -39,42 +41,95 @@ class TransactionDTO
 
     public static function fromEnableBanking(array $rawTransaction): self
     {
-        // 1. Zorg voor een vangnet als de data nóg een niveau dieper genest zit
         $t = $rawTransaction['raw'] ?? $rawTransaction;
 
-        // 2. Haal het rauwe bedrag en de valuta op uit het object
         $rawAmount = $t['transaction_amount']['amount'] ?? 0.0;
         $currency = $t['transaction_amount']['currency'] ?? 'EUR';
-        
-        // Converteer de string (bijv. "0.50") naar een zuivere float
-        $amount = (float)$rawAmount;
+        $amount = (float) $rawAmount;
 
-        // 3. CRUCIAAL VOOR PS2: Als het een afschrijving (DBIT) is, maken we het bedrag negatief
         $indicator = $t['credit_debit_indicator'] ?? 'CRDT';
         if ($indicator === 'DBIT' && $amount > 0) {
             $amount = -$amount;
         }
 
-        // 4. Bepaal de omschrijving (pakt de eerste regel uit de remittance array, of valt terug op bank_transaction_code)
         $remittance = $t['remittance_information'] ?? [];
-        $description = !empty($remittance) && is_array($remittance) 
-            ? $remittance[0] 
-            : ($t['bank_transaction_code']['description'] ?? 'Banktransactie');
+        $description = $t['bank_transaction_code']['description'] ?? 'Banktransactie';
+        $remittanceIban = null;
+        $ignorePatterns = [
+            '/^Datum:\s*/iu',
+            '/^Valutadatum:\s*/iu',
+            '/^Transactie:\s*/iu',
+            '/^Kaartnr:\s*/iu',
+            '/^Kenmerk:\s*/iu',
+            '/^Datum\/Tijd:\s*/iu',
+            '/^Machtiging ID:\s*/iu',
+            '/^Incassant ID:\s*/iu',
+            '/^Pasvolgnr:\s*/iu',
+        ];
+        $cleanPatterns = [
+            '/^Naam:\s*/iu',
+            '/^Omschrijving:\s*/iu',
+        ];
+        $descriptionParts = [];
 
-        // 5. Bepaal de naam van de tegenpartij (Creditor bij afschrijving, Debtor bij bijschrijving)
+        if (is_array($remittance)) {
+            foreach ($remittance as $line) {
+                if (! is_string($line)) {
+                    continue;
+                }
+
+                $trimmed = trim($line);
+                if ($trimmed === '') {
+                    continue;
+                }
+
+                if (preg_match('/^IBAN:\s*([A-Z0-9]+)/iu', $trimmed, $matches)) {
+                    $remittanceIban = trim($matches[1]);
+                    continue;
+                }
+
+                $shouldIgnore = false;
+                foreach ($ignorePatterns as $pattern) {
+                    if (preg_match($pattern, $trimmed) === 1) {
+                        $shouldIgnore = true;
+                        break;
+                    }
+                }
+                if ($shouldIgnore) {
+                    continue;
+                }
+
+                $cleaned = $trimmed;
+                foreach ($cleanPatterns as $pattern) {
+                    $cleaned = preg_replace($pattern, '', $cleaned) ?? $cleaned;
+                }
+                $cleaned = trim($cleaned);
+                if ($cleaned !== '') {
+                    $descriptionParts[] = $cleaned;
+                }
+            }
+        } elseif (is_string($remittance) && trim($remittance) !== '') {
+            $descriptionParts[] = trim($remittance);
+        }
+
+        if (! empty($descriptionParts)) {
+            $description = implode(' ', $descriptionParts);
+        }
+
         $merchant = $t['creditor']['name'] ?? ($t['debtor']['name'] ?? null);
+        $counterpartIban = $remittanceIban ?? $t['creditor_account']['iban'] ?? $t['debtor_account']['iban'] ?? null;
 
-        // 6. Bouw en retourneer de DTO met de exacte veldnamen die je Vue-template verwacht
         return new self([
-            'id'          => $t['entry_reference'] ?? ($t['transaction_id'] ?? bin2hex(random_bytes(8))),
-            'account_id'  => $t['debtor_account']['iban'] ?? null,
-            'amount'      => $amount,
-            'currency'    => $currency,
+            'id' => $t['entry_reference'] ?? ($t['transaction_id'] ?? bin2hex(random_bytes(8))),
+            'account_id' => $t['debtor_account']['iban'] ?? null,
+            'amount' => $amount,
+            'currency' => $currency,
             'description' => $description,
-            'posted_at'   => $t['booking_date'] ?? ($t['transaction_date'] ?? date('Y-m-d')),
-            'reference'   => $t['entry_reference'] ?? null,
-            'merchant'    => $merchant,
-            'raw'         => $rawTransaction // Behoud de rauwe data voor debuggen
+            'posted_at' => $t['booking_date'] ?? ($t['transaction_date'] ?? date('Y-m-d')),
+            'reference' => $t['entry_reference'] ?? null,
+            'merchant' => $merchant,
+            'counterpart_iban' => $counterpartIban,
+            'raw' => $rawTransaction,
         ]);
     }
 
@@ -90,6 +145,7 @@ class TransactionDTO
             'date' => optional($transaction->date)->format('Y-m-d'),
             'reference' => $transaction->reference ?? null,
             'merchant' => $transaction->merchant ?? null,
+            'counterpart_iban' => $transaction->counterparty_iban ?? null,
             'type' => $transaction->type,
             'categoryId' => $transaction->category_id,
             'budgetId' => $transaction->budget_id,
@@ -101,20 +157,22 @@ class TransactionDTO
     public function toArray(): array
     {
         return [
-            'id'          => $this->id ?? null,
-            'account_id'  => $this->account_id ?? null,
-            'amount'      => $this->amount ?? 0,
-            'currency'    => $this->currency ?? 'EUR',
+            'id' => $this->id ?? null,
+            'account_id' => $this->account_id ?? null,
+            'amount' => $this->amount ?? 0,
+            'currency' => $this->currency ?? 'EUR',
             'description' => $this->description ?? 'Geen omschrijving',
-            'posted_at'   => $this->posted_at ?? '-',
-            'date'        => $this->date ?? $this->posted_at ?? null,
-            'reference'   => $this->reference ?? null,
-            'merchant'    => $this->merchant ?? null,
-            'type'        => $this->type ?? null,
-            'categoryId'  => $this->categoryId,
-            'budgetId'    => $this->budgetId,
-            'sourceType'  => $this->sourceType,
-            'raw'         => $this->raw ?? []
+            'posted_at' => $this->posted_at ?? '-',
+            'date' => $this->date ?? $this->posted_at ?? null,
+            'reference' => $this->reference ?? null,
+            'merchant' => $this->merchant ?? null,
+            'counterpart_iban' => $this->counterpart_iban ?? null,
+            'counterparty_iban' => $this->counterpart_iban ?? null,
+            'type' => $this->type ?? null,
+            'categoryId' => $this->categoryId,
+            'budgetId' => $this->budgetId,
+            'sourceType' => $this->sourceType,
+            'raw' => $this->raw ?? [],
         ];
     }
 }

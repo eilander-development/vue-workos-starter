@@ -32,9 +32,10 @@ class CategoriesController extends Controller
         }
 
         $pageNumber = max(1, (int) $request->input('page', 1));
-        $startDate = $this->reportingPeriod->startOfCurrentMonthFromDay(20);
-        $categories = $this->categoriesService->list($filter, $startDate);
-        $allCategories = $this->categoriesService->list('all', $startDate);
+        $month = (string) ($request->query('month') ?? $this->reportingPeriod->defaultPickerMonth());
+        [$startDate, $endDate] = $this->reportingPeriod->periodForMonth($month, $this->reportingPeriod->configuredStartDay());
+        $categories = $this->categoriesService->list($filter, $startDate, $endDate);
+        $allCategories = $this->categoriesService->list('all', $startDate, $endDate);
 
         $paginatedCategories = array_values(array_slice($categories, ($pageNumber - 1) * 100, 100));
         $totalCategories = count($categories);
@@ -42,6 +43,7 @@ class CategoriesController extends Controller
         return Inertia::render('Categories', [
             'categories' => $paginatedCategories,
             'stats' => $this->categoriesService->stats($allCategories),
+            'month' => $month,
             'activeFilter' => $filter,
             'pagination' => [
                 'current_page' => $pageNumber,

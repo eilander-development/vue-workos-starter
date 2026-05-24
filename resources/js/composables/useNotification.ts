@@ -7,9 +7,10 @@ export interface Notification {
   message: string
 }
 
+const notification = ref<Notification | null>(null)
+let timeoutId: ReturnType<typeof setTimeout> | null = null
+
 export function useNotification() {
-  const notification = ref<Notification | null>(null)
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
 
   const clearNotification = () => {
     notification.value = null
@@ -36,9 +37,14 @@ export function useNotification() {
     }, duration)
   }
 
-  return {
-    notification,
-    showNotification,
-    clearNotification,
-  }
+  const showSuccess = (message: string, duration = 5000) =>
+    showNotification(message, 'success', duration)
+
+  const showError = (message: string, duration = 5000) =>
+    showNotification(message, 'error', duration)
+
+  const showInfo = (message: string, duration = 5000) =>
+    showNotification(message, 'info', duration)
+
+  return { notification, showNotification, showSuccess, showError, showInfo, clearNotification }
 }

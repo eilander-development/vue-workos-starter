@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\DTOs\TransactionDTO;
 use GuzzleHttp\Client;
 use RuntimeException;
 
@@ -207,86 +208,7 @@ class EnableBanking
             $list = $transactionsData['transactions'] ?? [];
 
             foreach ($list as $t) {
-                $rawAmount = $t['transaction_amount']['amount'] ?? 0.0;
-                $amount = (float) $rawAmount;
-                if (($t['credit_debit_indicator'] ?? 'CRDT') === 'DBIT' && $amount > 0) {
-                    $amount = -$amount;
-                }
-
-                $remittance = $t['remittance_information'] ?? [];
-                $description = $t['bank_transaction_code']['description'] ?? 'Banktransactie';
-                $remittanceIban = null;
-                $ignorePatterns = [
-                    '/^Datum:\s*/iu',
-                    '/^Valutadatum:\s*/iu',
-                    '/^Transactie:\s*/iu',
-                    '/^Kaartnr:\s*/iu',
-                    '/^Kenmerk:\s*/iu',
-                    '/^Datum\/Tijd:\s*/iu',
-                    '/^Machtiging ID:\s*/iu',
-                    '/^Incassant ID:\s*/iu',
-                    '/^Pasvolgnr:\s*/iu',
-                ];
-                $cleanPatterns = [
-                    '/^Naam:\s*/iu',
-                    '/^Omschrijving:\s*/iu',
-                ];
-                $descriptionParts = [];
-
-                if (is_array($remittance)) {
-                    foreach ($remittance as $line) {
-                        if (! is_string($line)) {
-                            continue;
-                        }
-
-                        $trimmed = trim($line);
-                        if ($trimmed === '') {
-                            continue;
-                        }
-
-                        if (preg_match('/^IBAN:\s*([A-Z0-9]+)/iu', $trimmed, $matches)) {
-                            $remittanceIban = trim($matches[1]);
-                            continue;
-                        }
-
-                        $shouldIgnore = false;
-                        foreach ($ignorePatterns as $pattern) {
-                            if (preg_match($pattern, $trimmed) === 1) {
-                                $shouldIgnore = true;
-                                break;
-                            }
-                        }
-                        if ($shouldIgnore) {
-                            continue;
-                        }
-
-                        $cleaned = $trimmed;
-                        foreach ($cleanPatterns as $pattern) {
-                            $cleaned = preg_replace($pattern, '', $cleaned) ?? $cleaned;
-                        }
-                        $cleaned = trim($cleaned);
-                        if ($cleaned !== '') {
-                            $descriptionParts[] = $cleaned;
-                        }
-                    }
-                } elseif (is_string($remittance) && trim($remittance) !== '') {
-                    $descriptionParts[] = trim($remittance);
-                }
-
-                if (! empty($descriptionParts)) {
-                    $description = implode(' ', $descriptionParts);
-                }
-
-                $items[] = [
-                    'id' => $t['entry_reference'] ?? bin2hex(random_bytes(8)),
-                    'posted_at' => $t['booking_date'] ?? ($t['transaction_date'] ?? '-'),
-                    'description' => $description,
-                    'amount' => $amount,
-                    'currency' => $t['transaction_amount']['currency'] ?? 'EUR',
-                    'merchant' => $t['creditor']['name'] ?? ($t['debtor']['name'] ?? 'Onbekend'),
-                    'counterparty_iban' => $remittanceIban ?? $t['creditor_account']['iban'] ?? $t['debtor_account']['iban'] ?? null,
-                    'raw' => $t,
-                ];
+                $items[] = TransactionDTO::fromEnableBanking($t)->toArray();
             }
 
             $continuationKey = $transactionsData['continuation_key'] ?? null;

@@ -16,8 +16,8 @@ import { Button } from '@/components/ui/button';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { TypeBadge } from '@/components/ui/type-badge';
-import NotificationBanner from '@/components/NotificationBanner.vue';
 import { useNotification } from '@/composables/useNotification';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import {
     Dialog,
     DialogClose,
@@ -96,6 +96,7 @@ const bulkFromBudgetId = ref<string>('');
 const bulkToBudgetId = ref<string>('');
 const bulkLoading = ref(false);
 const bulkSourceDeleteLoading = ref(false);
+const deleteSourceConfirmOpen = ref(false);
 const assignDialogOpen = ref(false);
 const selectedTransaction = ref<Record<string, any> | null>(null);
 const showDialogOpen = ref(false);
@@ -119,7 +120,7 @@ const ruleBudgetId = ref<number | null>(null);
 const ruleTransactionIban = ref('');
 const ruleTransactionDescription = ref('');
 const ruleSaveLoading = ref(false);
-const { notification, showNotification } = useNotification();
+const { showSuccess, showError } = useNotification();
 const budgetOptions = computed(() => Object.values(categories).flatMap((category: any) =>
     (category.budgets ?? []).map((budget: any) => ({
         id: String(budget.id),
@@ -162,10 +163,10 @@ const deleteTransaction = async () => {
         selectedTransaction.value = null;
 
         fetchTransactions();
-        showNotification('Transactie succesvol verwijderd.', 'success');
+        showSuccess('Transactie succesvol verwijderd.');
     } catch (error) {
         console.error('Kon transactie niet verwijderen:', error);
-        showNotification('Kon transactie niet verwijderen.', 'error');
+        showError('Kon transactie niet verwijderen.');
     }
 };
 
@@ -201,24 +202,30 @@ const handleCategoryAssigned = async (payload: {
         transaction.icon = payload.icon;
         transaction.color = payload.color;
 
-        const description = transaction.description ?? '';
-        const iban = transaction.counterpartyIban ?? transaction.counterparty_iban ?? '';
-
-        if (!description && !iban) {
-            return;
-        }
+        const description = String(
+            transaction.description
+            ?? transaction.name
+            ?? transaction.remittance_information
+            ?? '',
+        ).trim();
+        const iban = String(
+            transaction.counterpartyIban
+            ?? transaction.counterparty_iban
+            ?? transaction.iban
+            ?? '',
+        ).trim();
 
         ruleCategoryId.value = payload.categoryId;
         ruleBudgetId.value = payload.budgetId;
         ruleTransactionDescription.value = description;
         ruleTransactionIban.value = iban;
-        ruleType.value = iban ? 'iban' : 'description';
-        ruleMatchValue.value = iban || description;
+        ruleType.value = iban !== '' ? 'iban' : 'description';
+        ruleMatchValue.value = iban !== '' ? iban : description;
         createRuleDialogOpen.value = true;
-        showNotification('Transactiegegevens zijn opgeslagen.', 'success');
+        showSuccess('Transactiegegevens zijn opgeslagen.');
     } catch (error) {
         console.error('Kon de transactie niet opslaan:', error);
-        showNotification('Kon de transactie niet opslaan.', 'error');
+        showError('Kon de transactie niet opslaan.');
     }
 };
 
@@ -274,19 +281,23 @@ const onSourceFilterChange = () => {
     pagination.value.current_page = 1;
     fetchTransactions();
 };
+const requestDeleteBySource = () => {
+    if (selectedSourceType.value === 'all' || bulkSourceDeleteLoading.value) return;
+    deleteSourceConfirmOpen.value = true;
+};
 const deleteBySource = async () => {
     if (selectedSourceType.value === 'all') return;
-    if (!confirm(`Weet je zeker dat je alle ${selectedSourceType.value.toUpperCase()} transacties wilt verwijderen?`)) return;
     bulkSourceDeleteLoading.value = true;
     try {
         const response = await axios.delete('/transactions/source', {
             data: { source_type: selectedSourceType.value },
             headers: { Accept: 'application/json' },
         });
-        showNotification(`${response.data.deleted} transacties verwijderd.`, 'success');
+        showSuccess(`${response.data.deleted} transacties verwijderd.`);
+        deleteSourceConfirmOpen.value = false;
         fetchTransactions();
     } catch (error) {
-        showNotification('Verwijderen op bron is mislukt.', 'error');
+        showError('Verwijderen op bron is mislukt.');
     } finally {
         bulkSourceDeleteLoading.value = false;
     }
@@ -300,11 +311,11 @@ const applyBulkReassign = async () => {
             from_budget_id: Number(bulkFromBudgetId.value),
             to_budget_id: Number(bulkToBudgetId.value),
         });
-        showNotification(`${response.data.updated} transacties bijgewerkt.`, 'success');
+        showSuccess(`${response.data.updated} transacties bijgewerkt.`);
         bulkDialogOpen.value = false;
         fetchTransactions();
     } catch (error) {
-        showNotification('Bulk wijziging mislukt.', 'error');
+        showError('Bulk wijziging mislukt.');
     } finally {
         bulkLoading.value = false;
     }
@@ -328,7 +339,7 @@ const fetchMatchingTransactions = async (ruleId: number | null, page = 1) => {
         matchingPagination.value = response.data.pagination ?? matchingPagination.value;
     } catch (error) {
         console.error('Kon gekoppelde transacties niet ophalen:', error);
-        showNotification('Kon gekoppelde transacties niet ophalen.', 'error');
+        showError('Kon gekoppelde transacties niet ophalen.');
     }
 };
 
@@ -358,7 +369,7 @@ const saveImportRule = async () => {
         }
 
         if (rule) {
-            showNotification('Koppelregel succesvol aangemaakt.', 'success');
+            showSuccess('Koppelregel succesvol aangemaakt.');
         }
 
         if (matches.length) {
@@ -368,7 +379,7 @@ const saveImportRule = async () => {
         }
     } catch (error) {
         console.error('Kon de koppelregel niet aanmaken:', error);
-        showNotification('Kon de koppelregel niet aanmaken.', 'error');
+        showError('Kon de koppelregel niet aanmaken.');
     } finally {
         ruleSaveLoading.value = false;
         closeCreateRuleDialog();
@@ -386,10 +397,10 @@ const applyRuleToMatchingTransactions = async () => {
         });
         showSimilarTransactionsDialog.value = false;
         fetchTransactions();
-        showNotification('Vergelijkbare transacties succesvol gekoppeld.', 'success');
+        showSuccess('Vergelijkbare transacties succesvol gekoppeld.');
     } catch (error) {
         console.error('Kon de vergelijkbare transacties niet koppelen:', error);
-        showNotification('Kon de vergelijkbare transacties niet koppelen.', 'error');
+        showError('Kon de vergelijkbare transacties niet koppelen.');
     }
 };
 
@@ -415,7 +426,6 @@ const goToPage = (pageNumber: number) => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <main class="p-4 h-full">
-            <NotificationBanner v-if="notification" :type="notification.type" :message="notification.message" />
             <div class="flex h-full flex-col rounded-lg border bg-card text-card-foreground shadow-sm">
                 <div class="flex flex-col space-y-1.5 p-4 sm:p-6 ">
                     <div
@@ -485,7 +495,7 @@ const goToPage = (pageNumber: number) => {
                         <Button
                             variant="destructive"
                             :disabled="selectedSourceType === 'all' || bulkSourceDeleteLoading"
-                            @click="deleteBySource"
+                            @click="requestDeleteBySource"
                         >
                             {{ bulkSourceDeleteLoading ? 'Verwijderen...' : `Verwijder alles (${selectedSourceType.toUpperCase()})` }}
                         </Button>
@@ -800,7 +810,7 @@ const goToPage = (pageNumber: number) => {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div class="overflow-x-auto max-h-[60vh]">
+                    <div :class="`${customScrollbar} overflow-x-auto max-h-[60vh]`">
                         <table class="w-full table-auto text-sm">
                             <thead>
                                 <tr class="bg-slate-900 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -889,6 +899,16 @@ const goToPage = (pageNumber: number) => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <ConfirmDialog
+                :open="deleteSourceConfirmOpen"
+                title="Alle brontransacties verwijderen"
+                :description="`Weet je zeker dat je alle ${selectedSourceType.toUpperCase()} transacties wilt verwijderen?`"
+                confirm-text="Verwijderen"
+                confirm-variant="destructive"
+                :loading="bulkSourceDeleteLoading"
+                @update:open="(value) => deleteSourceConfirmOpen = value"
+                @confirm="deleteBySource"
+            />
         </main>
     </AppLayout>
 </template>

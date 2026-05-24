@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { DialogClose, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { customScrollbar } from '@/composables/scrollbar';
 
 defineProps<{
   open: boolean;
@@ -29,7 +30,7 @@ const emit = defineEmits<{
         <p v-if="description" class="text-sm text-muted-foreground">{{ description }}</p>
       </DialogHeader>
 
-      <div class="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20">
+      <div :class="`${customScrollbar} max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20`">
         <table class="w-full table-auto text-sm">
           <thead class="sticky top-0 bg-slate-950">
             <tr class="text-left text-xs uppercase tracking-wide text-muted-foreground">

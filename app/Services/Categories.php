@@ -7,11 +7,14 @@ use Carbon\CarbonInterface;
 
 class Categories
 {
-    public function list(string $filter = 'all', ?CarbonInterface $startDate = null): array
+    public function list(string $filter = 'all', ?CarbonInterface $startDate = null, ?CarbonInterface $endDate = null): array
     {
-        return Category::with(['budgets.transactions' => function ($query) use ($startDate) {
+        return Category::with(['budgets.transactions' => function ($query) use ($startDate, $endDate) {
             if ($startDate !== null) {
-                $query->whereDate('date', '>=', $startDate->toDateString());
+                $query->where('date', '>=', $startDate->copy()->startOfDay()->toDateTimeString());
+            }
+            if ($endDate !== null) {
+                $query->where('date', '<=', $endDate->copy()->endOfDay()->toDateTimeString());
             }
         }])
             ->when($filter !== 'all', fn ($query) => $query->where('type', $filter))
@@ -61,9 +64,7 @@ class Categories
             $isExpenseCategory = $budget->category?->type === 'expense';
             $isSavingCategory = $budget->category?->type === 'saving';
             $filteredTransactions = $budget->transactions
-                ->filter(fn ($transaction) => $isExpenseCategory
-                    ? (float) $transaction->amount < 0
-                    : ($isSavingCategory ? true : (float) $transaction->amount > 0))
+                ->filter(fn ($transaction) => (float) $transaction->amount !== 0.0)
                 ->sortByDesc('date')
                 ->values();
             $spend = $isExpenseCategory
@@ -96,12 +97,6 @@ class Categories
                 })->toArray(),
             ];
         })->toArray();
-
-        $budgetTypes = collect($category->budgets)
-            ->flatMap(fn ($budget) => $budget->transactions->pluck('type'))
-            ->filter()
-            ->unique()
-            ->values();
 
         $totalBudget = collect($budgets)->sum('budget');
         $totalSpend = collect($budgets)->sum('spend');
