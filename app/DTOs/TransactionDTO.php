@@ -2,6 +2,8 @@
 
 namespace App\DTOs;
 
+use App\Support\BankTransactionTime;
+
 class TransactionDTO
 {
     public ?string $id;
@@ -15,6 +17,7 @@ class TransactionDTO
     public ?string $counterpart_iban;
     public ?string $type;
     public ?string $date;
+    public ?string $time;
     public ?int $categoryId;
     public ?int $budgetId;
     public ?string $sourceType;
@@ -33,6 +36,7 @@ class TransactionDTO
         $this->counterpart_iban = $data['counterpart_iban'] ?? $data['counterparty_iban'] ?? null;
         $this->type = $data['type'] ?? null;
         $this->date = $data['date'] ?? $data['posted_at'] ?? $data['postedAt'] ?? null;
+        $this->time = $data['time'] ?? BankTransactionTime::extract($data);
         $this->categoryId = isset($data['categoryId']) ? (int) $data['categoryId'] : null;
         $this->budgetId = isset($data['budgetId']) ? (int) $data['budgetId'] : null;
         $this->sourceType = $data['sourceType'] ?? $data['source_type'] ?? null;
@@ -126,6 +130,7 @@ class TransactionDTO
             'currency' => $currency,
             'description' => $description,
             'posted_at' => $t['booking_date'] ?? ($t['transaction_date'] ?? date('Y-m-d')),
+            'time' => BankTransactionTime::extract($t),
             'reference' => $t['entry_reference'] ?? null,
             'merchant' => $merchant,
             'counterpart_iban' => $counterpartIban,
@@ -164,6 +169,7 @@ class TransactionDTO
             'description' => $this->description ?? 'Geen omschrijving',
             'posted_at' => $this->posted_at ?? '-',
             'date' => $this->date ?? $this->posted_at ?? null,
+            'time' => $this->time,
             'reference' => $this->reference ?? null,
             'merchant' => $this->merchant ?? null,
             'counterpart_iban' => $this->counterpart_iban ?? null,

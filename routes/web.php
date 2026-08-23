@@ -7,14 +7,53 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\SavingsController;
 use App\Http\Controllers\EnableBankingController;
+use App\Http\Controllers\SparenController;
 use App\Http\Controllers\TransactionsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\WorkOS\Http\Middleware\ValidateSessionWithWorkOS;
 
-Route::middleware(['auth', ValidateSessionWithWorkOS::class])->group(function () {
-    Route::get('/', [DashboardController::class, 'index'])->name('home');
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+$authMiddleware = ['auth'];
+if (! app()->environment('local')) {
+    $authMiddleware[] = ValidateSessionWithWorkOS::class;
+}
+
+if (app()->environment('local')) {
+    Route::get('/__local-login', function () {
+        $user = \App\Models\User::query()->firstOrFail();
+        auth()->login($user);
+        request()->session()->regenerate();
+
+        return redirect('/');
+    });
+}
+
+Route::middleware($authMiddleware)->group(function () {
+    Route::get('/', [SparenController::class, 'app'])->name('home');
+    Route::get('/maandbegroting', [SparenController::class, 'app'])->name('sparen.maandbegroting');
+    Route::get('/dashboard', [SparenController::class, 'app'])->name('dashboard');
+    Route::get('/uitgaven', [SparenController::class, 'app'])->name('sparen.uitgaven');
+    Route::get('/inkomsten', [SparenController::class, 'app'])->name('sparen.inkomsten');
+    Route::get('/sparen', [SparenController::class, 'app'])->name('sparen.sparen');
+    Route::get('/transacties', [SparenController::class, 'app'])->name('sparen.transacties');
+    Route::get('/bankkoppeling', [SparenController::class, 'app'])->name('sparen.bankkoppeling');
+    Route::get('/categorieen', [SparenController::class, 'app'])->name('sparen.categorieen');
+    Route::get('/koppelregels', [SparenController::class, 'app'])->name('sparen.koppelregels');
+    Route::get('/jaaroverzicht', [SparenController::class, 'app'])->name('sparen.jaaroverzicht');
+    Route::get('/api/sparen/state', [SparenController::class, 'state'])->name('sparen.state');
+    Route::put('/api/sparen/state', [SparenController::class, 'persist'])->name('sparen.persist');
+    Route::put('/api/sparen/budget-items/{itemId}', [SparenController::class, 'persistBudgetItem'])->name('sparen.budget_item.persist');
+    Route::delete('/api/sparen/budget-items/{itemId}', [SparenController::class, 'destroyBudgetItem'])->name('sparen.budget_item.destroy');
+    Route::put('/api/sparen/transactions', [SparenController::class, 'persistTransactions'])->name('sparen.transactions.persist');
+    Route::put('/api/sparen/transactions/{txId}', [SparenController::class, 'persistTransaction'])->name('sparen.transaction.persist');
+    Route::delete('/api/sparen/transactions/{txId}', [SparenController::class, 'destroyTransaction'])->name('sparen.transaction.destroy');
+    Route::put('/api/sparen/rules/{ruleId}', [SparenController::class, 'persistRule'])->name('sparen.rule.persist');
+    Route::delete('/api/sparen/rules/{ruleId}', [SparenController::class, 'destroyRule'])->name('sparen.rule.destroy');
+    Route::put('/api/sparen/categories/{categoryId}', [SparenController::class, 'persistCategoryRecord'])->name('sparen.category.persist');
+    Route::delete('/api/sparen/categories/{categoryId}', [SparenController::class, 'destroyCategoryRecord'])->name('sparen.category.destroy');
+    Route::put('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'persistSavingsGoal'])->name('sparen.savings_goal.persist');
+    Route::delete('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'destroySavingsGoal'])->name('sparen.savings_goal.destroy');
+    Route::post('/api/sparen/sync-bank', [SparenController::class, 'syncBank'])->name('sparen.sync_bank');
     Route::get('/dashboard/yearly-expenses-chart', [DashboardController::class, 'yearlyExpensesChart'])->name('dashboard.yearly_expenses_chart');
     Route::get('/dashboard/data', [DashboardController::class, 'dashboardData'])->name('dashboard.data');
     Route::post('/dashboard/dynamic-budgets', [DashboardController::class, 'storeDynamicBudgets'])->name('dashboard.dynamic_budgets.store');

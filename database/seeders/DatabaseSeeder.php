@@ -15,7 +15,6 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        $this->call(CategorySeeder::class);
-        $this->call(TransactionSeeder::class);
+        $this->call(SparenStamdataSeeder::class);
     }
 }

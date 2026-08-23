@@ -2,22 +2,26 @@
 
 namespace App\Services;
 
+use App\Models\Budget;
 use App\Models\ImportRule;
 use App\Models\Transaction;
+use App\Support\BankTransactionTime;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class EnabledBankingTransactionImporter
 {
     public function __construct(
         protected ImportRuleMatcher $ruleMatcher,
         protected TransactionRuleEnricher $transactionRuleEnricher,
+        protected TransactionClassifier $classifier,
     ) {}
 
     public function import(array $transactions): array
     {
-        $rules = ImportRule::with('category')->get();
         $hasSourceTypeColumn = Schema::hasColumn('transactions', 'source_type');
-        $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0];
+        $hasKeyColumn = Schema::hasColumn('transactions', 'key');
+        $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0, 'with_time' => 0, 'time_backfilled' => 0];
 
         foreach ($transactions as $row) {
             $stats['total']++;
@@ -27,35 +31,63 @@ class EnabledBankingTransactionImporter
                 ?? $row['counterparty_iban']
                 ?? data_get($row, 'raw.creditor_account.iban')
                 ?? data_get($row, 'raw.debtor_account.iban');
+            $counterparty = $row['merchant'] ?? $row['counterparty'] ?? null;
             $amount = (float) ($row['amount'] ?? 0);
-            $hash = hash('sha256', implode('|', [$date, $amount, $description, $iban]));
+            $hash = $this->sourceHash($row, $date, $amount, $description, $iban);
+            $time = $row['time'] ?? BankTransactionTime::extract($row);
+            if ($time) {
+                $stats['with_time']++;
+            }
 
-            if (Transaction::where('source_hash', $hash)->exists()) {
+            $existing = Transaction::query()->where('source_hash', $hash)->first();
+            if ($existing) {
                 $stats['duplicates']++;
+                if ($time && blank($existing->booked_time)) {
+                    $existing->booked_time = $time;
+                    $existing->save();
+                    $stats['time_backfilled']++;
+                }
                 continue;
             }
+
+            $classified = $this->classifier->classify($description, $iban, $counterparty);
+            $type = $classified['type'] ?? ($amount < 0 ? 'expense' : ($amount > 0 ? 'income' : null));
 
             $payload = [
                 'source_hash' => $hash,
                 'amount' => $amount,
                 'description' => $description,
                 'counterparty_iban' => $iban,
-                'date' => date('Y-m-d', strtotime($date)),
-                'type' => $amount < 0 ? 'expense' : ($amount > 0 ? 'income' : null),
+                'date' => date('Y-m-d', strtotime((string) $date)),
+                'type' => $type,
+                'category_id' => $classified['category_id'],
+                'budget_id' => $classified['budget_id'],
+                'rule_id' => $classified['rule_id'],
             ];
+
             if ($hasSourceTypeColumn) {
                 $payload['source_type'] = 'api';
             }
+            if (Schema::hasColumn('transactions', 'account_iban')) {
+                $payload['account_iban'] = $row['account_iban'] ?? $row['account_id'] ?? null;
+            }
+            if (Schema::hasColumn('transactions', 'counterparty_name')) {
+                $payload['counterparty_name'] = $counterparty;
+            }
+            if ($hasKeyColumn) {
+                $payload['key'] = 'tx-'.Str::uuid();
+            }
+            if (Schema::hasColumn('transactions', 'booked_time')) {
+                $payload['booked_time'] = $time;
+            }
 
-            $matchedRule = $this->ruleMatcher->findMatch($rules, $iban, $description);
-            if ($matchedRule) {
-                $payload = $this->transactionRuleEnricher->enrich($payload, $matchedRule);
+            Transaction::query()->create($payload);
+
+            if ($classified['budget_id'] || $classified['rule_id']) {
                 $stats['matched']++;
             } else {
                 $stats['unmatched']++;
             }
-
-            Transaction::create($payload);
             $stats['imported']++;
         }
 
@@ -65,5 +97,19 @@ class EnabledBankingTransactionImporter
     private function normalizeDescription(string $description): string
     {
         return preg_replace('/^Naam:\s*/iu', '', $description) ?? $description;
+    }
+
+    private function sourceHash(array $row, mixed $date, float $amount, string $description, mixed $iban): string
+    {
+        $raw = is_array($row['raw'] ?? null) ? $row['raw'] : [];
+        $bankId = $raw['entry_reference']
+            ?? $raw['transaction_id']
+            ?? null;
+
+        $parts = $bankId
+            ? ['ref', (string) $bankId]
+            : [(string) $date, number_format($amount, 2, '.', ''), $description, (string) $iban];
+
+        return hash('sha256', implode('|', $parts));
     }
 }

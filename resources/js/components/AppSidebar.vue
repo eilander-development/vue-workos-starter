@@ -30,6 +30,8 @@ import {
     PiggyBank,
     Euro,
     Wallet,
+    Landmark,
+    Link2,
 } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
@@ -38,49 +40,49 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: home(),
         icon: LayoutGrid,
-        color: 'white',
+        color: '#e2e8f0',
     },
     {
         title: 'Uitgaven',
         href: expenses(),
         icon: Wallet,
-        color: 'white',
+        color: '#f87171',
     },
     {
         title: 'Inkomsten',
         href: income(),
         icon: Euro,
-        color: 'white',
+        color: '#4ade80',
     },
     {
         title: 'Sparen',
         href: savings(),
         icon: PiggyBank,
-        color: 'white',
+        color: '#60a5fa',
     },
     {
         title: 'Transacties',
         href: transactions(),
         icon: Banknote,
-        color: 'white',
+        color: '#e2e8f0',
     },
     {
         title: 'EnableBanking',
         href: enabled_banking(),
-        icon: Wallet,
-        color: 'white',
+        icon: Landmark,
+        color: '#c4b5fd',
     },
     {
         title: 'Categorieën',
         href: categories(),
         icon: Folder,
-        color: 'white',
+        color: '#94a3b8',
     },
     {
         title: 'Koppelregels',
         href: '/imports/rules',
-        icon: Banknote,
-        color: 'white',
+        icon: Link2,
+        color: '#94a3b8',
     },
 ];
 

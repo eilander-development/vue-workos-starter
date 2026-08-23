@@ -23,4 +23,9 @@ class Budget extends Model
     {
         return $this->hasMany(Transaction::class);
     }
+
+    public function monthValues(): HasMany
+    {
+        return $this->hasMany(BudgetMonthValue::class);
+    }
 }

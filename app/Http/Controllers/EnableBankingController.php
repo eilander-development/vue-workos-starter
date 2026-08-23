@@ -54,12 +54,12 @@ class EnableBankingController extends Controller
         if (! $state || ! $savedState || $state !== $savedState) {
             session()->forget('eb_oauth_state');
 
-            return redirect()->to('/enabled-banking')->with('error', 'Beveiligingsfout: Ongeldige state.');
+            return redirect()->to('/')->with('error', 'Beveiligingsfout: Ongeldige state.');
         }
         session()->forget('eb_oauth_state');
 
         if (! $code) {
-            return redirect()->to('/enabled-banking')->with('error', 'Geen autorisatiecode ontvangen.');
+            return redirect()->to('/')->with('error', 'Geen autorisatiecode ontvangen.');
         }
 
         try {
@@ -71,12 +71,12 @@ class EnableBankingController extends Controller
                 session(['eb_session_id' => $sessionId]);
                 session(['eb_cached_accounts' => $accountsList]);
 
-                return redirect()->to('/enabled-banking?session_id='.$sessionId);
+                return redirect()->to('/?session_id='.$sessionId);
             }
 
-            return redirect()->to('/enabled-banking')->with('error', 'Geen geldige sessie gegenereerd.');
+            return redirect()->to('/')->with('error', 'Geen geldige sessie gegenereerd.');
         } catch (\Exception $e) {
-            return redirect()->to('/enabled-banking')->with('error', 'Sessie activeren mislukt: '.$e->getMessage());
+            return redirect()->to('/')->with('error', 'Sessie activeren mislukt: '.$e->getMessage());
         }
     }
 

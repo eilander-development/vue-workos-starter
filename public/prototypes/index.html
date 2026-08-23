@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finance · prototype</title>
+  <link rel="stylesheet" href="./prototype.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a2 2 0 0 0 2-2 2 2 0 0 0-2-2 1 1 0 0 0-1 1v1.07A7 7 0 0 0 5.07 14H4a1 1 0 0 0 0 2h1.07A7 7 0 0 0 12 21a7.1 7.1 0 0 0 3-.67V21a1 1 0 0 0 2 0v-3.1A7 7 0 0 0 19.93 16H21a1 1 0 0 0 0-2h-1.07A6.93 6.93 0 0 0 19 12.1V11a3 3 0 0 0-3-3Zm-1 9.9A5 5 0 0 1 7.1 16H16.9A5 5 0 0 1 15 17.9ZM8 13a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm8-3a1 1 0 0 1 1 1v.1a7 7 0 0 0-1-.1Z"/></svg>
+        </div>
+        <span class="brand-name">Finance</span>
+        <button class="nav-collapse" type="button" data-collapse-nav title="Menu in- of uitklappen" aria-label="Menu in- of uitklappen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+        </button>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-page="maand">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span>
+          <span class="nav-text">Dashboard</span>
+        </button>
+        <button class="nav-btn expense" data-page="uitgaven">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v1"/><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg></span>
+          <span class="nav-text">Uitgaven</span>
+        </button>
+        <button class="nav-btn income" data-page="inkomsten">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9.5A3.5 3.5 0 0 0 12 8v8a3.5 3.5 0 0 0 0-7"/></svg></span>
+          <span class="nav-text">Inkomsten</span>
+        </button>
+        <button class="nav-btn saving" data-page="sparen">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h6v2h4v-4s1.9-1.3 2.3-3.5C20.7 10.3 20.5 5 19 5z"/><path d="M16 9h.01"/></svg></span>
+          <span class="nav-text">Sparen</span>
+        </button>
+        <button class="nav-btn" data-page="transacties">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg></span>
+          <span class="nav-text">Transacties</span>
+        </button>
+        <button class="nav-btn" data-page="bank">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 10 9-6 9 6"/><path d="M4 10v10h16V10"/><path d="M8 20v-6h8v6"/></svg></span>
+          <span class="nav-text">EnableBanking</span>
+          <span class="badge">3</span>
+        </button>
+        <button class="nav-btn" data-page="categorieen">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+          <span class="nav-text">Categorieën</span>
+        </button>
+        <button class="nav-btn" data-page="regels">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5.93"/><path d="M14 11a5 5 0 0 0-7.07 0L5.52 12.4a5 5 0 0 0 7.07 7.07L14 18.07"/></svg></span>
+          <span class="nav-text">Koppelregels</span>
+        </button>
+      </nav>
+    </aside>
+    <div class="main">
+      <header class="top">
+        <div class="crumb">Home / <strong id="crumb-page">Dashboard</strong></div>
+        <div class="top-actions">
+          <input class="input" type="month" value="2026-08" />
+        </div>
+      </header>
+      <main class="content" id="view"></main>
+    </div>
+  </div>
+
+  <div class="overlay" id="coverage">
+    <div class="modal">
+      <div class="modal-h"><strong>Resterende budgetten per categorie</strong><button class="btn btn-ghost" data-close>×</button></div>
+      <div class="modal-b">
+        <div class="row" style="margin-bottom:12px"><span class="grow"></span><button class="btn" data-open="rest-budget">Dynamisch / restbudget beheren</button></div>
+        <table>
+          <thead><tr><th>Categorie / budget</th><th class="num">Budget</th><th class="num">Besteed</th><th class="num">Nog te betalen</th><th class="num">Teveel</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Woning</strong></td><td class="num">€ 352,10</td><td class="num">€ 72,40</td><td class="num">€ 279,70</td><td class="num">€ 0,00</td></tr>
+            <tr class="open"><td style="padding-left:24px">Stroom (Greenchoice)</td><td class="num">€ 89,00</td><td class="num">€ 0,00</td><td class="num">€ 89,00</td><td class="num">€ 0,00</td></tr>
+            <tr class="paid"><td style="padding-left:24px">Internet (KPN)</td><td class="num">€ 72,40</td><td class="num">€ 72,40</td><td class="num">€ 0,00</td><td class="num">€ 0,00</td></tr>
+            <tr><td><strong>Dagelijks leven</strong></td><td class="num">€ 1.069,23</td><td class="num">€ 327,40</td><td class="num">€ 741,83</td><td class="num">€ 0,00</td></tr>
+            <tr class="open"><td style="padding-left:24px">Boodschappen</td><td class="num">€ 500,00</td><td class="num">€ 186,40</td><td class="num">€ 313,60</td><td class="num">€ 0,00</td></tr>
+            <tr><td><strong>Rest</strong></td><td class="num">€ 593,06</td><td class="num">€ 0,00</td><td class="num">€ 593,06</td><td class="num">€ 0,00</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-f"><button class="btn" data-close>Sluiten</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="income-list">
+    <div class="modal">
+      <div class="modal-h"><strong>Inkomsten transacties</strong><button class="btn btn-ghost" data-close>×</button></div>
+      <div class="modal-b">
+        <table>
+          <thead><tr><th>Datum</th><th>Omschrijving</th><th>Categorie</th><th>Budget</th><th class="num">Bedrag</th></tr></thead>
+          <tbody>
+            <tr><td>11-08</td><td>Belastingdienst TOESLAGEN</td><td>Inkomsten</td><td>Kindgebonden budget</td><td class="num">€ 412,00</td></tr>
+            <tr><td>08-08</td><td>Belastingdienst TERUGGAVE</td><td>Inkomsten</td><td>Voorlopige teruggave</td><td class="num">€ 185,75</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-f"><button class="btn" data-close>Sluiten</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="expense-list">
+    <div class="modal">
+      <div class="modal-h"><strong>Uitgaven transacties</strong><button class="btn btn-ghost" data-close>×</button></div>
+      <div class="modal-b">
+        <table>
+          <thead><tr><th>Datum</th><th>Omschrijving</th><th>Categorie</th><th>Budget</th><th class="num">Bedrag</th></tr></thead>
+          <tbody>
+            <tr><td>18-08</td><td>PLUS 4321</td><td>Dagelijks leven</td><td>Boodschappen</td><td class="num">€ -54,12</td></tr>
+            <tr><td>15-08</td><td>KPN Glasvezel</td><td>Woning</td><td>Internet (KPN)</td><td class="num">€ -72,40</td></tr>
+            <tr><td>14-08</td><td>Shell</td><td>Vervoer</td><td>Brandstof</td><td class="num">€ -41,20</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-f"><button class="btn" data-close>Sluiten</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="assign">
+    <div class="modal sm">
+      <div class="modal-h"><strong>Transactie toewijzen</strong><button class="btn btn-ghost" data-close>×</button></div>
+      <div class="modal-b">
+        <p class="muted small">PLUS 4321 APELDOORN · € 54,12</p>
+        <label class="field"><span>Type</span>
+          <select class="input"><option>Uitgave</option><option>Inkomen</option><option>Sparen</option></select>
+        </label>
+        <label class="field"><span>Categorie</span>
+          <select class="input"><option>Dagelijks leven</option><option>Woning</option><option>Vervoer</option><option>Rest</option></select>
+        </label>
+        <label class="field"><span>Budget</span>
+          <select class="input"><option>Boodschappen</option><option>Telefoon</option><option>Openstaand</option></select>
+        </label>
+        <label class="row"><input type="checkbox" checked /> <span class="small">Bewaar als koppelregel (omschrijving bevat “PLUS”)</span></label>
+      </div>
+      <div class="modal-f">
+        <button class="btn" data-close>Annuleren</button>
+        <button class="btn btn-primary" data-close>Toewijzen</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="tx-detail">
+    <div class="modal sm">
+      <div class="modal-h"><strong>Transactie</strong><button class="btn btn-ghost" data-close>×</button></div>
+      <div class="modal-b">
+        <p><strong>PLUS 4321 APELDOORN</strong></p>
+        <p class="muted small">18-08-2026 · IBAN NL12ABCD… · bron EnableBanking</p>
+        <p>Bedrag <strong>€ -54,12</strong></p>
+        <p>Nu: Dagelijks leven / Boodschappen</p>
+      </div>
+      <div class="modal-f">
+        <button class="btn" data-open="assign">Wijzig toewijzing</button>
+        <button class="btn" data-open="rule">Regel maken</button>
+        <button class="btn" data-close>Sluiten</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="category">
+    <div class="modal sm">
+      <div class="modal-h"><strong>Categorie</strong><button class="btn btn-ghost" data-close>×</button></div>
+      <div class="modal-b">
+        <p class="muted small">Preview zoals in de huidige modal: icoon + kleur + naam.</p>
+        <label class="field"><span>Naam</span><input class="input" value="Dagelijks leven" /></label>
+        <label class="field"><span>Type</span>
+          <select class="input"><option>Uitgaven</option><option>Inkomsten</option><option>Sparen</option></select>
+        </label>
+        <label class="field"><span>Kleur / icoon</span><input class="input" value="emerald / shopping-cart" /></label>
+        <p class="small muted">Budgetten</p>
+        <input class="input" style="margin-bottom:6px" value="Boodschappen · 500" />
+        <input class="input" style="margin-bottom:6px" value="Telefoon · 32" />
+        <button class="btn">+ Budget toevoegen</button>
+      </div>
+      <div class="modal-f"><button class="btn" data-close>Annuleren</button><button class="btn btn-primary" data-close>Opslaan</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="rule">
+    <div class="modal sm">
+      <div class="modal-h"><strong>Koppelregel</strong><button class="btn btn-ghost" data-close>×</button></div>
+      <div class="modal-b">
+        <label class="field"><span>Type</span>
+          <select class="input"><option>Omschrijving bevat</option><option>Rekeningnummer bevat</option></select>
+        </label>
+        <label class="field"><span>Waarde</span><input class="input" value="PLUS" /></label>
+        <label class="field"><span>Categorie</span><input class="input" value="Dagelijks leven" /></label>
+        <label class="field"><span>Budget</span><input class="input" value="Boodschappen" /></label>
+      </div>
+      <div class="modal-f">
+        <button class="btn" data-close>Toepassen op matches</button>
+        <button class="btn btn-primary" data-close>Opslaan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="rest-budget">
+    <div class="modal sm">
+      <div class="modal-h"><strong>Rest / dynamisch budget · augustus</strong><button class="btn btn-ghost" data-close>×</button></div>
+      <div class="modal-b">
+        <p class="muted small">Dit is de huidige “dynamische budgetten”-modal, maar als Rest-categorie: extra posten van deze periode.</p>
+        <div class="row" style="margin-bottom:8px"><input class="input grow" value="Openstaand" /><input class="input" style="width:110px" value="521,76" /><input class="input" style="width:110px" value="0" /></div>
+        <div class="row" style="margin-bottom:8px"><input class="input grow" value="Eigen risico" /><input class="input" style="width:110px" value="32,00" /><input class="input" style="width:110px" value="0" /></div>
+        <button class="btn">+ Post toevoegen</button>
+      </div>
+      <div class="modal-f"><button class="btn" data-close>Annuleren</button><button class="btn btn-primary" data-close>Opslaan</button></div>
+    </div>
+  </div>
+
+  <script src="./prototype.js"></script>
+</body>
+</html>
