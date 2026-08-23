@@ -85,7 +85,7 @@ class DashboardController extends Controller
     {
         $data = $request->validate([
             'month' => ['required', 'date_format:Y-m'],
-            'rows' => ['required', 'array'],
+            'rows' => ['present', 'array'],
             'rows.*.name' => ['required', 'string', 'max:255'],
             'rows.*.budget' => ['required', 'numeric'],
             'rows.*.paid' => ['nullable', 'numeric'],

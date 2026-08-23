@@ -11,7 +11,7 @@ import { customScrollbar } from '@/composables/scrollbar';
 import { home,dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { HandCoins, PiggyBank, TrendingDown, TrendingUp, Trash2 } from 'lucide-vue-next';
+import { HandCoins, PiggyBank, Plus, TrendingDown, TrendingUp, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch, onMounted } from 'vue';
 
 const breadcrumbs: BreadcrumbItem[] = [
