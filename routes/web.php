@@ -40,6 +40,10 @@ Route::middleware($authMiddleware)->group(function () {
     Route::get('/categorieen', [SparenController::class, 'app'])->name('sparen.categorieen');
     Route::get('/koppelregels', [SparenController::class, 'app'])->name('sparen.koppelregels');
     Route::get('/jaaroverzicht', [SparenController::class, 'app'])->name('sparen.jaaroverzicht');
+    Route::get('/instellingen', [SparenController::class, 'app'])->name('sparen.instellingen');
+    Route::get('/instellingen/{section}', [SparenController::class, 'app'])
+        ->whereIn('section', ['profiel', 'uiterlijk', 'uitloggen'])
+        ->name('sparen.instellingen.section');
     Route::get('/api/sparen/state', [SparenController::class, 'state'])->name('sparen.state');
     Route::put('/api/sparen/state', [SparenController::class, 'persist'])->name('sparen.persist');
     Route::put('/api/sparen/budget-items/{itemId}', [SparenController::class, 'persistBudgetItem'])->name('sparen.budget_item.persist');

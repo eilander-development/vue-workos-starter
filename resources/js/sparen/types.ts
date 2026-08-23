@@ -144,4 +144,7 @@ export type ActiveTab =
   | "enablebanking"
   | "categorieen"
   | "koppelregels"
-  | "jaaroverzicht";
+  | "jaaroverzicht"
+  | "settings";
+
+export type SaveState = "idle" | "saving" | "saved" | "error";

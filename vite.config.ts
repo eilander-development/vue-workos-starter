@@ -1,4 +1,3 @@
-import react from '@vitejs/plugin-react';
 import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
@@ -51,7 +50,7 @@ export default defineConfig(({ mode }) => {
     return {
         plugins: [
             laravel({
-                input: ['resources/js/app.ts', 'resources/js/sparen/main.tsx'],
+                input: ['resources/js/app.ts', 'resources/js/sparen/main.ts'],
                 ssr: 'resources/js/ssr.ts',
                 refresh: true,
             }),
@@ -67,7 +66,6 @@ export default defineConfig(({ mode }) => {
                     },
                 },
             }),
-            react(),
         ],
         server: {
             watch: {

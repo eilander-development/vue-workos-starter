@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, type MouseEvent } from "react";
-import { ActiveTab } from "./types";
+import { ref, onMounted, onUnmounted, type Ref } from "vue";
+import type { ActiveTab } from "./types";
 
 export const SPAREN_PAGES: {
   tab: ActiveTab;
@@ -16,6 +16,7 @@ export const SPAREN_PAGES: {
   { tab: "categorieen", path: "/categorieen", title: "Categorieën & Rubrieken" },
   { tab: "koppelregels", path: "/koppelregels", title: "Koppelregels" },
   { tab: "jaaroverzicht", path: "/jaaroverzicht", title: "Jaaroverzicht" },
+  { tab: "settings", path: "/instellingen", title: "Instellingen" },
 ];
 
 export const PATH_BY_TAB: Record<ActiveTab, string> = SPAREN_PAGES.reduce(
@@ -39,50 +40,67 @@ export function tabFromPath(pathname: string): ActiveTab {
   if (normalized === "/") {
     return "maandbegroting";
   }
+  if (normalized === "/instellingen" || normalized.startsWith("/instellingen/")) {
+    return "settings";
+  }
 
   return SPAREN_PAGES.find((page) => page.path === normalized)?.tab ?? "maandbegroting";
 }
 
+export function settingsSectionFromPath(pathname: string): "profiel" | "uiterlijk" | "uitloggen" {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  if (normalized.endsWith("/uiterlijk")) return "uiterlijk";
+  if (normalized.endsWith("/uitloggen")) return "uitloggen";
+  return "profiel";
+}
+
+export function pathForSettingsSection(section: "profiel" | "uiterlijk" | "uitloggen" = "profiel"): string {
+  return `/instellingen/${section}`;
+}
+
 export function pathForTab(tab: ActiveTab): string {
-  return PATH_BY_TAB[tab];
+  return PATH_BY_TAB[tab] ?? "/maandbegroting";
 }
 
 function applyDocumentTitle(tab: ActiveTab) {
-  document.title = `${TITLE_BY_TAB[tab]} · Financiën`;
+  document.title = `${TITLE_BY_TAB[tab] ?? "Financiën"} · Financiën`;
 }
 
-export function useSparenRoute(): [ActiveTab, (tab: ActiveTab) => void] {
-  const [tab, setTab] = useState<ActiveTab>(() => tabFromPath(window.location.pathname));
+export function useSparenRoute(): {
+  activeTab: Ref<ActiveTab>;
+  setActiveTab: (tab: ActiveTab) => void;
+} {
+  const activeTab = ref<ActiveTab>(tabFromPath(window.location.pathname));
 
-  useEffect(() => {
-    applyDocumentTitle(tab);
-  }, [tab]);
-
-  useEffect(() => {
-    const onPopState = () => {
-      const next = tabFromPath(window.location.pathname);
-      setTab(next);
-      applyDocumentTitle(next);
-    };
-
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  const navigate = useCallback((next: ActiveTab) => {
+  const setActiveTab = (next: ActiveTab) => {
     const path = pathForTab(next);
     if (window.location.pathname !== path) {
       window.history.pushState({ tab: next }, "", path);
     }
-    setTab(next);
+    activeTab.value = next;
     applyDocumentTitle(next);
-  }, []);
+  };
 
-  return [tab, navigate];
+  const onPopState = () => {
+    const next = tabFromPath(window.location.pathname);
+    activeTab.value = next;
+    applyDocumentTitle(next);
+  };
+
+  onMounted(() => {
+    applyDocumentTitle(activeTab.value);
+    window.addEventListener("popstate", onPopState);
+  });
+
+  onUnmounted(() => {
+    window.removeEventListener("popstate", onPopState);
+  });
+
+  return { activeTab, setActiveTab };
 }
 
 export function handleSparenNavClick(
-  event: MouseEvent<HTMLAnchorElement>,
+  event: MouseEvent,
   tab: ActiveTab,
   navigate: (tab: ActiveTab) => void
 ) {

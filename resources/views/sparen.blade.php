@@ -20,7 +20,7 @@
         <script>
             window.__SPAREN__ = @json($sparenBoot);
         </script>
-        @vite(['resources/js/sparen/main.tsx'])
+        @vite(['resources/js/sparen/main.ts'])
     </head>
     <body class="bg-slate-950">
         <div id="root"></div>
