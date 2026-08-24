@@ -50,7 +50,7 @@ class EnabledBankingTransactionImporter
                 continue;
             }
 
-            $classified = $this->classifier->classify($description, $iban, $counterparty);
+            $classified = $this->classifier->classify($description, $iban, $counterparty, $amount);
             $type = $classified['type'] ?? ($amount < 0 ? 'expense' : ($amount > 0 ? 'income' : null));
 
             $payload = [
@@ -79,6 +79,12 @@ class EnabledBankingTransactionImporter
             }
             if (Schema::hasColumn('transactions', 'booked_time')) {
                 $payload['booked_time'] = $time;
+            }
+            if (Schema::hasColumn('transactions', 'link_excluded')) {
+                $payload['link_excluded'] = (bool) ($classified['link_excluded'] ?? false);
+            }
+            if (Schema::hasColumn('transactions', 'link_exclusion_reason')) {
+                $payload['link_exclusion_reason'] = $classified['link_exclusion_reason'] ?? null;
             }
 
             Transaction::query()->create($payload);

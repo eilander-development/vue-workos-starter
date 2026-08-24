@@ -12,7 +12,8 @@ import {
   Unlink,
 } from "lucide-vue-next";
 import type { BudgetItem, MonthlyBudget, Transaction, BudgetCategoryGroup } from "../types";
-import { monthDatePrefix } from "../month";
+import { isTransactionInReportingMonth } from "../month";
+import { hasPotEnvelope, shadowOverspend } from "../potSettlement";
 import TransactionDate from "./TransactionDate.vue";
 
 const props = withDefaults(
@@ -41,7 +42,7 @@ const linkedTransactions = computed(() => {
   return props.transactions.filter((t) => {
     if (t.budgetItemId !== props.budgetItem!.id) return false;
     if (filterScope.value === "current_month") {
-      return t.date.startsWith(monthDatePrefix(props.currentMonth));
+      return isTransactionInReportingMonth(t, props.currentMonth);
     }
     return true;
   });
@@ -84,11 +85,16 @@ const totalPaidInView = computed(() =>
 const isIncome = computed(() => props.budgetItem?.type === "inkomsten");
 const isSaving = computed(() => props.budgetItem?.type === "sparen");
 const budgetAmount = computed(() => props.budgetItem?.actual ?? 0);
-const difference = computed(() =>
-  isIncome.value
+const isPotItem = computed(() => !!props.budgetItem && hasPotEnvelope(props.budgetItem));
+const envelopePaid = computed(() => props.budgetItem?.paidOrReceived ?? 0);
+const difference = computed(() => {
+  if (isPotItem.value) {
+    return budgetAmount.value - envelopePaid.value;
+  }
+  return isIncome.value
     ? totalPaidInView.value - budgetAmount.value
-    : budgetAmount.value - totalPaidInView.value
-);
+    : budgetAmount.value - totalPaidInView.value;
+});
 
 function openEdit() {
   if (!props.budgetItem || !props.onOpenEditBudgetItem) return;
@@ -132,7 +138,11 @@ function addTx() {
               </span>
             </div>
             <p class="text-xs text-slate-400 mt-0.5">
-              Transactieoverzicht & gekoppelde bankmutaties voor deze begrotingspost
+              {{
+                isPotItem
+                  ? "Bankmutaties zijn schaduwuitgaven vanuit het potje; de begroting gebruikt het envelopbedrag."
+                  : "Transactieoverzicht & gekoppelde bankmutaties voor deze begrotingspost"
+              }}
             </p>
           </div>
         </div>
@@ -170,25 +180,56 @@ function addTx() {
           </div>
           <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
             <span class="text-slate-400 text-[11px] block font-medium">
-              {{ isIncome ? "Ontvangen (Bank):" : "Betaald via Bank:" }}
+              {{
+                isPotItem
+                  ? "Betaald (potje):"
+                  : isIncome
+                    ? "Ontvangen (Bank):"
+                    : "Betaald via Bank:"
+              }}
             </span>
             <span
               class="text-sm sm:text-base font-bold font-mono mt-0.5 block"
               :class="isIncome ? 'text-emerald-400' : 'text-rose-400'"
             >
-              € {{ totalPaidInView.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              €
+              {{
+                (isPotItem ? envelopePaid : totalPaidInView).toLocaleString("nl-NL", {
+                  minimumFractionDigits: 2,
+                })
+              }}
             </span>
           </div>
           <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
             <span class="text-slate-400 text-[11px] block font-medium">
-              {{ isIncome ? "Verschil:" : "Resterend / Verschil:" }}
+              {{
+                isPotItem
+                  ? "Schaduw (bank):"
+                  : isIncome
+                    ? "Verschil:"
+                    : "Resterend / Verschil:"
+              }}
             </span>
             <span
               class="text-sm sm:text-base font-bold font-mono mt-0.5 block"
-              :class="difference >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+              :class="
+                isPotItem
+                  ? shadowOverspend(budgetItem) > 0
+                    ? 'text-rose-400'
+                    : 'text-amber-300'
+                  : difference >= 0
+                    ? 'text-emerald-400'
+                    : 'text-rose-400'
+              "
             >
-              {{ difference >= 0 ? "€ " : "€ -"
-              }}{{ Math.abs(difference).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              <template v-if="isPotItem">
+                €
+                {{ totalPaidInView.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              </template>
+              <template v-else>
+                {{ difference >= 0 ? "€ " : "€ -"
+                }}{{ Math.abs(difference).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              </template>
             </span>
           </div>
           <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">

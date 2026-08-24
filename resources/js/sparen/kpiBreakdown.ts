@@ -1,5 +1,101 @@
 import type { BudgetItem } from "../types";
-import type { KpiBreakdownColumn, KpiBreakdownRow } from "../components/KpiBreakdownModal";
+import type { KpiBreakdownColumn, KpiBreakdownRow } from "../components/KpiBreakdownModal.vue";
+
+/** Post heeft een begroting in deze maand. */
+export function hasBudget(item: BudgetItem): boolean {
+  return item.actual > 0;
+}
+
+/** Post gebruikt regels per maand (losse regels) als begroting. */
+export function hasMonthEntries(item: BudgetItem): boolean {
+  return (item.monthEntries?.length ?? 0) > 0;
+}
+
+export function isFixedBudgetItem(item: BudgetItem): boolean {
+  return hasBudget(item) && !hasMonthEntries(item);
+}
+
+export function isMonthEntryBudgetItem(item: BudgetItem): boolean {
+  return hasBudget(item) && hasMonthEntries(item);
+}
+
+export function sumFixedBudgetedAmount(items: BudgetItem[]): number {
+  return items.reduce((sum, item) => sum + (isFixedBudgetItem(item) ? item.actual : 0), 0);
+}
+
+export function sumMonthEntryBudgetedAmount(items: BudgetItem[]): number {
+  return items.reduce((sum, item) => sum + (isMonthEntryBudgetItem(item) ? item.actual : 0), 0);
+}
+
+export function sumFixedBudgetedPaid(items: BudgetItem[]): number {
+  return items.reduce(
+    (sum, item) => sum + (isFixedBudgetItem(item) ? item.paidOrReceived : 0),
+    0
+  );
+}
+
+export function sumMonthEntryBudgetedPaid(items: BudgetItem[]): number {
+  return items.reduce(
+    (sum, item) => sum + (isMonthEntryBudgetItem(item) ? item.paidOrReceived : 0),
+    0
+  );
+}
+
+export function sumFixedBudgetedRemaining(items: BudgetItem[]): number {
+  return items.reduce(
+    (sum, item) =>
+      sum + (isFixedBudgetItem(item) ? Math.max(0, item.actual - item.paidOrReceived) : 0),
+    0
+  );
+}
+
+export function sumMonthEntryBudgetedRemaining(items: BudgetItem[]): number {
+  return items.reduce(
+    (sum, item) =>
+      sum + (isMonthEntryBudgetItem(item) ? Math.max(0, item.actual - item.paidOrReceived) : 0),
+    0
+  );
+}
+
+export function sumBudgetedAmount(items: BudgetItem[]): number {
+  return items.reduce((sum, item) => sum + item.actual, 0);
+}
+
+/** Reeds bijgeschreven / afgeschreven: alleen bankbedragen van begrote posten. */
+export function sumBudgetedPaid(items: BudgetItem[]): number {
+  return items.reduce(
+    (sum, item) => sum + (hasBudget(item) ? item.paidOrReceived : 0),
+    0
+  );
+}
+
+export function sumBudgetedRemaining(items: BudgetItem[]): number {
+  return items.reduce(
+    (sum, item) =>
+      sum + (hasBudget(item) ? Math.max(0, item.actual - item.paidOrReceived) : 0),
+    0
+  );
+}
+
+/** Meevallers / overschrijding: boven begroting + volledige onbegrote ontvangsten. */
+export function sumBudgetedOver(items: BudgetItem[]): number {
+  return items.reduce((sum, item) => {
+    if (hasBudget(item)) {
+      return sum + Math.max(0, item.paidOrReceived - item.actual);
+    }
+    return sum + Math.max(0, item.paidOrReceived);
+  }, 0);
+}
+
+/** Alle bankbedragen (o.a. voor werkelijk netto / cashflow). */
+export function sumAllPaid(items: BudgetItem[]): number {
+  return items.reduce((sum, item) => sum + item.paidOrReceived, 0);
+}
+
+/** Verschil bank vs begroting (positief = meer ontvangen/betaald dan begroot). */
+export function sumBudgetDelta(items: BudgetItem[]): number {
+  return sumAllPaid(items) - sumBudgetedAmount(items);
+}
 
 const euroCols = (keys: string[]): KpiBreakdownColumn[] =>
   keys.map((key, index) => ({
@@ -26,7 +122,7 @@ const euroCols = (keys: string[]): KpiBreakdownColumn[] =>
 
 export function budgetItemRows(
   items: BudgetItem[],
-  metric: "budget" | "paid" | "remaining" | "over",
+  metric: "budget" | "paid" | "paidAll" | "remaining" | "over",
   onOpenItem?: (item: BudgetItem) => void
 ): { columns: KpiBreakdownColumn[]; rows: KpiBreakdownRow[]; total: number } {
   const columns: KpiBreakdownColumn[] = [
@@ -51,9 +147,11 @@ export function budgetItemRows(
 
   const filtered = items.filter((item) => {
     if (metric === "budget") return true;
-    if (metric === "paid") return item.paidOrReceived > 0;
-    if (metric === "remaining") return Math.max(0, item.actual - item.paidOrReceived) > 0;
-    return item.paidOrReceived > item.actual;
+    if (metric === "paidAll") return item.paidOrReceived > 0;
+    if (metric === "paid") return hasBudget(item) && item.paidOrReceived > 0;
+    if (metric === "remaining") return hasBudget(item) && item.actual - item.paidOrReceived > 0;
+    if (hasBudget(item)) return item.paidOrReceived > item.actual;
+    return item.paidOrReceived > 0;
   });
 
   const rows: KpiBreakdownRow[] = filtered.map((item) => {
@@ -75,16 +173,37 @@ export function budgetItemRows(
 
   const total = filtered.reduce((sum, item) => {
     if (metric === "budget") return sum + item.actual;
-    if (metric === "paid") return sum + item.paidOrReceived;
+    if (metric === "paid" || metric === "paidAll") return sum + item.paidOrReceived;
     if (metric === "remaining") return sum + Math.max(0, item.actual - item.paidOrReceived);
-    return sum + Math.max(0, item.paidOrReceived - item.actual);
+    if (hasBudget(item)) return sum + Math.max(0, item.paidOrReceived - item.actual);
+    return sum + Math.max(0, item.paidOrReceived);
   }, 0);
 
   return { columns, rows, total };
 }
 
+export type FormulaLine = {
+  id: string;
+  label: string;
+  amount?: number;
+  tone?: "plus" | "minus" | "result" | "subresult" | "section" | "neutral";
+};
+
+function formulaAmountColor(tone: string, value: number | string): string | undefined {
+  if (tone === "section") return undefined;
+  if (tone === "result") {
+    return Number(value) >= 0 ? "text-indigo-300 font-bold" : "text-rose-400 font-bold";
+  }
+  if (tone === "subresult") {
+    return Number(value) >= 0 ? "text-indigo-300 font-semibold" : "text-rose-400 font-semibold";
+  }
+  if (tone === "minus") return "text-rose-400";
+  if (tone === "plus") return "text-emerald-400";
+  return "text-slate-300";
+}
+
 export function formulaRows(
-  lines: { id: string; label: string; amount: number; tone?: "plus" | "minus" | "result" }[]
+  lines: FormulaLine[]
 ): { columns: KpiBreakdownColumn[]; rows: KpiBreakdownRow[]; total: number } {
   const columns: KpiBreakdownColumn[] = [
     { key: "label", label: "Onderdeel", emphasize: true },
@@ -92,13 +211,7 @@ export function formulaRows(
       key: "amount",
       label: "Bedrag",
       align: "right",
-      colorClass: (value, row) => {
-        const tone = String(row.cells.tone);
-        if (tone === "result") return "text-indigo-300 font-bold";
-        if (tone === "minus") return "text-rose-400";
-        if (tone === "plus") return "text-emerald-400";
-        return undefined;
-      },
+      colorClass: (value, row) => formulaAmountColor(String(row.cells.tone), value),
     },
   ];
 
@@ -106,8 +219,8 @@ export function formulaRows(
     id: line.id,
     cells: {
       label: line.label,
-      amount: line.amount,
-      tone: line.tone ?? "plus",
+      amount: line.tone === "section" ? "" : (line.amount ?? 0),
+      tone: line.tone ?? "neutral",
     },
   }));
 

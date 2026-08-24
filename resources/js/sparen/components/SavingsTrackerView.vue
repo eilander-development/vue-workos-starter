@@ -23,9 +23,15 @@ import type {
   Transaction,
   MonthlyBudget,
 } from "../types";
-import { transactionMatchesSavingsGoal } from "../matchSavings";
-import { computePotSettlement, isPotGoal } from "../potSettlement";
+import {
+  transactionMatchesSavingsGoal,
+  transactionMatchesSavingsGoalDeposit,
+  isSavingsWithdrawalTransaction,
+  savingsBalanceDelta,
+} from "../matchSavings";
+import { computePotSettlement, isPotGoal, potCompensationStatus, type PotSettlement } from "../potSettlement";
 import TransactionDate from "./TransactionDate.vue";
+import PotSettlementModal from "./PotSettlementModal.vue";
 
 const props = defineProps<{
   savingsHistory: SavingsRow[];
@@ -40,6 +46,24 @@ const props = defineProps<{
 }>();
 
 const expandedGoalId = ref<string | null>(null);
+const potDetailGoalId = ref<string | null>(null);
+
+const potDetailGoal = computed(() =>
+  props.savingsGoals.find((goal) => goal.id === potDetailGoalId.value) ?? null
+);
+
+const potDetailSettlement = computed((): PotSettlement | null => {
+  if (!potDetailGoal.value || !props.currentMonth) return null;
+  return computePotSettlement(potDetailGoal.value, props.currentMonth, props.transactions);
+});
+
+function openPotDetail(goal: SavingsGoal) {
+  potDetailGoalId.value = goal.id;
+}
+
+function closePotDetail() {
+  potDetailGoalId.value = null;
+}
 
 function getGoalIcon(iconName: string): Component {
   switch (iconName) {
@@ -62,34 +86,60 @@ function getGoalIcon(iconName: string): Component {
 
 const goalsWithCalculations = computed(() =>
   props.savingsGoals.map((goal) => {
-    const goalTxs = props.transactions.filter((tx) => {
+    if (isPotGoal(goal)) {
+      return {
+        ...goal,
+        isPot: true as const,
+      };
+    }
+
+    const matchingTxs = props.transactions.filter((tx) => {
       if (tx.type !== "Sparen" && tx.categoryGroup !== "Spaargeld") return false;
-      const isLinkedBudget =
-        goal.categoryBudgetItemId && tx.budgetItemId === goal.categoryBudgetItemId;
-      return isLinkedBudget || transactionMatchesSavingsGoal(tx, goal);
+      return transactionMatchesSavingsGoal(tx, goal);
     });
 
-    const totalFromTxs = goalTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const totalFromTxs = matchingTxs.reduce((sum, tx) => sum + savingsBalanceDelta(tx), 0);
     const currentBalance = goal.initialAmount + totalFromTxs;
     const progressPercent =
       goal.targetAmount > 0
         ? Math.min(100, Math.round((currentBalance / goal.targetAmount) * 100))
         : 0;
 
+    const depositTxs = matchingTxs.filter((tx) =>
+      transactionMatchesSavingsGoalDeposit(tx, goal)
+    );
+    const withdrawalTxs = matchingTxs.filter((tx) =>
+      isSavingsWithdrawalTransaction(tx)
+    );
+
+    const totalDeposits = depositTxs.reduce((sum, tx) => sum + savingsBalanceDelta(tx), 0);
+    const totalWithdrawals = withdrawalTxs.reduce(
+      (sum, tx) => sum + Math.abs(savingsBalanceDelta(tx)),
+      0
+    );
+
     return {
       ...goal,
+      isPot: false as const,
       currentBalance,
       progressPercent,
-      transactions: goalTxs,
+      transactions: depositTxs,
+      totalDeposits,
+      totalWithdrawals,
+      withdrawalTxs,
     };
   })
 );
 
 const totalCalculatedSavings = computed(() =>
-  goalsWithCalculations.value.reduce((sum, g) => sum + g.currentBalance, 0)
+  goalsWithCalculations.value
+    .filter((g) => !g.isPot)
+    .reduce((sum, g) => sum + g.currentBalance, 0)
 );
 const totalTargetSavings = computed(() =>
-  goalsWithCalculations.value.reduce((sum, g) => sum + g.targetAmount, 0)
+  goalsWithCalculations.value
+    .filter((g) => !g.isPot)
+    .reduce((sum, g) => sum + g.targetAmount, 0)
 );
 const overallProgress = computed(() =>
   totalTargetSavings.value > 0
@@ -105,6 +155,11 @@ function potFor(goal: SavingsGoal) {
   return isPotGoal(goal) && props.currentMonth
     ? computePotSettlement(goal, props.currentMonth, props.transactions)
     : null;
+}
+
+function potStatus(goal: SavingsGoal) {
+  const settlement = potFor(goal);
+  return settlement ? potCompensationStatus(settlement) : null;
 }
 
 function barHeight(totaal: number) {
@@ -228,55 +283,122 @@ function barHeight(totaal: number) {
               <span class="text-slate-400 text-[10px]">IBAN</span>
               <span class="font-bold text-slate-200">{{ goal.accountIban || "Geen eigen IBAN" }}</span>
             </div>
-            <div v-if="potFor(goal)?.budgetItem" class="flex items-center justify-between gap-2">
-              <span class="text-slate-400 text-[10px]">Rubriek</span>
-              <span class="font-semibold text-white truncate">
-                {{ potFor(goal)!.budgetItem!.group }} › {{ potFor(goal)!.budgetItem!.name }}
+            <div v-if="potFor(goal)?.budgetItems.length" class="flex items-start justify-between gap-2">
+              <span class="text-slate-400 text-[10px] shrink-0 pt-0.5">Rubriek</span>
+              <span class="font-semibold text-white text-right">
+                <template v-if="potFor(goal)!.budgetItems.length === 1">
+                  {{ potFor(goal)!.budgetItems[0].group }} › {{ potFor(goal)!.budgetItems[0].name }}
+                </template>
+                <template v-else>
+                  {{ potFor(goal)!.budgetItems.length }} rubrieken:
+                  {{
+                    potFor(goal)!
+                      .budgetItems.map((item) => item.name)
+                      .join(", ")
+                  }}
+                </template>
               </span>
             </div>
           </div>
 
           <div
             v-if="potFor(goal)"
-            class="mb-3 bg-amber-950/30 border border-amber-800/50 rounded-xl px-3 py-2 space-y-1 text-[11px] font-mono"
+            class="mb-3 bg-amber-950/30 border border-amber-800/50 rounded-xl px-3 py-2.5 space-y-2 text-[11px] font-mono"
           >
+            <div
+              class="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 border"
+              :class="
+                potStatus(goal)?.sufficient
+                  ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
+                  : 'bg-rose-950/30 border-rose-800/50 text-rose-300'
+              "
+            >
+              <span class="font-sans font-semibold text-[10px] uppercase tracking-wide">
+                {{ potStatus(goal)?.sufficient ? "Voldoende gecompenseerd" : "Nog niet voldoende" }}
+              </span>
+              <CheckCircle2
+                v-if="potStatus(goal)?.sufficient"
+                class="w-4 h-4 text-emerald-400 shrink-0"
+              />
+            </div>
+
             <div class="flex justify-between text-slate-300">
               <span>Begroot / in pot</span>
               <span>
                 € {{ potFor(goal)!.budgeted.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </span>
             </div>
-            <div class="flex justify-between text-rose-300">
-              <span>Uitgegeven (bank)</span>
-              <span>
-                € {{ potFor(goal)!.spent.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            <button
+              type="button"
+              class="w-full flex justify-between text-rose-300 hover:text-rose-200 transition-colors group"
+              @click="openPotDetail(goal)"
+            >
+              <span class="group-hover:underline">Uitgegeven (bank)</span>
+              <span class="flex items-center gap-1.5">
+                <span>
+                  € {{ potFor(goal)!.spent.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                </span>
+                <span
+                  v-if="potFor(goal)!.spentTransactions.length > 0"
+                  class="text-[9px] text-slate-500 group-hover:text-slate-400"
+                >
+                  ({{ potFor(goal)!.spentTransactions.length }})
+                </span>
               </span>
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>Al gecompenseerd</span>
+            </button>
+            <div class="flex justify-between text-emerald-300/90">
+              <span>Gecompenseerd</span>
               <span>
                 €
                 {{ potFor(goal)!.compensated.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </span>
             </div>
             <div
-              class="flex justify-between font-bold pt-1 border-t border-amber-800/40"
-              :class="potFor(goal)!.toTransfer > 0 ? 'text-amber-300' : 'text-emerald-400'"
+              v-if="!potStatus(goal)?.sufficient"
+              class="flex justify-between font-bold pt-1 border-t border-amber-800/40 text-yellow-400"
             >
-              <span>Nog over te zetten</span>
+              <span>Nog te compenseren</span>
               <span>
                 €
-                {{ potFor(goal)!.toTransfer.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                {{ potStatus(goal)!.shortfall.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </span>
             </div>
           </div>
 
-          <div class="mt-3">
-            <div class="flex items-baseline justify-between">
-              <span class="text-xs text-slate-400">Huidig Saldo:</span>
-              <span class="text-xl font-black font-mono text-emerald-400">
+          <div v-if="!goal.isPot" class="mt-3">
+            <div class="flex items-baseline justify-between gap-2">
+              <div>
+                <span class="text-xs text-slate-400">Huidig Saldo:</span>
+              </div>
+              <span
+                class="text-xl font-black font-mono"
+                :class="goal.currentBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+              >
                 € {{ goal.currentBalance.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </span>
+            </div>
+
+            <div
+              class="mt-2 bg-slate-800/60 border border-slate-700/60 rounded-lg px-2.5 py-2 space-y-0.5 text-[10px] font-mono text-slate-400"
+            >
+              <div class="flex justify-between">
+                <span>Beginsaldo</span>
+                <span class="text-slate-300">
+                  € {{ goal.initialAmount.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                </span>
+              </div>
+              <div v-if="goal.totalDeposits > 0" class="flex justify-between text-emerald-400/90">
+                <span>+ Stortingen (Naar)</span>
+                <span>
+                  € {{ goal.totalDeposits.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                </span>
+              </div>
+              <div v-if="goal.totalWithdrawals > 0" class="flex justify-between text-rose-400/90">
+                <span>− Opnames (Van)</span>
+                <span>
+                  € {{ goal.totalWithdrawals.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                </span>
+              </div>
             </div>
 
             <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden my-2.5">
@@ -302,7 +424,7 @@ function barHeight(totaal: number) {
           <p v-if="goal.notes" class="mt-2 text-[10px] text-slate-400 italic truncate">{{ goal.notes }}</p>
         </div>
 
-        <div class="mt-4 pt-3 border-t border-slate-800">
+        <div v-if="!goal.isPot" class="mt-4 pt-3 border-t border-slate-800">
           <button
             type="button"
             class="w-full flex items-center justify-between text-[11px] text-indigo-400 hover:text-indigo-300 font-medium py-1"
@@ -310,7 +432,7 @@ function barHeight(totaal: number) {
           >
             <span class="flex items-center gap-1.5">
               <CheckCircle2 class="w-3.5 h-3.5 text-emerald-400" />
-              <span>{{ goal.transactions.length }} gekoppelde mutaties</span>
+              <span>{{ goal.transactions.length }} stortingen (Naar)</span>
             </span>
             <ChevronUp v-if="expandedGoalId === goal.id" class="w-3.5 h-3.5" />
             <ChevronDown v-else class="w-3.5 h-3.5" />
@@ -318,10 +440,10 @@ function barHeight(totaal: number) {
 
           <div v-if="expandedGoalId === goal.id" class="mt-2 space-y-1.5 max-h-36 overflow-y-auto pr-1">
             <p
-              v-if="goal.transactions.length === 0"
+              v-if="goal.transactions.length === 0 && goal.withdrawalTxs.length === 0"
               class="text-[10px] text-slate-500 italic py-1 text-center"
             >
-              Nog geen transacties gematcht met deze IBAN.
+              Nog geen bankmutaties gematcht — saldo = beginsaldo.
             </p>
             <div
               v-for="tx in goal.transactions"
@@ -333,7 +455,20 @@ function barHeight(totaal: number) {
                 <span class="text-slate-200 truncate">{{ tx.description }}</span>
               </div>
               <span class="font-bold text-emerald-400 shrink-0 ml-2">
-                +€ {{ Math.abs(tx.amount).toFixed(2) }}
+                +€ {{ savingsBalanceDelta(tx).toFixed(2) }}
+              </span>
+            </div>
+            <div
+              v-for="tx in goal.withdrawalTxs"
+              :key="`w-${tx.id}`"
+              class="bg-slate-800/60 p-2 rounded-lg text-[10px] flex items-center justify-between font-mono"
+            >
+              <div class="truncate max-w-[150px]">
+                <TransactionDate :date="tx.date" :time="tx.time" size="sm" />
+                <span class="text-slate-200 truncate">{{ tx.description }}</span>
+              </div>
+              <span class="font-bold text-rose-400 shrink-0 ml-2">
+                −€ {{ Math.abs(savingsBalanceDelta(tx)).toFixed(2) }}
               </span>
             </div>
           </div>
@@ -385,7 +520,7 @@ function barHeight(totaal: number) {
 
           <div class="space-y-3">
             <div
-              v-for="goal in goalsWithCalculations"
+              v-for="goal in goalsWithCalculations.filter((g) => !g.isPot)"
               :key="goal.id"
               class="p-2.5 bg-slate-800/60 rounded-xl border border-slate-700/60"
             >
@@ -482,4 +617,13 @@ function barHeight(totaal: number) {
       </div>
     </div>
   </div>
+
+  <PotSettlementModal
+    v-if="currentMonth"
+    :is-open="potDetailGoalId !== null"
+    :on-close="closePotDetail"
+    :goal="potDetailGoal"
+    :settlement="potDetailSettlement"
+    :current-month="currentMonth"
+  />
 </template>

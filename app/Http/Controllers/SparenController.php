@@ -86,6 +86,8 @@ class SparenController extends Controller
             'items.*.counterparty' => ['nullable', 'string'],
             'items.*.isPending' => ['nullable', 'boolean'],
             'items.*.matchedRuleId' => ['nullable', 'string'],
+            'items.*.linkExcluded' => ['nullable', 'boolean'],
+            'items.*.linkExclusionReason' => ['nullable', 'string'],
             'items.*.source' => ['nullable', 'string'],
         ]);
 
@@ -108,6 +110,8 @@ class SparenController extends Controller
             'counterparty' => ['nullable', 'string'],
             'isPending' => ['nullable', 'boolean'],
             'matchedRuleId' => ['nullable', 'string'],
+            'linkExcluded' => ['nullable', 'boolean'],
+            'linkExclusionReason' => ['nullable', 'string'],
             'source' => ['nullable', 'string'],
         ]);
 

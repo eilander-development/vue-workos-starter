@@ -8,6 +8,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ReportingPeriod
 {
+    public const SPAREN_MONTH_IDS = [
+        'jan', 'feb', 'mrt', 'apr', 'mei', 'jun',
+        'jul', 'aug', 'sep', 'okt', 'nov', 'dec',
+    ];
+
     public function periodForMonth(?string $month, int $day = 15): array
     {
         $safeDay = max(1, min(28, $day));
@@ -16,6 +21,50 @@ class ReportingPeriod
         $end = $selected->endOfDay();
 
         return [$start, $end];
+    }
+
+    /**
+     * Sparen labels months by their start date (e.g. "augustus" = 15 aug – 14 sep).
+     *
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
+     */
+    public function periodForSparenMonth(string $monthId, int $year, ?int $day = null): array
+    {
+        $safeDay = max(1, min(28, $day ?? $this->configuredStartDay()));
+        $monthNumber = $this->sparenMonthNumber($monthId);
+        $start = CarbonImmutable::create($year, $monthNumber, $safeDay, 0, 0, 0, 'Europe/Amsterdam')->startOfDay();
+        $end = $start->addMonth()->subDay()->endOfDay();
+
+        return [$start, $end];
+    }
+
+    /**
+     * @return array{monthId: string, year: int}
+     */
+    public function defaultSparenMonth(?CarbonImmutable $today = null): array
+    {
+        $today ??= CarbonImmutable::now('Europe/Amsterdam');
+        $anchor = $today->day >= $this->configuredStartDay() ? $today : $today->subMonthNoOverflow();
+
+        return [
+            'monthId' => $this->sparenMonthIdFromNumber((int) $anchor->month),
+            'year' => (int) $anchor->year,
+        ];
+    }
+
+    public function transactionInSparenMonth(string $date, string $monthId, int $year, ?int $day = null): bool
+    {
+        [$start, $end] = $this->periodForSparenMonth($monthId, $year, $day);
+        $parsed = CarbonImmutable::parse($date, 'Europe/Amsterdam')->startOfDay();
+
+        return $parsed->greaterThanOrEqualTo($start) && $parsed->lessThanOrEqualTo($end);
+    }
+
+    public function isCurrentSparenMonth(string $monthId, int $year): bool
+    {
+        $current = $this->defaultSparenMonth();
+
+        return $current['monthId'] === $monthId && $current['year'] === $year;
     }
 
     public function configuredStartDay(): int
@@ -72,5 +121,17 @@ class ReportingPeriod
         }
 
         return CarbonImmutable::now()->startOfMonth();
+    }
+
+    private function sparenMonthNumber(string $monthId): int
+    {
+        $index = array_search($monthId, self::SPAREN_MONTH_IDS, true);
+
+        return $index === false ? 1 : $index + 1;
+    }
+
+    private function sparenMonthIdFromNumber(int $monthNumber): string
+    {
+        return self::SPAREN_MONTH_IDS[max(0, min(11, $monthNumber - 1))];
     }
 }

@@ -47,7 +47,7 @@ const color = ref("emerald");
 const iconName = ref("ShieldCheck");
 const notes = ref("");
 const kind = ref<SavingsGoalKind>("goal");
-const categoryBudgetItemId = ref("");
+const categoryBudgetItemIds = ref<string[]>([]);
 
 watch(
   () => [props.editingGoal, props.isOpen] as const,
@@ -65,7 +65,12 @@ watch(
       iconName.value = g.iconName || "ShieldCheck";
       notes.value = g.notes || "";
       kind.value = g.kind === "pot" ? "pot" : "goal";
-      categoryBudgetItemId.value = g.categoryBudgetItemId || "";
+      const ids = g.categoryBudgetItemIds?.length
+        ? [...g.categoryBudgetItemIds]
+        : g.categoryBudgetItemId
+          ? [g.categoryBudgetItemId]
+          : [];
+      categoryBudgetItemIds.value = ids;
     } else {
       name.value = "";
       accountIban.value = "";
@@ -77,7 +82,7 @@ watch(
       iconName.value = "PiggyBank";
       notes.value = "";
       kind.value = "goal";
-      categoryBudgetItemId.value = "";
+      categoryBudgetItemIds.value = [];
     }
   },
   { immediate: true }
@@ -133,9 +138,19 @@ const bankSuggestions = [
   "Overige Bank",
 ];
 
+function toggleBudgetItem(itemId: string) {
+  if (categoryBudgetItemIds.value.includes(itemId)) {
+    categoryBudgetItemIds.value = categoryBudgetItemIds.value.filter((id) => id !== itemId);
+  } else {
+    categoryBudgetItemIds.value = [...categoryBudgetItemIds.value, itemId];
+  }
+}
+
 function handleSubmit() {
   if (name.value.trim().length < 3) return;
-  if (kind.value === "pot" && !categoryBudgetItemId.value) return;
+  if (kind.value === "pot" && categoryBudgetItemIds.value.length === 0) return;
+
+  const linkedIds = kind.value === "pot" ? [...categoryBudgetItemIds.value] : [];
 
   props.onSave(
     {
@@ -151,7 +166,8 @@ function handleSubmit() {
       iconName: iconName.value,
       notes: notes.value.trim(),
       kind: kind.value,
-      categoryBudgetItemId: categoryBudgetItemId.value || undefined,
+      categoryBudgetItemId: linkedIds[0],
+      categoryBudgetItemIds: linkedIds,
     },
     props.editingGoal ? props.editingGoal.id : undefined
   );
@@ -244,25 +260,45 @@ function pickBankSuggestion(value: string) {
               </button>
             </div>
             <p v-if="kind === 'pot'" class="text-[10px] text-amber-200/90 mt-1.5 leading-relaxed">
-              Uitgaven landen op de betaalrekening in een rubriek. Dit potje toont hoeveel je nog van pot →
-              rekening moet overzetten om te compenseren.
+              Het begrote bedrag telt als betaald (het potje is de envelop). Bankuitgaven zijn schaduwmutaties:
+              die verreken je door van pot → rekening over te zetten.
             </p>
           </div>
 
           <div v-if="kind === 'pot'" class="sm:col-span-2">
             <label class="block text-slate-300 font-semibold mb-1">
-              Gekoppelde uitgavenrubriek <span class="text-rose-400">*</span>
+              Gekoppelde uitgavenrubrieken <span class="text-rose-400">*</span>
             </label>
-            <select
-              v-model="categoryBudgetItemId"
-              required
-              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-indigo-500"
+            <div
+              class="max-h-44 overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 divide-y divide-slate-700/80"
             >
-              <option value="">Kies begrotingspost…</option>
-              <option v-for="item in expenseBudgetItems" :key="item.id" :value="item.id">
-                {{ item.group }} › {{ item.name }}
-              </option>
-            </select>
+              <label
+                v-for="item in expenseBudgetItems"
+                :key="item.id"
+                class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-700/40 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  class="rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
+                  :checked="categoryBudgetItemIds.includes(item.id)"
+                  @change="toggleBudgetItem(item.id)"
+                />
+                <span class="text-slate-200 truncate">{{ item.group }} › {{ item.name }}</span>
+              </label>
+              <p
+                v-if="expenseBudgetItems.length === 0"
+                class="px-3 py-3 text-[11px] text-slate-500 italic"
+              >
+                Geen uitgavenrubrieken beschikbaar.
+              </p>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1.5">
+              {{
+                categoryBudgetItemIds.length === 0
+                  ? "Selecteer minstens één rubriek waarvan uitgaven bij dit potje horen."
+                  : `${categoryBudgetItemIds.length} rubriek${categoryBudgetItemIds.length === 1 ? "" : "en"} geselecteerd — uitgaven op al deze posten tellen mee.`
+              }}
+            </p>
           </div>
 
           <div class="sm:col-span-2">
@@ -354,9 +390,10 @@ function pickBankSuggestion(value: string) {
             <input
               v-model="targetAmount"
               type="number"
-              step="10"
+              step="0.01"
               min="0"
-              placeholder="Bijv. 4500"
+              inputmode="decimal"
+              placeholder="Bijv. 4500,00"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -366,9 +403,10 @@ function pickBankSuggestion(value: string) {
             <input
               v-model="initialAmount"
               type="number"
-              step="10"
+              step="0.01"
               min="0"
-              placeholder="Bijv. 1200"
+              inputmode="decimal"
+              placeholder="Bijv. 313,91"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -378,9 +416,10 @@ function pickBankSuggestion(value: string) {
             <input
               v-model="monthlyContribution"
               type="number"
-              step="5"
+              step="0.01"
               min="0"
-              placeholder="Bijv. 100"
+              inputmode="decimal"
+              placeholder="Bijv. 100,00"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
           </div>

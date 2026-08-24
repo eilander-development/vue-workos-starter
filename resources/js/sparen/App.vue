@@ -42,7 +42,9 @@ import ManageCategoryModal from "./components/ManageCategoryModal.vue";
 import AddRuleModal from "./components/AddRuleModal.vue";
 import AddSavingsGoalModal from "./components/AddSavingsGoalModal.vue";
 import ItemTransactionsModal from "./components/ItemTransactionsModal.vue";
+import AutoProcessTransactionsModal from "./components/AutoProcessTransactionsModal.vue";
 import ToastStack from "./components/Toast.vue";
+import type { AutoProcessSaveAssignment } from "./services/transactionLinkSuggestions";
 import { useToasts } from "./composables/useToasts";
 import {
   loadSparenState,
@@ -60,13 +62,25 @@ import {
   syncSparenBank,
 } from "./api";
 import { useSparenRoute } from "./navigation";
-import { monthDatePrefix } from "./month";
+import {
+  applyReportingSettings,
+  formatReportingPeriodLabel,
+  isTransactionInReportingMonth,
+  reportingPeriodForMonth,
+} from "./month";
 import {
   isUnlinkedTransaction,
   matchingUnlinkedTransactions,
   transactionMatchesKeyword,
 } from "./matchRule";
-import { transactionMatchesSavingsGoal } from "./matchSavings";
+import { transactionMatchesSavingsGoalDeposit, transactionMatchesSavingsGoalWithdrawal } from "./matchSavings";
+import {
+  goalBudgetItemIds,
+  isPotGoal,
+  applyPotTransferLinkExclusion,
+  potLinkedBudgetItemIds,
+} from "./potSettlement";
+import { transactionMatchesBudgetItem } from "./budgetPayment";
 
 const DISCONNECTED_CHECKING_ACCOUNT: BankAccount = {
   id: "checking-unlinked",
@@ -84,6 +98,7 @@ const DISCONNECTED_CHECKING_ACCOUNT: BankAccount = {
 
 const { activeTab, setActiveTab } = useSparenRoute();
 const selectedMonthId = ref("aug");
+const selectedYear = ref(2026);
 const baseMonthlyBudgets = ref<MonthlyBudget[]>(INITIAL_MONTHLY_BUDGETS);
 const categories = ref<CategoryDefinition[]>(DEFAULT_CATEGORY_DEFINITIONS);
 const transactions = ref<Transaction[]>([]);
@@ -95,6 +110,7 @@ const isSyncing = ref(false);
 const isMobileDrawerOpen = ref(false);
 
 const isAddTxModalOpen = ref(false);
+const isAutoProcessModalOpen = ref(false);
 const isAddBudgetItemModalOpen = ref(false);
 const addBudgetItemDefaultGroup = ref<BudgetCategoryGroup | undefined>(undefined);
 const editingBudgetItem = ref<BudgetItem | null>(null);
@@ -113,6 +129,19 @@ const saveState = ref<SaveState>("idle");
 const { toasts, notify, dismiss } = useToasts();
 
 function applyRemoteState(data: Record<string, unknown>) {
+  if (data.reporting) {
+    applyReportingSettings(data.reporting as { startDayOfMonth: number });
+    const reporting = data.reporting as {
+      defaultMonthId?: string;
+      defaultYear?: number;
+    };
+    if (reporting.defaultMonthId) {
+      selectedMonthId.value = reporting.defaultMonthId;
+    }
+    if (reporting.defaultYear) {
+      selectedYear.value = reporting.defaultYear;
+    }
+  }
   if (data.categories) categories.value = data.categories as CategoryDefinition[];
   if (data.monthlyBudgets) baseMonthlyBudgets.value = data.monthlyBudgets as MonthlyBudget[];
   if (data.transactions) transactions.value = data.transactions as Transaction[];
@@ -122,10 +151,18 @@ function applyRemoteState(data: Record<string, unknown>) {
   if (data.savingsHistory) savingsHistory.value = data.savingsHistory as SavingsRow[];
 }
 
+function reconcilePotDepositFlags() {
+  const previous = transactions.value;
+  const next = applyRulesToTransactions(previous, rules.value, savingsGoals.value);
+  transactions.value = next;
+  void persistChangedTransactions(previous, next);
+}
+
 onMounted(() => {
   loadSparenState()
     .then((data) => {
       applyRemoteState(data);
+      reconcilePotDepositFlags();
     })
     .catch(() =>
       notify(
@@ -152,6 +189,8 @@ async function persistChangedTransactions(previous: Transaction[], next: Transac
       before.categoryGroup !== tx.categoryGroup ||
       before.type !== tx.type ||
       before.matchedRuleId !== tx.matchedRuleId ||
+      before.linkExcluded !== tx.linkExcluded ||
+      before.linkExclusionReason !== tx.linkExclusionReason ||
       before.description !== tx.description ||
       before.amount !== tx.amount ||
       before.date !== tx.date
@@ -193,12 +232,31 @@ watch(saveState, (value) => {
   }, 2500);
 });
 
+function matchesSavingsGoalTransfer(
+  tx: Transaction,
+  goal: SavingsGoal,
+  ownIbans: string[]
+): boolean {
+  return (
+    transactionMatchesSavingsGoalDeposit(tx, goal, ownIbans) ||
+    transactionMatchesSavingsGoalWithdrawal(tx, goal, ownIbans)
+  );
+}
+
 function applyRulesToTransactions(txs: Transaction[], rls: Rule[], sGoals: SavingsGoal[]) {
   const ownIbans = bankAccounts.value.map((account) => account.iban).filter(Boolean);
 
   return txs.map((tx) => {
+    const potApplied = applyPotTransferLinkExclusion(tx, sGoals, ownIbans);
+    if (potApplied.linkExcluded) {
+      return potApplied;
+    }
+
     for (const goal of sGoals) {
-      if (!isUnlinkedTransaction(tx) || !transactionMatchesSavingsGoal(tx, goal, ownIbans)) {
+      if (isPotGoal(goal)) {
+        continue;
+      }
+      if (!isUnlinkedTransaction(tx) || !matchesSavingsGoalTransfer(tx, goal, ownIbans)) {
         continue;
       }
 
@@ -206,8 +264,10 @@ function applyRulesToTransactions(txs: Transaction[], rls: Rule[], sGoals: Savin
         ...tx,
         type: "Sparen" as const,
         categoryGroup: "Spaargeld" as const,
-        budgetItemId: goal.categoryBudgetItemId || tx.budgetItemId || "spaar-1",
+        budgetItemId: goalBudgetItemIds(goal)[0] || tx.budgetItemId || "spaar-1",
         counterparty: goal.bankName || goal.name,
+        linkExcluded: false,
+        linkExclusionReason: undefined,
       };
     }
 
@@ -241,30 +301,35 @@ function applyRulesToTransactions(txs: Transaction[], rls: Rule[], sGoals: Savin
 }
 
 const monthlyBudgets = computed(() => {
+  const potLinkedIds = potLinkedBudgetItemIds(savingsGoals.value);
+
   return baseMonthlyBudgets.value.map((mb) => {
-    const monthPrefix = monthDatePrefix(mb);
-    const txsInMonth = transactions.value.filter(
-      (t) => monthPrefix && t.date.startsWith(monthPrefix)
-    );
+    const txsInMonth = transactions.value.filter((t) => isTransactionInReportingMonth(t, mb));
 
     const updatedItems = mb.items.map((item) => {
-      const matchingTxs = txsInMonth.filter((t) => {
-        if (t.budgetItemId && t.budgetItemId === item.id) return true;
-        if (t.categoryGroup === item.group && !t.budgetItemId) {
-          const desc = t.description.toLowerCase();
-          const itemNameLower = item.name.toLowerCase();
-          if (desc.includes(itemNameLower) || itemNameLower.includes(desc)) return true;
-        }
-        return false;
-      });
+      const matchingTxs = txsInMonth.filter((t) => transactionMatchesBudgetItem(t, item));
 
       const totalFromTxs = matchingTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
       const paymentCount = matchingTxs.length;
+      const isPotEnvelope = potLinkedIds.has(item.id) && item.type === "uitgaven";
+
+      if (isPotEnvelope) {
+        const envelopePaid = item.actual ?? 0;
+        return {
+          ...item,
+          paidOrReceived: envelopePaid,
+          shadowSpent: totalFromTxs,
+          paymentCount: paymentCount > 0 ? paymentCount : item.paymentCount,
+          isPaid: envelopePaid > 0,
+        };
+      }
+
       const finalPaid = Math.max(item.paidOrReceived, totalFromTxs);
 
       return {
         ...item,
         paidOrReceived: finalPaid,
+        shadowSpent: undefined,
         paymentCount: paymentCount > 0 ? paymentCount : item.paymentCount,
         isPaid: finalPaid >= item.actual && item.actual > 0,
       };
@@ -279,16 +344,38 @@ const monthlyBudgets = computed(() => {
 
 const currentMonth = computed(
   () =>
+    monthlyBudgets.value.find(
+      (m) => m.monthId === selectedMonthId.value && m.year === selectedYear.value
+    ) ||
     monthlyBudgets.value.find((m) => m.monthId === selectedMonthId.value) ||
     monthlyBudgets.value[0]
 );
 
-const primaryBankAccount = computed(
-  () =>
-    bankAccounts.value.find((account) => account.type === "checking") ||
-    bankAccounts.value[0] ||
-    DISCONNECTED_CHECKING_ACCOUNT
-);
+const currentReportingPeriodLabel = computed(() => {
+  if (!currentMonth.value) {
+    return "";
+  }
+
+  const period =
+    currentMonth.value.periodStart && currentMonth.value.periodEnd
+      ? { start: currentMonth.value.periodStart, end: currentMonth.value.periodEnd }
+      : reportingPeriodForMonth(currentMonth.value);
+
+  return formatReportingPeriodLabel(period);
+});
+
+const primaryBankAccount = computed(() => {
+  const checking = bankAccounts.value.filter((account) => account.type === "checking");
+  if (checking.length === 0) {
+    return bankAccounts.value[0] ?? DISCONNECTED_CHECKING_ACCOUNT;
+  }
+
+  return checking.reduce((latest, account) => {
+    const latestAt = latest.lastSyncedAt ?? "";
+    const accountAt = account.lastSyncedAt ?? "";
+    return accountAt > latestAt ? account : latest;
+  });
+});
 
 function budgetItemName(itemId?: string) {
   return (
@@ -644,6 +731,102 @@ function handleApplyRulesToAll() {
   );
 }
 
+function transactionTypeFromBudgetType(targetType: BudgetType): Transaction["type"] {
+  if (targetType === "inkomsten") {
+    return "Inkomsten";
+  }
+  if (targetType === "sparen") {
+    return "Sparen";
+  }
+  return "Uitgave";
+}
+
+function handleAutoProcessSave(assignments: AutoProcessSaveAssignment[]) {
+  if (assignments.length === 0) {
+    return;
+  }
+
+  const assignmentByTransactionId = new Map(
+    assignments.map((assignment) => [assignment.transactionId, assignment])
+  );
+
+  const createdRules: Rule[] = [];
+  const ruleKeyToRule = new Map<string, Rule>();
+
+  for (const assignment of assignments) {
+    if (!assignment.createRule || !assignment.createRule.keyword.trim()) {
+      continue;
+    }
+
+    const dedupeKey = `${assignment.createRule.keyword.trim().toLowerCase()}::${assignment.categoryGroup}::${assignment.budgetItemId}`;
+    if (ruleKeyToRule.has(dedupeKey)) {
+      continue;
+    }
+
+    const rule: Rule = {
+      id: `rule-${Date.now()}-${createdRules.length}`,
+      name: assignment.createRule.name.trim() || `Regel: ${assignment.createRule.keyword.trim()}`,
+      keyword: assignment.createRule.keyword.trim(),
+      matchField: assignment.createRule.matchField,
+      targetGroup: assignment.categoryGroup,
+      targetBudgetItemId: assignment.budgetItemId,
+      targetType: assignment.createRule.targetType,
+      isActive: true,
+      matchedCount: assignments.filter(
+        (entry) =>
+          entry.createRule &&
+          entry.createRule.keyword.trim().toLowerCase() ===
+            assignment.createRule!.keyword.trim().toLowerCase() &&
+          entry.categoryGroup === assignment.categoryGroup &&
+          entry.budgetItemId === assignment.budgetItemId
+      ).length,
+    };
+
+    createdRules.push(rule);
+    ruleKeyToRule.set(dedupeKey, rule);
+  }
+
+  const next = transactions.value.map((tx) => {
+    const assignment = assignmentByTransactionId.get(tx.id);
+    if (!assignment) {
+      return tx;
+    }
+
+    const dedupeKey = assignment.createRule
+      ? `${assignment.createRule.keyword.trim().toLowerCase()}::${assignment.categoryGroup}::${assignment.budgetItemId}`
+      : "";
+    const createdRule = dedupeKey ? ruleKeyToRule.get(dedupeKey) : undefined;
+
+    return {
+      ...tx,
+      categoryGroup: assignment.categoryGroup,
+      budgetItemId: assignment.budgetItemId,
+      type: transactionTypeFromBudgetType(assignment.targetType),
+      matchedRuleId: createdRule?.id ?? tx.matchedRuleId,
+    };
+  });
+
+  void runSave(
+    async () => {
+      for (const rule of createdRules) {
+        await saveRule(rule);
+      }
+      await persistChangedTransactions(transactions.value, next);
+      if (createdRules.length > 0) {
+        rules.value = [...rules.value, ...createdRules];
+      }
+      transactions.value = next;
+    },
+    {
+      title: `${assignments.length} ${assignments.length === 1 ? "transactie" : "transacties"} gekoppeld`,
+      detail:
+        createdRules.length > 0
+          ? `${createdRules.length} nieuwe koppelregels aangemaakt`
+          : "Geselecteerde suggesties opgeslagen",
+    }
+  );
+}
+
 function handleUpdateBudgetItem(itemId: string, updates: Partial<BudgetItem>) {
   const current = currentMonth.value.items.find((item) => item.id === itemId);
   const next = { ...current, ...updates } as BudgetItem;
@@ -913,8 +1096,16 @@ function handleUnlinkTransaction(txId: string) {
   );
 }
 
+function handleSelectMonth(monthId: string) {
+  selectedMonthId.value = monthId;
+  const month = monthlyBudgets.value.find((entry) => entry.monthId === monthId);
+  if (month) {
+    selectedYear.value = month.year;
+  }
+}
+
 function handleYearOverviewSelectMonth(mId: string) {
-  selectedMonthId.value = mId;
+  handleSelectMonth(mId);
   setActiveTab("maandbegroting");
 }
 
@@ -964,11 +1155,12 @@ function closeSavingsGoalModal() {
       <Header
         :current-month="currentMonth"
         :all-months="monthlyBudgets"
+        :reporting-period-label="currentReportingPeriodLabel"
         :bank-account="primaryBankAccount"
         :is-syncing="isSyncing"
         :save-state="saveState"
         :on-open-mobile-menu="() => (isMobileDrawerOpen = true)"
-        @select-month="(monthId) => (selectedMonthId = monthId)"
+        @select-month="handleSelectMonth"
         @sync="handleBankSync"
         @open-add-transaction="isAddTxModalOpen = true"
         @open-add-budget-item="handleOpenAddBudgetItemModal()"
@@ -993,7 +1185,7 @@ function closeSavingsGoalModal() {
           :all-months="monthlyBudgets"
           :transactions="transactions"
           :bank-account="primaryBankAccount"
-          :on-select-month="(monthId) => (selectedMonthId = monthId)"
+          :on-select-month="handleSelectMonth"
           :on-update-budget-item="handleUpdateBudgetItem"
           :on-open-add-budget-item="() => handleOpenAddBudgetItemModal()"
           :on-open-edit-budget-item="handleOpenEditBudgetItem"
@@ -1006,6 +1198,7 @@ function closeSavingsGoalModal() {
           :current-month="currentMonth"
           :all-months="monthlyBudgets"
           :transactions="transactions"
+          :categories="categories"
           :on-update-budget-item="handleUpdateBudgetItem"
           :on-open-add-budget-item="() => handleOpenAddBudgetItemModal()"
           :on-open-edit-budget-item="handleOpenEditBudgetItem"
@@ -1040,6 +1233,7 @@ function closeSavingsGoalModal() {
           v-if="activeTab === 'transacties'"
           :transactions="transactions"
           :on-add-transaction="() => (isAddTxModalOpen = true)"
+          :on-open-auto-process="() => (isAutoProcessModalOpen = true)"
           :on-delete-transaction="handleDeleteTransaction"
           :on-link-transaction="handleLinkTransaction"
           :on-create-rule-from-transaction="handleCreateRuleFromTransaction"
@@ -1099,6 +1293,19 @@ function closeSavingsGoalModal() {
       :active-tab="activeTab"
       :set-active-tab="setActiveTab"
       @open-mobile-menu="isMobileDrawerOpen = true"
+    />
+
+    <AutoProcessTransactionsModal
+      :is-open="isAutoProcessModalOpen"
+      :on-close="() => (isAutoProcessModalOpen = false)"
+      :transactions="transactions"
+      :rules="rules"
+      :savings-goals="savingsGoals"
+      :budget-items="currentMonth.items"
+      :categories="categories"
+      :bank-accounts="bankAccounts"
+      :current-month="currentMonth"
+      :on-save="handleAutoProcessSave"
     />
 
     <AddTransactionModal

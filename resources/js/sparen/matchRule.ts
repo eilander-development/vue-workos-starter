@@ -2,7 +2,19 @@ import type { Transaction } from "./types";
 
 export type RuleMatchField = "description" | "counterparty" | "both";
 
-export function isUnlinkedTransaction(tx: Pick<Transaction, "budgetItemId" | "categoryGroup">): boolean {
+export function isLinkExcludedTransaction(
+  tx: Pick<Transaction, "linkExcluded">
+): boolean {
+  return Boolean(tx.linkExcluded);
+}
+
+export function isUnlinkedTransaction(
+  tx: Pick<Transaction, "budgetItemId" | "categoryGroup" | "linkExcluded">
+): boolean {
+  if (isLinkExcludedTransaction(tx)) {
+    return false;
+  }
+
   return !tx.budgetItemId || tx.categoryGroup === "Ongecategoriseerd";
 }
 
@@ -45,9 +57,13 @@ export function matchingUnlinkedTransactions(
 
 const IBAN_PATTERN = /^[A-Z]{2}\d{2}[A-Z0-9]{10,}$/i;
 
+export function isIbanLike(value: string): boolean {
+  return IBAN_PATTERN.test(value.replace(/\s+/g, ""));
+}
+
 export function extractSmartKeyword(tx: Transaction): string {
   const counterparty = tx.counterparty?.trim() ?? "";
-  if (counterparty.length > 2 && !IBAN_PATTERN.test(counterparty.replace(/\s+/g, ""))) {
+  if (counterparty.length > 2 && !isIbanLike(counterparty)) {
     return counterparty;
   }
 

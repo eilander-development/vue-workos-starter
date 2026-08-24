@@ -20,8 +20,18 @@ import {
 import type { MonthlyBudget, Transaction, BankAccount, ActiveTab, BudgetItem } from "../types";
 import TransactionDate from "./TransactionDate.vue";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
-import { monthDatePrefix } from "../month";
-import { budgetItemRows, formulaRows } from "../kpiBreakdown";
+import { defaultReportingMonth } from "../month";
+import {
+  buildBalanceModalBreakdown,
+  buildDashboardExpenseModalBreakdown,
+  buildDashboardIncomeModalBreakdown,
+  buildNettoModalBreakdown,
+  computeMonthKpi,
+  isActiveReportingMonth,
+  resolvePeriodStartBalance,
+  sumRawBankTotals,
+} from "../monthKpi";
+import { isTransactionInReportingMonth } from "../month";
 
 type DashboardKpiKey = "balance" | "income" | "expense" | "netto";
 
@@ -53,53 +63,55 @@ const incomeItems = computed(() => props.currentMonth.items.filter((i) => i.type
 const expenseItems = computed(() => props.currentMonth.items.filter((i) => i.type === "uitgaven"));
 const savingsItems = computed(() => props.currentMonth.items.filter((i) => i.type === "sparen"));
 
-const totalIncomeEstimated = computed(() =>
-  incomeItems.value.reduce((sum, i) => sum + budgetAmount(i), 0)
-);
-const totalIncomeReceived = computed(() =>
-  incomeItems.value.reduce((sum, i) => sum + paidAmount(i), 0)
-);
-const totalExpenseEstimated = computed(() =>
-  expenseItems.value.reduce((sum, i) => sum + budgetAmount(i), 0)
-);
-const totalExpensePaid = computed(() =>
-  expenseItems.value.reduce((sum, i) => sum + paidAmount(i), 0)
-);
-const totalExpenseRemaining = computed(() =>
-  expenseItems.value.reduce((sum, i) => sum + Math.max(0, budgetAmount(i) - paidAmount(i)), 0)
-);
-const totalSavingsBudget = computed(() =>
-  savingsItems.value.reduce((sum, i) => sum + budgetAmount(i), 0)
+const reportingAnchor = computed(() => defaultReportingMonth());
+
+const liveAccountBalance = computed(() => Number(props.bankAccount.balance ?? 0));
+
+const isCurrentReportingMonth = computed(() =>
+  isActiveReportingMonth(props.currentMonth, reportingAnchor.value)
 );
 
-const monthId = computed(
-  () => props.currentMonth.monthId || "aug"
-);
-const monthPrefix = computed(() =>
-  monthDatePrefix({ monthId: monthId.value, year: props.currentMonth.year })
-);
-
-const totalSavingsPaid = computed(() => {
-  const savingsFromItems = savingsItems.value.reduce((sum, i) => sum + paidAmount(i), 0);
-  const savingsFromTx = props.transactions
-    .filter((t) => monthPrefix.value && t.date.startsWith(monthPrefix.value) && t.type === "Sparen")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  return Math.max(savingsFromItems, savingsFromTx);
-});
-
-const totalSavingsRemaining = computed(() =>
-  savingsItems.value.reduce((sum, i) => sum + Math.max(0, budgetAmount(i) - paidAmount(i)), 0)
-);
-const totalIncomeRemaining = computed(() =>
-  incomeItems.value.reduce((sum, i) => sum + Math.max(0, budgetAmount(i) - paidAmount(i)), 0)
+const periodStartBalance = computed(() =>
+  resolvePeriodStartBalance(
+    props.currentMonth,
+    liveAccountBalance.value,
+    reportingAnchor.value
+  )
 );
 
-const netActual = computed(
-  () => totalIncomeReceived.value - totalExpensePaid.value - totalSavingsPaid.value
+const monthTransactions = computed(() =>
+  props.transactions.filter(
+    (tx) => isTransactionInReportingMonth(tx, props.currentMonth) && !tx.isPending
+  )
 );
-const netEstimated = computed(
-  () => totalIncomeEstimated.value - totalExpenseEstimated.value - totalSavingsBudget.value
+
+const monthKpi = computed(() =>
+  computeMonthKpi({
+    incomeItems: incomeItems.value,
+    expenseItems: expenseItems.value,
+    savingsItems: savingsItems.value,
+    bankBalance: periodStartBalance.value,
+    monthTransactions: monthTransactions.value,
+    bankTotalsFromTransactions: true,
+  })
 );
+
+const totalIncomeBudget = computed(() => monthKpi.value.totalIncomeBudget);
+const totalIncomeReceived = computed(() => monthKpi.value.totalIncomeBank);
+const totalIncomeDelta = computed(() => monthKpi.value.totalIncomeDelta);
+const totalIncomeOver = computed(() => monthKpi.value.totalIncomeOver);
+const totalExpenseFixedBudget = computed(() => monthKpi.value.totalExpenseFixedBudget);
+const totalExpenseRulesBudget = computed(() => monthKpi.value.totalExpenseRulesBudget);
+const totalExpensePaid = computed(() => monthKpi.value.totalExpenseBank);
+const totalExpenseFixedPaid = computed(() => monthKpi.value.totalExpenseFixedPaid);
+const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
+const totalExpenseDelta = computed(() => monthKpi.value.totalExpenseDelta);
+const totalExpenseFixedRemaining = computed(() => monthKpi.value.totalExpenseFixedRemaining);
+const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
+const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
+const netActual = computed(() => monthKpi.value.netActual);
+const netBudgetDelta = computed(() => monthKpi.value.netBudgetDelta);
+const freeToSpend = computed(() => monthKpi.value.expectedEndOfMonth);
 
 const unpaidExpenses = computed(() =>
   expenseItems.value.filter((i) => budgetAmount(i) > paidAmount(i) && budgetAmount(i) > 0)
@@ -188,17 +200,40 @@ const categoryGroups = computed((): CatDef[] => {
 
 const annualChartData = computed(() =>
   props.allMonths.map((m) => {
-    const pick = chartMode.value === "budget" ? budgetAmount : paidAmount;
-    const inc = m.items.filter((i) => i.type === "inkomsten").reduce((acc, x) => acc + pick(x), 0);
-    const exp = m.items.filter((i) => i.type === "uitgaven").reduce((acc, x) => acc + pick(x), 0);
-    const sav = m.items.filter((i) => i.type === "sparen").reduce((acc, x) => acc + pick(x), 0);
+    if (chartMode.value === "budget") {
+      const inc = m.items
+        .filter((i) => i.type === "inkomsten")
+        .reduce((acc, x) => acc + budgetAmount(x), 0);
+      const exp = m.items
+        .filter((i) => i.type === "uitgaven")
+        .reduce((acc, x) => acc + budgetAmount(x), 0);
+      const sav = m.items
+        .filter((i) => i.type === "sparen")
+        .reduce((acc, x) => acc + budgetAmount(x), 0);
+      return {
+        month: monthLabel(m),
+        fullName: m.monthName,
+        Inkomsten: Math.round(inc),
+        Uitgaven: Math.round(exp),
+        Sparen: Math.round(sav),
+        Netto: Math.round(inc - exp - sav),
+      };
+    }
+
+    const monthTxs = props.transactions.filter(
+      (tx) => isTransactionInReportingMonth(tx, m) && !tx.isPending
+    );
+    const raw = sumRawBankTotals(monthTxs);
+
     return {
       month: monthLabel(m),
       fullName: m.monthName,
-      Inkomsten: Math.round(inc),
-      Uitgaven: Math.round(exp),
-      Sparen: Math.round(sav),
-      Netto: Math.round(inc - exp - sav),
+      Inkomsten: Math.round(raw.totalIncomeBank),
+      Uitgaven: Math.round(raw.totalExpenseBank),
+      Sparen: Math.round(raw.totalSavingsBank),
+      Netto: Math.round(
+        raw.totalIncomeBank - raw.totalExpenseBank - raw.totalSavingsBank
+      ),
     };
   })
 );
@@ -212,77 +247,33 @@ const chartMax = computed(() => {
   return Math.max(1, ...vals);
 });
 
-const accountBalance = computed(() => Number(props.bankAccount.balance ?? 0));
-const expectedEnd = computed(
-  () =>
-    accountBalance.value +
-    totalIncomeRemaining.value -
-    totalExpenseRemaining.value -
-    totalSavingsRemaining.value
-);
-const freeToSpend = computed(() => accountBalance.value - totalExpenseRemaining.value);
-
 const kpiBreakdown = computed(() => {
   const key = kpiKey.value;
   if (!key) return null;
+  const kpi = monthKpi.value;
 
   if (key === "balance") {
-    const { columns, rows, total } = formulaRows([
-      { id: "ing", label: "Saldo ING", amount: accountBalance.value, tone: "plus" },
-      { id: "unpaid", label: "Nog te betalen", amount: -totalExpenseRemaining.value, tone: "minus" },
-      { id: "free", label: "Vrij besteedbaar", amount: freeToSpend.value, tone: "result" },
-    ]);
-    return {
-      title: "Huidig Saldo (ING)",
-      formula: "Saldo ING − nog te betalen = vrij besteedbaar",
-      subtitle: "Nog te betalen is de som van openstaande uitgavenposten",
-      columns,
-      rows,
-      totalValue: total,
-      totalColorClass: freeToSpend.value >= 0 ? "text-emerald-400" : "text-rose-400",
-    };
+    return buildBalanceModalBreakdown(
+      kpi,
+      periodStartBalance.value,
+      isCurrentReportingMonth.value
+    );
   }
   if (key === "income") {
-    const { columns, rows } = budgetItemRows(incomeItems.value, "paid");
-    return {
-      title: `Inkomsten (${props.currentMonth.monthName})`,
-      formula: "Som van ontvangen bedragen op inkomstenposten",
-      subtitle: `Begroot / geschat: € ${totalIncomeEstimated.value.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}`,
-      columns,
-      rows,
-      totalValue: totalIncomeReceived.value,
-      totalColorClass: "text-emerald-400",
-    };
+    return buildDashboardIncomeModalBreakdown(
+      incomeItems.value,
+      kpi,
+      props.currentMonth.monthName
+    );
   }
   if (key === "expense") {
-    const { columns, rows } = budgetItemRows(expenseItems.value, "paid");
-    return {
-      title: `Uitgaven (${props.currentMonth.monthName})`,
-      formula: "Som van betaalde bedragen op uitgavenposten",
-      subtitle: `Totaal geschat: € ${totalExpenseEstimated.value.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}`,
-      columns,
-      rows,
-      totalValue: totalExpensePaid.value,
-      totalColorClass: "text-rose-400",
-    };
+    return buildDashboardExpenseModalBreakdown(kpi, props.currentMonth.monthName);
   }
-  const { columns, rows, total } = formulaRows([
-    { id: "received", label: "Ontvangen", amount: totalIncomeReceived.value, tone: "plus" },
-    { id: "paid", label: "Betaald", amount: -totalExpensePaid.value, tone: "minus" },
-    { id: "saved", label: "Gespaard", amount: -totalSavingsPaid.value, tone: "minus" },
-    { id: "actual", label: "Werkelijk netto", amount: netActual.value, tone: "result" },
-    { id: "planned", label: "Begroot", amount: netEstimated.value },
-    { id: "expected", label: "Verwacht eind", amount: expectedEnd.value },
-  ]);
-  return {
-    title: "Netto Overschot / Saldo",
-    formula: "Ontvangen − betaald − gespaard = werkelijk netto",
-    subtitle: "Begroot en verwacht eind ter vergelijking",
-    columns,
-    rows,
-    totalValue: total,
-    totalColorClass: netActual.value >= 0 ? "text-emerald-400" : "text-rose-400",
-  };
+  return buildNettoModalBreakdown(kpi, {
+    mode: "dashboard",
+    bankBalance: periodStartBalance.value,
+    includeStartBalance: isCurrentReportingMonth.value,
+  });
 });
 
 function barPct(value: number) {
@@ -315,7 +306,7 @@ function catStats(cat: CatDef) {
       </div>
       <div class="flex items-center gap-3">
         <div class="bg-slate-800/80 border border-slate-700 px-3.5 py-2 rounded-xl text-right">
-          <span class="text-[11px] text-slate-400 block font-medium">Vrij Besteedbaar Saldo:</span>
+          <span class="text-[11px] text-slate-400 block font-medium">Verwacht eind saldo:</span>
           <span
             class="text-base font-bold font-mono"
             :class="freeToSpend >= 0 ? 'text-emerald-400' : 'text-rose-400'"
@@ -335,10 +326,10 @@ function catStats(cat: CatDef) {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
       <button
         type="button"
-        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all relative overflow-hidden"
+        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all relative overflow-hidden h-full flex flex-col"
         @click="kpiKey = 'balance'"
       >
         <div class="flex items-center justify-between text-slate-400 mb-3">
@@ -350,20 +341,31 @@ function catStats(cat: CatDef) {
           </div>
         </div>
         <div class="text-2xl font-black text-white font-mono tracking-tight">
-          € {{ accountBalance.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+          € {{ liveAccountBalance.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
-        <div class="mt-3 flex items-center justify-between text-xs pt-3 border-t border-slate-800/80">
-          <span class="text-slate-400">Nog te betalen:</span>
-          <span class="font-mono font-semibold text-amber-400">
-            -€ {{ totalExpenseRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-          </span>
+        <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
+          <div
+            class="flex items-center justify-between"
+            :class="expectedEndOfMonth >= 0 ? 'text-indigo-300' : 'text-rose-400'"
+          >
+            <span class="text-slate-400">Verwacht eind</span>
+            <span class="font-semibold">
+              € {{ expectedEndOfMonth.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div class="flex items-center justify-between text-slate-400">
+            <span>Nog te betalen (vast)</span>
+            <span class="font-semibold text-amber-400">
+              −€ {{ totalExpenseFixedRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
         </div>
-        <p class="mt-2 text-[10px] text-slate-500">klik voor detail</p>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
 
       <button
         type="button"
-        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all"
+        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all h-full flex flex-col"
         @click="kpiKey = 'income'"
       >
         <div class="flex items-center justify-between text-slate-400 mb-3">
@@ -380,17 +382,17 @@ function catStats(cat: CatDef) {
           € {{ totalIncomeReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
         <div class="mt-3 flex items-center justify-between text-xs pt-3 border-t border-slate-800/80">
-          <span class="text-slate-400">Begroot / Geschat:</span>
+          <span class="text-slate-400">Begroot:</span>
           <span class="font-mono font-medium text-slate-300">
-            € {{ totalIncomeEstimated.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            € {{ totalIncomeBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
           </span>
         </div>
-        <p class="mt-2 text-[10px] text-slate-500">klik voor detail</p>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
 
       <button
         type="button"
-        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all"
+        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all h-full flex flex-col"
         @click="kpiKey = 'expense'"
       >
         <div class="flex items-center justify-between text-slate-400 mb-3">
@@ -406,18 +408,49 @@ function catStats(cat: CatDef) {
         <div class="text-2xl font-black text-rose-400 font-mono tracking-tight">
           € {{ totalExpensePaid.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
-        <div class="mt-3 flex items-center justify-between text-xs pt-3 border-t border-slate-800/80">
-          <span class="text-slate-400">Totaal Geschat:</span>
-          <span class="font-mono font-medium text-slate-300">
-            € {{ totalExpenseEstimated.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-          </span>
+        <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Vast begroot</span>
+            <span class="font-medium text-slate-300">
+              € {{ totalExpenseFixedBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Binnen begroting</span>
+            <span class="font-medium text-rose-300">
+              € {{ totalExpenseFixedPaid.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div
+            v-if="totalExpenseRulesBudget > 0 || totalExpenseOver > 0"
+            class="mt-2 pt-1.5 border-t border-slate-800/70 space-y-1"
+          >
+            <div
+              v-if="totalExpenseRulesBudget > 0"
+              class="flex items-center justify-between text-indigo-300/90"
+            >
+              <span>Buiten budget (regels)</span>
+              <span>
+                € {{ totalExpenseRulesBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              </span>
+            </div>
+            <div
+              v-if="totalExpenseOver > 0"
+              class="flex items-center justify-between"
+            >
+              <span class="text-slate-400">Overschrijding</span>
+              <span class="font-medium text-rose-400">
+                € {{ totalExpenseOver.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              </span>
+            </div>
+          </div>
         </div>
-        <p class="mt-2 text-[10px] text-slate-500">klik voor detail</p>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
 
       <button
         type="button"
-        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all"
+        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all h-full flex flex-col"
         @click="kpiKey = 'netto'"
       >
         <div class="flex items-center justify-between text-slate-400 mb-3">
@@ -433,24 +466,43 @@ function catStats(cat: CatDef) {
           {{ netActual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
         <div class="mt-3 space-y-1 text-[11px] font-mono pt-3 border-t border-slate-800/80">
+          <div
+            v-if="isCurrentReportingMonth"
+            class="flex items-center justify-between text-slate-300"
+          >
+            <span class="text-slate-400">Huidig saldo</span>
+            <span>€ {{ periodStartBalance.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
+          </div>
+          <div
+            class="flex items-center justify-between"
+            :class="expectedEndOfMonth >= 0 ? 'text-indigo-300' : 'text-rose-400'"
+          >
+            <span class="text-slate-400">Verwacht eind</span>
+            <span>€ {{ expectedEndOfMonth.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Inkomsten vs begroting</span>
+            <span :class="totalIncomeDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+              {{ totalIncomeDelta >= 0 ? "+" : "" }}€
+              {{ totalIncomeDelta.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Uitgaven vs begroting</span>
+            <span :class="totalExpenseDelta <= 0 ? 'text-emerald-400' : 'text-rose-400'">
+              {{ totalExpenseDelta >= 0 ? "+" : "" }}€
+              {{ totalExpenseDelta.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
           <div class="flex items-center justify-between text-slate-300">
-            <span class="text-slate-400">Begroot</span>
-            <span :class="netEstimated >= 0 ? 'text-slate-200' : 'text-rose-400'">
-              € {{ netEstimated.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            <span class="text-slate-400">Netto vs begroting</span>
+            <span :class="netBudgetDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+              {{ netBudgetDelta >= 0 ? "+" : "" }}€
+              {{ netBudgetDelta.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
             </span>
-          </div>
-          <div class="flex items-center justify-between text-indigo-300">
-            <span>Verwacht eind</span>
-            <span :class="expectedEnd >= 0 ? 'text-indigo-300' : 'text-rose-400'">
-              € {{ expectedEnd.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-            </span>
-          </div>
-          <div class="flex items-center justify-between text-slate-500">
-            <span>Gespaard deze maand</span>
-            <span>€ {{ totalSavingsPaid.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
           </div>
         </div>
-        <p class="mt-2 text-[10px] text-slate-500">klik voor detail</p>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
     </div>
 
@@ -784,6 +836,7 @@ function catStats(cat: CatDef) {
       :columns="kpiBreakdown?.columns ?? []"
       :rows="kpiBreakdown?.rows ?? []"
       :total-value="kpiBreakdown?.totalValue ?? 0"
+      :total-label="kpiBreakdown?.totalLabel"
       :total-color-class="kpiBreakdown?.totalColorClass"
       :on-close="() => (kpiKey = null)"
     />

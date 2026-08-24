@@ -15,7 +15,7 @@ import {
 } from "lucide-vue-next";
 import type { MonthlyBudget, BudgetItem, Transaction } from "../types";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
-import { budgetItemRows } from "../kpiBreakdown";
+import { budgetItemRows, sumBudgetedAmount, sumBudgetedPaid, sumBudgetedRemaining, sumBudgetedOver } from "../kpiBreakdown";
 
 const props = withDefaults(
   defineProps<{
@@ -36,19 +36,10 @@ const showExplanation = ref(false);
 const kpiKey = ref<"budget" | "paid" | "remaining" | "over" | null>(null);
 const incomeItems = computed(() => props.currentMonth.items.filter((i) => i.type === "inkomsten"));
 
-const totalIncomeBudget = computed(() => incomeItems.value.reduce((s, i) => s + i.actual, 0));
-const totalIncomeReceived = computed(() =>
-  incomeItems.value.reduce((s, i) => s + i.paidOrReceived, 0)
-);
-const totalIncomePending = computed(() =>
-  incomeItems.value.reduce((s, i) => s + Math.max(0, i.actual - i.paidOrReceived), 0)
-);
-const totalIncomeSurplus = computed(() =>
-  incomeItems.value.reduce(
-    (s, i) => s + (i.paidOrReceived > i.actual ? i.paidOrReceived - i.actual : 0),
-    0
-  )
-);
+const totalIncomeBudget = computed(() => sumBudgetedAmount(incomeItems.value));
+const totalIncomeReceived = computed(() => sumBudgetedPaid(incomeItems.value));
+const totalIncomePending = computed(() => sumBudgetedRemaining(incomeItems.value));
+const totalIncomeSurplus = computed(() => sumBudgetedOver(incomeItems.value));
 
 const kpiMeta = computed(
   () =>
@@ -60,7 +51,7 @@ const kpiMeta = computed(
       },
       paid: {
         title: `Reeds bijgeschreven — ${props.currentMonth.monthName}`,
-        formula: "Som van Bank-bedragen op inkomstenposten met ontvangen > 0.",
+        formula: "Som van bankbedragen op inkomstenposten met begroting > 0.",
         color: "text-emerald-400",
       },
       remaining: {

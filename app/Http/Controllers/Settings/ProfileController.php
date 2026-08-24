@@ -4,28 +4,17 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 use Laravel\WorkOS\Http\Requests\AuthKitAccountDeletionRequest;
 
 class ProfileController extends Controller
 {
     /**
-     * Show the user's profile settings page.
-     */
-    public function edit(Request $request): Response
-    {
-        return Inertia::render('settings/Profile', [
-            'status' => $request->session()->get('status'),
-        ]);
-    }
-
-    /**
      * Update the user's profile settings.
      */
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request): JsonResponse|RedirectResponse
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -33,7 +22,18 @@ class ProfileController extends Controller
 
         $request->user()->update(['name' => $request->name]);
 
-        return to_route('profile.edit');
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'user' => [
+                    'id' => $request->user()->id,
+                    'name' => $request->user()->name,
+                    'email' => $request->user()->email,
+                ],
+            ]);
+        }
+
+        return redirect('/instellingen/profiel');
     }
 
     /**

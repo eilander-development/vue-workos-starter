@@ -29,10 +29,11 @@ export type KpiBreakdownProps = {
 </script>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { Table2, X } from "lucide-vue-next";
 import type { KpiBreakdownColumn, KpiBreakdownRow } from "./KpiBreakdownModal.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     isOpen: boolean;
     title: string;
@@ -58,8 +59,15 @@ function euro(value: number): string {
 }
 
 function formatCell(value: string | number): string {
+  if (value === "") return "";
   return typeof value === "number" ? `€ ${euro(value)}` : value;
 }
+
+function isSectionRow(row: KpiBreakdownRow): boolean {
+  return row.cells.tone === "section";
+}
+
+const dataRowCount = computed(() => props.rows.filter((row) => !isSectionRow(row)).length);
 
 function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBreakdownRow): string {
   return (
@@ -122,24 +130,36 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
               v-for="row in rows"
               :key="row.id"
               :class="
-                row.onClick
-                  ? 'hover:bg-slate-800/50 cursor-pointer transition-colors'
-                  : 'hover:bg-slate-800/30'
+                isSectionRow(row)
+                  ? 'bg-slate-800/40'
+                  : row.onClick
+                    ? 'hover:bg-slate-800/50 cursor-pointer transition-colors'
+                    : 'hover:bg-slate-800/30'
               "
               @click="row.onClick?.()"
             >
-              <td
-                v-for="column in columns"
-                :key="column.key"
-                class="py-2.5 px-4"
-                :class="[
-                  column.align === 'right' ? 'text-right' : 'text-left',
-                  column.mono || typeof row.cells[column.key] === 'number' ? 'font-mono' : '',
-                  cellColor(column, row.cells[column.key], row),
-                ]"
-              >
-                {{ formatCell(row.cells[column.key]) }}
-              </td>
+              <template v-if="isSectionRow(row)">
+                <td
+                  :colspan="columns.length"
+                  class="py-2 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400"
+                >
+                  {{ row.cells.label }}
+                </td>
+              </template>
+              <template v-else>
+                <td
+                  v-for="column in columns"
+                  :key="column.key"
+                  class="py-2.5 px-4"
+                  :class="[
+                    column.align === 'right' ? 'text-right' : 'text-left',
+                    column.mono || typeof row.cells[column.key] === 'number' ? 'font-mono' : '',
+                    cellColor(column, row.cells[column.key], row),
+                  ]"
+                >
+                  {{ formatCell(row.cells[column.key]) }}
+                </td>
+              </template>
             </tr>
           </tbody>
           <tfoot class="border-t border-slate-700 bg-slate-950/80 sticky bottom-0">
@@ -148,7 +168,7 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
                 :colspan="Math.max(1, columns.length - 1)"
                 class="py-3 px-4 text-xs font-semibold text-slate-300"
               >
-                {{ totalLabel }} ({{ rows.length }} {{ rows.length === 1 ? "rij" : "rijen" }})
+                {{ totalLabel }} ({{ dataRowCount }} {{ dataRowCount === 1 ? "regel" : "regels" }})
               </td>
               <td class="py-3 px-4 text-right font-mono font-bold text-sm" :class="totalColorClass">
                 € {{ euro(totalValue) }}

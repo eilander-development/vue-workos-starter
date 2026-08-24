@@ -1,0 +1,56 @@
+
+   INFO  Running migrations.  
+
+  2026_08_23_210000_add_budget_keys_to_savings_goals_table ...... 30.13ms DONE
+
+MIGRATE_EXIT:0
+
+> build
+> vite build
+
+vite v7.1.12 building for production...
+[plugin @laravel/vite-plugin-wayfinder] Types generated for actions, routes, form variants
+transforming...
+✓ 3210 modules transformed.
+rendering chunks...
+computing gzip size...
+public/build/manifest.json                                                               13.07 kB │ gzip:   1.36 kB
+public/build/assets/main-R8lm8mKC.css                                                   143.96 kB │ gzip:  21.99 kB
+public/build/assets/app-Dt-NZ0Hk.css                                                    177.27 kB │ gzip:  26.23 kB
+public/build/assets/DialogClose.vue_vue_type_script_setup_true_lang-BUCyqDzi.js           0.35 kB │ gzip:   0.28 kB
+public/build/assets/MoneyAmount.vue_vue_type_script_setup_true_lang-DMtP125H.js           0.49 kB │ gzip:   0.35 kB
+public/build/assets/DialogDescription.vue_vue_type_script_setup_true_lang-XiwoVVjx.js     0.51 kB │ gzip:   0.36 kB
+public/build/assets/CardContent.vue_vue_type_script_setup_true_lang-qHMxlECk.js           0.57 kB │ gzip:   0.33 kB
+public/build/assets/pencil-CmRtVFls.js                                                    0.81 kB │ gzip:   0.41 kB
+public/build/assets/trash-2-B0XBiYlV.js                                                   1.19 kB │ gzip:   0.48 kB
+public/build/assets/ConfirmDialog.vue_vue_type_script_setup_true_lang-C1Iodqsj.js         1.30 kB │ gzip:   0.60 kB
+public/build/assets/Filters.vue_vue_type_script_setup_true_lang-CfFoVAAE.js               1.67 kB │ gzip:   0.93 kB
+public/build/assets/TypeBadge.vue_vue_type_script_setup_true_lang-DnD9otUc.js             1.79 kB │ gzip:   0.80 kB
+public/build/assets/Savings-CZIwZ1Dn.js                                                   3.08 kB │ gzip:   1.34 kB
+public/build/assets/Income-CS0PNKeM.js                                                    3.08 kB │ gzip:   1.34 kB
+public/build/assets/Expenses-BxyKq_OZ.js                                                  3.09 kB │ gzip:   1.34 kB
+public/build/assets/BudgetSummaryTable.vue_vue_type_script_setup_true_lang-C2k9Wlwf.js    3.47 kB │ gzip:   1.14 kB
+public/build/assets/DialogTitle.vue_vue_type_script_setup_true_lang-DmBxDiIH.js           3.91 kB │ gzip:   1.36 kB
+public/build/assets/index-B_D_ojCK.js                                                     6.19 kB │ gzip:   1.50 kB
+public/build/assets/x-DJA0JmKv.js                                                         6.24 kB │ gzip:   1.58 kB
+public/build/assets/Progress.vue_vue_type_script_setup_true_lang-DkyBTeod.js              6.78 kB │ gzip:   2.08 kB
+public/build/assets/EnableBanking-D5gC1Rqe.js                                            11.48 kB │ gzip:   3.92 kB
+public/build/assets/ImportTransactions-CXdsR-GL.js                                       15.33 kB │ gzip:   4.03 kB
+public/build/assets/ImportRules-nfTP6y5R.js                                              19.65 kB │ gzip:   5.62 kB
+public/build/assets/wifi-CPw_ALbC.js                                                     25.31 kB │ gzip:   5.05 kB
+public/build/assets/Transactions-CAMEhPIc.js                                             35.06 kB │ gzip:  10.18 kB
+public/build/assets/Categories-BRCwOULw.js                                               42.23 kB │ gzip:  10.95 kB
+public/build/assets/Welcome-B2GUoLa1.js                                                  47.39 kB │ gzip:   8.87 kB
+public/build/assets/useAppearance-7P3ABTFi.js                                            76.93 kB │ gzip:  30.51 kB
+public/build/assets/scrollbar-DVYTnzoW.js                                               158.14 kB │ gzip:  45.74 kB
+public/build/assets/app-B3GUWfOQ.js                                                     162.20 kB │ gzip:  54.21 kB
+public/build/assets/main-D1IQWW3Q.js                                                    334.18 kB │ gzip:  79.31 kB
+public/build/assets/Dashboard-BTBeXyDx.js                                               623.02 kB │ gzip: 168.82 kB
+public/build/assets/Category.vue_vue_type_script_setup_true_lang-u6Lw0XKh.js            760.09 kB │ gzip: 133.20 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 17.42s
+BUILD_EXIT:0

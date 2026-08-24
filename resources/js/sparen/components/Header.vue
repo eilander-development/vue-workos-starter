@@ -13,11 +13,13 @@ import {
 } from "lucide-vue-next";
 import type { Component } from "vue";
 import type { MonthlyBudget, BankAccount, SaveState } from "../types";
+import { formatReportingPeriodShort, reportingPeriodForMonth } from "../month";
 
 const props = withDefaults(
   defineProps<{
     currentMonth: MonthlyBudget;
     allMonths: MonthlyBudget[];
+    reportingPeriodLabel: string;
     bankAccount: BankAccount;
     isSyncing: boolean;
     saveState?: SaveState;
@@ -70,6 +72,20 @@ function monthShortName(mId: string) {
   return monthById(mId)?.monthName.slice(0, 3) ?? "";
 }
 
+function monthPeriodShort(mId: string) {
+  const month = monthById(mId);
+  if (!month) {
+    return "";
+  }
+
+  const period =
+    month.periodStart && month.periodEnd
+      ? { start: month.periodStart, end: month.periodEnd }
+      : reportingPeriodForMonth(month);
+
+  return formatReportingPeriodShort(period);
+}
+
 function onMonthSelectChange(event: Event) {
   emit("selectMonth", (event.target as HTMLSelectElement).value);
 }
@@ -108,8 +124,21 @@ function onMonthSelectChange(event: Event) {
             class="bg-slate-800 text-white"
           >
             {{ m.monthName }} {{ m.year }}
+            ({{
+              m.periodStart && m.periodEnd
+                ? formatReportingPeriodShort({ start: m.periodStart, end: m.periodEnd })
+                : formatReportingPeriodShort(reportingPeriodForMonth(m))
+            }})
           </option>
         </select>
+      </div>
+
+      <div
+        class="flex items-center bg-slate-800/60 border border-slate-700/60 rounded-xl px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] text-slate-300 max-w-[9rem] sm:max-w-none"
+        :title="`Rapportageperiode: ${reportingPeriodLabel}`"
+      >
+        <span class="text-slate-400 hidden md:inline">Periode</span>
+        <span class="font-medium text-slate-200 md:ml-1.5 truncate">{{ reportingPeriodLabel }}</span>
       </div>
 
       <div
@@ -125,6 +154,7 @@ function onMonthSelectChange(event: Event) {
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
             "
+            :title="monthPeriodShort(mId)"
             @click="emit('selectMonth', mId)"
           >
             {{ monthShortName(mId) }}

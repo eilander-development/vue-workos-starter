@@ -36,11 +36,13 @@ export interface BudgetItem {
   estimated: number; // Geschat
   actual: number; // Werkelijk
   paidOrReceived: number; // Betaald of Ontvangen
+  /** Bankuitgaven op een potje: tellen niet mee in begroting, wel voor verrekening */
+  shadowSpent?: number;
   paymentCount?: number; // Aantal transacties / betalingen
   notes?: string;
   icon?: string;
   isPaid?: boolean;
-  /** Losse openstaande regels (vooral bij Openstaand) */
+  /** Losse regels per maand (som = begroot bedrag) */
   monthEntries?: BudgetMonthEntry[];
 }
 
@@ -48,8 +50,16 @@ export interface MonthlyBudget {
   monthId: string; // e.g. "jan", "feb", "mrt", etc.
   monthName: string; // "Januari", "Februari", etc.
   year: number;
+  periodStart?: string; // YYYY-MM-DD
+  periodEnd?: string; // YYYY-MM-DD
   opRekening: number; // Saldo op rekening aan begin/eind van de maand
   items: BudgetItem[];
+}
+
+export interface ReportingSettings {
+  startDayOfMonth: number;
+  defaultMonthId: string;
+  defaultYear: number;
 }
 
 export interface Transaction {
@@ -66,6 +76,9 @@ export interface Transaction {
   isPending?: boolean;
   matchedRuleId?: string;
   source: "EnableBanking" | "Handmatig" | "CSV-import";
+  /** Automatisch of handmatig: nooit koppelen aan begrotingspost */
+  linkExcluded?: boolean;
+  linkExclusionReason?: string;
 }
 
 export interface Rule {
@@ -90,6 +103,7 @@ export interface BankAccount {
   availableBalance: number;
   currency: string;
   lastSync: string;
+  lastSyncedAt?: string;
   status: "connected" | "syncing" | "disconnected" | "error";
   syncCountToday: number;
 }
@@ -117,7 +131,10 @@ export interface SavingsGoal {
   color: string;
   iconName: string;
   notes?: string;
+  /** @deprecated Prefer categoryBudgetItemIds; kept as first selected id for older payloads */
   categoryBudgetItemId?: string;
+  /** Gekoppelde uitgavenrubrieken (potjes kunnen er meerdere hebben) */
+  categoryBudgetItemIds?: string[];
   /** goal = spaardoel; pot = verrekenpotje gekoppeld aan een uitgavenrubriek */
   kind?: SavingsGoalKind;
 }

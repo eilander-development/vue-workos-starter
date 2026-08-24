@@ -5,6 +5,7 @@ import {
   Search,
   Filter,
   Plus,
+  Sparkles,
   Sliders,
   CheckSquare,
   Square,
@@ -26,11 +27,12 @@ import type {
 } from "../types";
 import LinkTransactionModal from "./LinkTransactionModal.vue";
 import TransactionDate from "./TransactionDate.vue";
-import { matchingUnlinkedTransactions } from "../matchRule";
+import { isLinkExcludedTransaction, isUnlinkedTransaction, matchingUnlinkedTransactions } from "../matchRule";
 
 const props = defineProps<{
   transactions: Transaction[];
   onAddTransaction: () => void;
+  onOpenAutoProcess: () => void;
   onDeleteTransaction: (id: string) => void;
   onLinkTransaction: (
     txId: string,
@@ -92,15 +94,19 @@ const budgetItemMap = computed(() => {
 });
 
 const unlinkedCount = computed(
-  () =>
-    props.transactions.filter((t) => !t.budgetItemId || t.categoryGroup === "Ongecategoriseerd")
-      .length
+  () => props.transactions.filter((t) => isUnlinkedTransaction(t)).length
 );
-const linkedCount = computed(() => props.transactions.length - unlinkedCount.value);
+const excludedCount = computed(
+  () => props.transactions.filter((t) => isLinkExcludedTransaction(t)).length
+);
+const linkedCount = computed(
+  () => props.transactions.filter((t) => !isUnlinkedTransaction(t) && !isLinkExcludedTransaction(t)).length
+);
 
 const filtered = computed(() =>
   props.transactions.filter((tx) => {
-    const isUnlinked = !tx.budgetItemId || tx.categoryGroup === "Ongecategoriseerd";
+    const isUnlinked = isUnlinkedTransaction(tx);
+    const isExcluded = isLinkExcludedTransaction(tx);
     const matchesSearch =
       tx.description.toLowerCase().includes(searchTerm.value.toLowerCase()) ||
       (tx.counterparty &&
@@ -115,8 +121,8 @@ const filtered = computed(() =>
     if (!matchesSearch) return false;
 
     const isJustLinked = justLinked.value?.txId === tx.id;
-    if (filterType.value === "UNLINKED" && !isUnlinked && !isJustLinked) return false;
-    if (filterType.value === "LINKED" && isUnlinked) return false;
+    if (filterType.value === "UNLINKED" && (!isUnlinked || isExcluded) && !isJustLinked) return false;
+    if (filterType.value === "LINKED" && (isUnlinked || isExcluded)) return false;
     if (filterType.value === "Inkomsten" && tx.type !== "Inkomsten") return false;
     if (filterType.value === "Uitgave" && tx.type !== "Uitgave") return false;
     if (filterType.value === "Sparen" && tx.type !== "Sparen") return false;
@@ -152,7 +158,11 @@ const filterTabs = computed(() => [
     label: `Niet direct gekoppeld (${unlinkedCount.value})`,
     isWarning: unlinkedCount.value > 0,
   },
-  { id: "LINKED" as const, label: `Gekoppeld (${linkedCount.value})`, isWarning: false },
+  {
+    id: "LINKED" as const,
+    label: `Gekoppeld (${linkedCount.value})${excludedCount.value > 0 ? ` · ${excludedCount.value} uitgesloten` : ""}`,
+    isWarning: false,
+  },
   {
     id: "Uitgave" as const,
     label: `Uitgaven (${props.transactions.filter((t) => t.type === "Uitgave").length})`,
@@ -257,6 +267,15 @@ function createRuleFromTx(tx: Transaction) {
         </p>
       </div>
       <div class="flex items-center gap-3">
+        <button
+          v-if="unlinkedCount > 0"
+          type="button"
+          class="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all active:scale-95"
+          @click="onOpenAutoProcess"
+        >
+          <Sparkles class="w-4 h-4" />
+          <span>Automatisch verwerken</span>
+        </button>
         <button
           type="button"
           class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all active:scale-95"
@@ -497,7 +516,19 @@ function createRuleFromTx(tx: Transaction) {
                 </div>
               </td>
               <td class="py-3 px-3">
-                <div v-if="tx.budgetItemId && tx.categoryGroup !== 'Ongecategoriseerd'" class="space-y-1">
+                <div v-if="tx.linkExcluded" class="space-y-1">
+                  <span
+                    class="inline-flex items-center gap-1 bg-slate-700/60 text-slate-300 border border-slate-600 px-2 py-0.5 rounded-lg font-medium text-[11px]"
+                    :title="tx.linkExclusionReason || 'Deze mutatie wordt niet gekoppeld aan een rubriek'"
+                  >
+                    <CheckCircle2 class="w-3 h-3 text-slate-400" />
+                    Niet koppelen
+                  </span>
+                  <div v-if="tx.linkExclusionReason" class="text-[10px] text-slate-500 leading-snug">
+                    {{ tx.linkExclusionReason }}
+                  </div>
+                </div>
+                <div v-else-if="tx.budgetItemId && tx.categoryGroup !== 'Ongecategoriseerd'" class="space-y-1">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
@@ -563,6 +594,7 @@ function createRuleFromTx(tx: Transaction) {
               <td class="py-3 px-3 text-center">
                 <div class="flex items-center justify-center gap-1">
                   <button
+                    v-if="!tx.linkExcluded"
                     type="button"
                     class="p-1.5 rounded-lg transition-colors"
                     :class="
@@ -580,6 +612,7 @@ function createRuleFromTx(tx: Transaction) {
                     <Link2 class="w-3.5 h-3.5" />
                   </button>
                   <button
+                    v-if="!tx.linkExcluded"
                     type="button"
                     class="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition-colors"
                     title="Maak automatische koppelregel voor dit trefwoord"

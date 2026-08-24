@@ -30,6 +30,10 @@ class SparenStateService
         'dec' => 'December',
     ];
 
+    public function __construct(
+        protected ReportingPeriod $reportingPeriod,
+    ) {}
+
     public function build(int $year = 2026): array
     {
         $categories = Category::query()->orderBy('id')->get();
@@ -38,14 +42,20 @@ class SparenStateService
         $transactions = Transaction::query()->with(['category', 'budget', 'importRule'])->orderByDesc('date')->orderByDesc('id')->get();
         $rules = ImportRule::query()->with(['category', 'budget'])->orderBy('id')->get();
         $goals = SavingsGoal::query()->orderBy('id')->get();
-        $accounts = BankAccount::query()->orderBy('id')->get();
+        $accounts = BankAccount::query()->orderByDesc('last_synced_at')->orderByDesc('id')->get();
 
         $txPayload = $transactions->map(fn (Transaction $tx) => $this->mapTransaction($tx))->values();
+        $potBudgetKeys = $goals
+            ->filter(fn (SavingsGoal $goal) => $goal->kind === 'pot')
+            ->flatMap(fn (SavingsGoal $goal) => $goal->budgetKeys())
+            ->filter()
+            ->unique()
+            ->all();
 
         $monthlyBudgets = [];
         foreach (self::MONTHS as $monthId => $monthName) {
-            $prefix = sprintf('%d-%02d', $year, $this->monthNumber($monthId));
-            $items = $budgets->map(function (Budget $budget) use ($monthValues, $monthId, $txPayload, $prefix) {
+            [$periodStart, $periodEnd] = $this->reportingPeriod->periodForSparenMonth($monthId, $year);
+            $items = $budgets->map(function (Budget $budget) use ($monthValues, $monthId, $txPayload, $year, $potBudgetKeys) {
                 $monthValue = optional($monthValues->get($budget->id))->firstWhere('month_id', $monthId);
                 $entries = collect($monthValue?->entries ?? [])
                     ->filter(fn ($row) => is_array($row))
@@ -63,20 +73,24 @@ class SparenStateService
                     ? $estimatedFromEntries
                     : (float) ($monthValue?->estimated ?? $budget->budget);
 
-                $matching = $txPayload->filter(function (array $tx) use ($budget, $prefix) {
-                    return str_starts_with((string) $tx['date'], $prefix)
-                        && ($tx['budgetItemId'] ?? null) === $budget->key;
+                $matching = $txPayload->filter(function (array $tx) use ($budget, $monthId, $year) {
+                    return $this->transactionCountsTowardBudget($budget, $tx)
+                        && $this->reportingPeriod->transactionInSparenMonth((string) $tx['date'], $monthId, $year);
                 });
-                $paid = round((float) $matching->sum(fn (array $tx) => abs((float) $tx['amount'])), 2);
+                $txPaid = round((float) $matching->sum(fn (array $tx) => abs((float) $tx['amount'])), 2);
+                $sparenType = $this->toSparenType($budget->category?->type);
+                $isPotEnvelope = $sparenType === 'uitgaven' && in_array($budget->key, $potBudgetKeys, true);
+                $paid = $isPotEnvelope ? round((float) $estimated, 2) : $txPaid;
 
                 return [
                     'id' => $budget->key,
                     'name' => $budget->name,
                     'group' => $budget->category?->name ?? 'Overige Kosten',
-                    'type' => $this->toSparenType($budget->category?->type),
+                    'type' => $sparenType,
                     'estimated' => $estimated,
                     'actual' => $estimated,
                     'paidOrReceived' => $paid,
+                    'shadowSpent' => $isPotEnvelope ? $txPaid : null,
                     'paymentCount' => $matching->count(),
                     'notes' => $budget->notes,
                     'isPaid' => $estimated > 0 && $paid >= $estimated,
@@ -84,19 +98,28 @@ class SparenStateService
                 ];
             })->values()->all();
 
-            $checking = $accounts->firstWhere('type', 'checking');
-            $isCurrent = ((int) now('Europe/Amsterdam')->format('n')) === $this->monthNumber($monthId);
+            $checking = BankAccount::latestChecking();
+            $isCurrent = $this->reportingPeriod->isCurrentSparenMonth($monthId, $year);
 
             $monthlyBudgets[] = [
                 'monthId' => $monthId,
                 'monthName' => $monthName,
                 'year' => $year,
+                'periodStart' => $periodStart->toDateString(),
+                'periodEnd' => $periodEnd->toDateString(),
                 'opRekening' => $isCurrent && $checking ? (float) $checking->balance : 0,
                 'items' => $items,
             ];
         }
 
+        $defaultMonth = $this->reportingPeriod->defaultSparenMonth();
+
         return [
+            'reporting' => [
+                'startDayOfMonth' => $this->reportingPeriod->configuredStartDay(),
+                'defaultMonthId' => $defaultMonth['monthId'],
+                'defaultYear' => $defaultMonth['year'],
+            ],
             'categories' => $categories->map(fn (Category $category) => [
                 'id' => $category->key,
                 'name' => $category->name,
@@ -120,20 +143,25 @@ class SparenStateService
                 'matchedCount' => Transaction::query()->where('rule_id', $rule->id)->count(),
             ])->values()->all(),
             'bankAccounts' => $accounts->map(fn (BankAccount $account) => $this->mapAccount($account))->values()->all(),
-            'savingsGoals' => $goals->map(fn (SavingsGoal $goal) => [
-                'id' => $goal->key,
-                'name' => $goal->name,
-                'accountIban' => $goal->account_iban,
-                'bankName' => $goal->bank_name,
-                'targetAmount' => (float) $goal->target_amount,
-                'initialAmount' => (float) $goal->initial_amount,
-                'monthlyContribution' => (float) $goal->monthly_contribution,
-                'color' => $goal->color,
-                'iconName' => $goal->icon_name,
-                'notes' => $goal->notes,
-                'categoryBudgetItemId' => $goal->budget_key,
-                'kind' => $goal->kind === 'pot' ? 'pot' : 'goal',
-            ])->values()->all(),
+            'savingsGoals' => $goals->map(function (SavingsGoal $goal) {
+                $budgetKeys = $goal->budgetKeys();
+
+                return [
+                    'id' => $goal->key,
+                    'name' => $goal->name,
+                    'accountIban' => $goal->account_iban,
+                    'bankName' => $goal->bank_name,
+                    'targetAmount' => (float) $goal->target_amount,
+                    'initialAmount' => (float) $goal->initial_amount,
+                    'monthlyContribution' => (float) $goal->monthly_contribution,
+                    'color' => $goal->color,
+                    'iconName' => $goal->icon_name,
+                    'notes' => $goal->notes,
+                    'categoryBudgetItemId' => $budgetKeys[0] ?? null,
+                    'categoryBudgetItemIds' => $budgetKeys,
+                    'kind' => $goal->kind === 'pot' ? 'pot' : 'goal',
+                ];
+            })->values()->all(),
             'savingsHistory' => $this->savingsHistory($year, $txPayload, $goals),
             'enableBankingConnected' => session()->has('eb_session_id') && filled(session('eb_session_id')),
         ];
@@ -239,6 +267,17 @@ class SparenStateService
 
     public function persistSavingsGoal(array $row): void
     {
+        $budgetKeys = collect($row['categoryBudgetItemIds'] ?? [])
+            ->filter(fn ($key) => is_string($key) && $key !== '')
+            ->values()
+            ->all();
+
+        if ($budgetKeys === [] && filled($row['categoryBudgetItemId'] ?? null)) {
+            $budgetKeys = [(string) $row['categoryBudgetItemId']];
+        }
+
+        $budgetKeys = array_values(array_unique($budgetKeys));
+
         SavingsGoal::query()->updateOrCreate(
             ['key' => $row['id']],
             [
@@ -251,7 +290,8 @@ class SparenStateService
                 'color' => $row['color'] ?? null,
                 'icon_name' => $row['iconName'] ?? null,
                 'notes' => $row['notes'] ?? null,
-                'budget_key' => $row['categoryBudgetItemId'] ?? null,
+                'budget_key' => $budgetKeys[0] ?? null,
+                'budget_keys' => $budgetKeys !== [] ? $budgetKeys : null,
                 'kind' => ($row['kind'] ?? 'goal') === 'pot' ? 'pot' : 'goal',
             ]
         );
@@ -376,6 +416,12 @@ class SparenStateService
                     : $existing?->counterparty_name,
                 'is_pending' => (bool) ($row['isPending'] ?? $existing?->is_pending ?? false),
                 'booked_time' => ! empty($row['time']) ? $row['time'] : $existing?->booked_time,
+                'link_excluded' => array_key_exists('linkExcluded', $row)
+                    ? (bool) $row['linkExcluded']
+                    : ($existing?->link_excluded ?? false),
+                'link_exclusion_reason' => array_key_exists('linkExclusionReason', $row)
+                    ? ($row['linkExclusionReason'] ?? null)
+                    : $existing?->link_exclusion_reason,
                 'source_type' => $existing?->source_type ?? $sourceType,
             ]
         );
@@ -406,6 +452,8 @@ class SparenStateService
             'counterparty' => $tx->counterparty_name ?: $tx->counterparty_iban,
             'isPending' => (bool) $tx->is_pending,
             'matchedRuleId' => $tx->importRule?->key,
+            'linkExcluded' => (bool) $tx->link_excluded,
+            'linkExclusionReason' => $tx->link_exclusion_reason,
             'source' => match ($tx->source_type) {
                 'api' => 'EnableBanking',
                 'csv' => 'CSV-import',
@@ -426,6 +474,7 @@ class SparenStateService
             'availableBalance' => (float) $account->available_balance,
             'currency' => $account->currency ?: 'EUR',
             'lastSync' => $account->last_synced_at?->timezone('Europe/Amsterdam')->format('H:i') ?? '',
+            'lastSyncedAt' => $account->last_synced_at?->timezone('Europe/Amsterdam')->toIso8601String(),
             'status' => $account->status ?: 'disconnected',
             'syncCountToday' => (int) $account->sync_count_today,
         ];
@@ -438,8 +487,10 @@ class SparenStateService
         $rows = [];
 
         foreach (self::MONTHS as $monthId => $monthName) {
-            $prefix = sprintf('%d-%02d', $year, $this->monthNumber($monthId));
-            $monthTx = $transactions->filter(fn (array $tx) => ($tx['type'] ?? '') === 'Sparen' && str_starts_with((string) $tx['date'], $prefix));
+            $monthTx = $transactions->filter(
+                fn (array $tx) => ($tx['type'] ?? '') === 'Sparen'
+                    && $this->reportingPeriod->transactionInSparenMonth((string) $tx['date'], $monthId, $year)
+            );
             $out = (float) $monthTx->filter(fn (array $tx) => $tx['amount'] < 0)->sum(fn (array $tx) => abs($tx['amount']));
             $in = (float) $monthTx->filter(fn (array $tx) => $tx['amount'] > 0)->sum('amount');
             $sparen = $planned > 0 ? min($out, $planned) : $out;
@@ -499,6 +550,25 @@ class SparenStateService
             'CSV-import' => 'csv',
             default => 'manual',
         };
+    }
+
+    private function transactionCountsTowardBudget(Budget $budget, array $tx): bool
+    {
+        if (! empty($tx['linkExcluded'])) {
+            return false;
+        }
+
+        if (($tx['budgetItemId'] ?? null) !== $budget->key) {
+            return false;
+        }
+
+        $expectedType = match ($budget->category?->type) {
+            'income' => 'Inkomsten',
+            'saving' => 'Sparen',
+            default => 'Uitgave',
+        };
+
+        return ($tx['type'] ?? '') === $expectedType;
     }
 
     private function extractIban(?string $value): ?string

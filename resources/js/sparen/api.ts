@@ -54,6 +54,8 @@ export function transactionWritePayload(tx: Transaction) {
     counterparty: tx.counterparty ?? null,
     isPending: Boolean(tx.isPending),
     matchedRuleId: tx.matchedRuleId ?? null,
+    linkExcluded: Boolean(tx.linkExcluded),
+    linkExclusionReason: tx.linkExclusionReason ?? null,
     source: tx.source,
   };
 }

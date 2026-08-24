@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   ArrowDownCircle,
   Search,
@@ -11,9 +11,10 @@ import {
   TrendingDown,
   Eye,
 } from "lucide-vue-next";
-import type { MonthlyBudget, BudgetItem, BudgetCategoryGroup, Transaction } from "../types";
+import type { MonthlyBudget, BudgetItem, BudgetCategoryGroup, Transaction, CategoryDefinition } from "../types";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
-import { budgetItemRows } from "../kpiBreakdown";
+import { budgetItemRows, sumBudgetedAmount, sumBudgetedPaid, sumBudgetedRemaining, sumBudgetedOver } from "../kpiBreakdown";
+import { hasPotEnvelope, shadowOverspend } from "../potSettlement";
 
 const props = withDefaults(
   defineProps<{
@@ -24,9 +25,11 @@ const props = withDefaults(
     onOpenAddBudgetItem: () => void;
     onOpenEditBudgetItem?: (item: BudgetItem) => void;
     onOpenItemTransactions?: (item: BudgetItem) => void;
+    categories?: CategoryDefinition[];
   }>(),
   {
     transactions: () => [],
+    categories: () => [],
   }
 );
 
@@ -44,27 +47,38 @@ const filteredItems = computed(() =>
   })
 );
 
-const totalExpenseBudget = computed(() => expenseItems.value.reduce((s, i) => s + i.actual, 0));
-const totalExpensePaid = computed(() => expenseItems.value.reduce((s, i) => s + i.paidOrReceived, 0));
-const totalExpenseRemaining = computed(() =>
-  expenseItems.value.reduce((s, i) => s + Math.max(0, i.actual - i.paidOrReceived), 0)
-);
-const totalExpenseOverpaid = computed(() =>
-  expenseItems.value.reduce(
-    (s, i) => s + (i.paidOrReceived > i.actual ? i.paidOrReceived - i.actual : 0),
-    0
-  )
-);
+const totalExpenseBudget = computed(() => sumBudgetedAmount(expenseItems.value));
+const totalExpensePaid = computed(() => sumBudgetedPaid(expenseItems.value));
+const totalExpenseRemaining = computed(() => sumBudgetedRemaining(expenseItems.value));
+const totalExpenseOverpaid = computed(() => sumBudgetedOver(expenseItems.value));
 
-const expenseGroups: BudgetCategoryGroup[] = [
-  "Woning",
-  "Dagelijks Leven",
-  "Vervoersmiddelen",
-  "Verzekeringen",
-  "Leningen",
-  "Overige Vaste Kosten",
-  "Overige Kosten",
-];
+const expenseGroups = computed((): BudgetCategoryGroup[] => {
+  const present = new Set(expenseItems.value.map((i) => i.group));
+  if (present.size === 0) return [];
+
+  if (props.categories.length > 0) {
+    const ordered = props.categories
+      .filter((c) => c.type === "uitgaven" && present.has(c.name))
+      .map((c) => c.name);
+    const extras = [...present].filter((g) => !ordered.includes(g)).sort();
+    return [...ordered, ...extras];
+  }
+
+  return [...present].sort();
+});
+
+function groupItemCount(group: BudgetCategoryGroup): number {
+  return expenseItems.value.filter((i) => i.group === group).length;
+}
+
+watch(
+  () => [expenseGroups.value, props.currentMonth.monthId] as const,
+  () => {
+    if (selectedGroup.value !== "ALL" && !expenseGroups.value.includes(selectedGroup.value)) {
+      selectedGroup.value = "ALL";
+    }
+  }
+);
 
 const kpiMeta = computed(
   () =>
@@ -76,7 +90,7 @@ const kpiMeta = computed(
       },
       paid: {
         title: `Reeds afgeschreven — ${props.currentMonth.monthName}`,
-        formula: "Som van Bank-bedragen op uitgavenposten met betaald > 0.",
+        formula: "Som van bankbedragen op uitgavenposten met begroting > 0.",
         color: "text-rose-400",
       },
       remaining: {
@@ -259,7 +273,7 @@ function itemState(item: BudgetItem) {
           "
           @click="selectedGroup = 'ALL'"
         >
-          Alle Rubrieken
+          Alle Rubrieken ({{ expenseItems.length }})
         </button>
         <button
           v-for="grp in expenseGroups"
@@ -273,7 +287,7 @@ function itemState(item: BudgetItem) {
           "
           @click="selectedGroup = grp"
         >
-          {{ grp }}
+          {{ grp }} ({{ groupItemCount(grp) }})
         </button>
       </div>
     </div>
@@ -289,6 +303,9 @@ function itemState(item: BudgetItem) {
             <div>
               <h4 class="font-bold text-white text-sm">{{ item.name }}</h4>
               <span class="text-[11px] text-slate-400">{{ item.group }}</span>
+              <span v-if="hasPotEnvelope(item)" class="block text-[10px] text-amber-300/90 mt-0.5">
+                Potje · bankuitgaven als schaduw
+              </span>
             </div>
             <div class="flex items-center gap-1.5">
               <span
@@ -363,12 +380,27 @@ function itemState(item: BudgetItem) {
               </span>
             </div>
             <div class="flex justify-between text-slate-300 pt-1 border-t border-slate-800">
-              <span class="font-sans text-slate-400">Betaald via rekening (Auto):</span>
+              <span class="font-sans text-slate-400">
+                {{ hasPotEnvelope(item) ? "Betaald (potje):" : "Betaald via rekening (Auto):" }}
+              </span>
               <span
                 class="font-semibold"
                 :class="item.paidOrReceived > 0 ? 'text-rose-400' : 'text-slate-400'"
               >
                 € {{ item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              </span>
+            </div>
+            <div
+              v-if="hasPotEnvelope(item) && (item.shadowSpent ?? 0) > 0"
+              class="flex justify-between font-semibold pt-1 border-t border-slate-800"
+              :class="shadowOverspend(item) > 0 ? 'text-rose-400' : 'text-amber-300'"
+            >
+              <span class="font-sans">Schaduwuitgaven:</span>
+              <span>
+                €
+                {{
+                  item.shadowSpent!.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+                }}
               </span>
             </div>
             <div
@@ -392,6 +424,20 @@ function itemState(item: BudgetItem) {
                 € -
                 {{
                   (item.paidOrReceived - item.actual).toLocaleString("nl-NL", {
+                    minimumFractionDigits: 2,
+                  })
+                }}
+              </span>
+            </div>
+            <div
+              v-else-if="hasPotEnvelope(item) && shadowOverspend(item) > 0"
+              class="flex justify-between text-rose-400 font-semibold pt-1 border-t border-slate-800"
+            >
+              <span class="font-sans">Schaduw overschrijding:</span>
+              <span>
+                € -
+                {{
+                  shadowOverspend(item).toLocaleString("nl-NL", {
                     minimumFractionDigits: 2,
                   })
                 }}

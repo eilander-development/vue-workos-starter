@@ -29,9 +29,21 @@ import type {
   ActiveTab,
   BankAccount,
 } from "../types";
+import { isTransactionInReportingMonth, formatReportingPeriodLabel, reportingPeriodForMonth, defaultReportingMonth } from "../month";
+import { isLinkExcludedTransaction } from "../matchRule";
+import { hasPotEnvelope, shadowOverspend } from "../potSettlement";
 import TransactionDate from "./TransactionDate.vue";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
-import { budgetItemRows, formulaRows } from "../kpiBreakdown";
+import { sumBudgetedAmount, sumBudgetedPaid, sumBudgetedRemaining, sumBudgetedOver, hasBudget } from "../kpiBreakdown";
+import {
+  buildBudgetExpenseModalBreakdown,
+  buildBudgetIncomeModalBreakdown,
+  buildBudgetSavingsModalBreakdown,
+  buildNettoModalBreakdown,
+  computeMonthKpi,
+  isActiveReportingMonth,
+  resolvePeriodStartBalance,
+} from "../monthKpi";
 
 type SpreadsheetKpiKey = "income" | "expense" | "savings" | "netto";
 
@@ -174,66 +186,85 @@ const nextMonth = computed(() =>
     : null
 );
 
-const monthPrefix = computed(
-  () => `2026-${(currentIndex.value + 1).toString().padStart(2, "0")}`
-);
 const monthTransactions = computed(() =>
-  props.transactions.filter((t) => t.date.startsWith(monthPrefix.value))
+  props.transactions.filter(
+    (t) =>
+      isTransactionInReportingMonth(t, props.currentMonth) &&
+      !isLinkExcludedTransaction(t)
+  )
 );
+
+const currentPeriodLabel = computed(() => {
+  const month = props.currentMonth;
+  const period =
+    month.periodStart && month.periodEnd
+      ? { start: month.periodStart, end: month.periodEnd }
+      : reportingPeriodForMonth(month);
+  return formatReportingPeriodLabel(period);
+});
 
 const incomeItems = computed(() => props.currentMonth.items.filter((i) => i.type === "inkomsten"));
 const expenseItems = computed(() => props.currentMonth.items.filter((i) => i.type === "uitgaven"));
 const savingsItems = computed(() => props.currentMonth.items.filter((i) => i.type === "sparen"));
 
-const totalIncomeBudget = computed(() => incomeItems.value.reduce((s, i) => s + i.actual, 0));
-const totalIncomeReceived = computed(() =>
-  incomeItems.value.reduce((s, i) => s + i.paidOrReceived, 0)
+const reportingAnchor = computed(() => defaultReportingMonth());
+
+const liveAccountBalance = computed(() => {
+  if (props.bankAccount && props.bankAccount.status !== "disconnected") {
+    return props.bankAccount.balance;
+  }
+  const anchorMonth = props.allMonths.find(
+    (m) => m.monthId === reportingAnchor.value.monthId && m.year === reportingAnchor.value.year
+  );
+  return anchorMonth?.opRekening ?? props.currentMonth.opRekening ?? 0;
+});
+
+const isCurrentReportingMonth = computed(() =>
+  isActiveReportingMonth(props.currentMonth, reportingAnchor.value)
 );
-const totalIncomeRemaining = computed(() =>
-  incomeItems.value.reduce(
-    (s, i) => s + (i.paidOrReceived < i.actual ? i.actual - i.paidOrReceived : 0),
-    0
-  )
-);
-const totalExpenseBudget = computed(() => expenseItems.value.reduce((s, i) => s + i.actual, 0));
-const totalExpensePaid = computed(() =>
-  expenseItems.value.reduce((s, i) => s + i.paidOrReceived, 0)
-);
-const totalExpenseRemaining = computed(() =>
-  expenseItems.value.reduce(
-    (s, i) => s + (i.paidOrReceived < i.actual ? i.actual - i.paidOrReceived : 0),
-    0
-  )
-);
-const totalSavingsBudget = computed(() => savingsItems.value.reduce((s, i) => s + i.actual, 0));
-const totalSavingsPaid = computed(() =>
-  savingsItems.value.reduce((s, i) => s + i.paidOrReceived, 0)
-);
-const totalSavingsRemaining = computed(() =>
-  savingsItems.value.reduce(
-    (s, i) => s + (i.paidOrReceived < i.actual ? i.actual - i.paidOrReceived : 0),
-    0
+
+const periodStartBalance = computed(() =>
+  resolvePeriodStartBalance(
+    props.currentMonth,
+    liveAccountBalance.value,
+    reportingAnchor.value
   )
 );
 
-const actualCashflow = computed(
-  () => totalIncomeReceived.value - totalExpensePaid.value - totalSavingsPaid.value
+const monthKpi = computed(() =>
+  computeMonthKpi({
+    incomeItems: incomeItems.value,
+    expenseItems: expenseItems.value,
+    savingsItems: savingsItems.value,
+    bankBalance: periodStartBalance.value,
+  })
 );
-const plannedSurplus = computed(
-  () => totalIncomeBudget.value - totalExpenseBudget.value - totalSavingsBudget.value
-);
-const ingBalance = computed(() =>
-  props.bankAccount && props.bankAccount.status !== "disconnected"
-    ? props.bankAccount.balance
-    : (props.currentMonth.opRekening ?? 0)
-);
-const expectedEndOfMonth = computed(
-  () =>
-    ingBalance.value +
-    totalIncomeRemaining.value -
-    totalExpenseRemaining.value -
-    totalSavingsRemaining.value
-);
+
+const totalIncomeBudget = computed(() => monthKpi.value.totalIncomeBudget);
+const totalIncomeReceived = computed(() => monthKpi.value.totalIncomeReceived);
+const totalIncomeRemaining = computed(() => monthKpi.value.totalIncomeRemaining);
+const totalExpenseBudget = computed(() => monthKpi.value.totalExpenseBudget);
+const totalExpenseFixedBudget = computed(() => monthKpi.value.totalExpenseFixedBudget);
+const totalExpenseRulesBudget = computed(() => monthKpi.value.totalExpenseRulesBudget);
+const expenseFixedCount = computed(() => monthKpi.value.expenseFixedCount);
+const totalExpenseFixedPaid = computed(() => monthKpi.value.totalExpenseFixedPaid);
+const totalExpenseFixedRemaining = computed(() => monthKpi.value.totalExpenseFixedRemaining);
+const totalExpensePaid = computed(() => monthKpi.value.totalExpensePaid);
+const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
+const totalSavingsBudget = computed(() => monthKpi.value.totalSavingsBudget);
+const totalSavingsPaid = computed(() => monthKpi.value.totalSavingsPaid);
+const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemaining);
+const totalSavingsOver = computed(() => monthKpi.value.totalSavingsOver);
+const totalIncomeOver = computed(() => monthKpi.value.totalIncomeOver);
+const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
+const totalExpenseOutsideBudget = computed(() => monthKpi.value.totalExpenseOutsideBudget);
+const totalIncomeBank = computed(() => monthKpi.value.totalIncomeBank);
+const totalExpenseBank = computed(() => monthKpi.value.totalExpenseBank);
+const totalSavingsBank = computed(() => monthKpi.value.totalSavingsBank);
+const actualCashflow = computed(() => monthKpi.value.actualCashflow);
+const plannedSurplus = computed(() => monthKpi.value.plannedSurplus);
+const plannedSurplusWithRules = computed(() => monthKpi.value.plannedSurplusWithRules);
+const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
 
 function openItemFromKpi(item: BudgetItem) {
   kpiKey.value = null;
@@ -246,64 +277,19 @@ const kpiBreakdown = computed(() => {
   const openFn = props.onOpenItemTransactions ? openItemFromKpi : undefined;
 
   if (key === "income") {
-    const { columns, rows } = budgetItemRows(incomeItems.value, "budget", openFn);
-    return {
-      title: "Totaal Inkomsten",
-      formula: "Som van begrote inkomstenposten (budget)",
-      subtitle: props.onOpenItemTransactions
-        ? "Klik op een post om banktransacties te openen"
-        : "Begroot per inkomstenpost, met bankbedrag ernaast",
-      columns,
-      rows,
-      totalValue: totalIncomeBudget.value,
-      totalColorClass: "text-emerald-400",
-    };
+    return buildBudgetIncomeModalBreakdown(incomeItems.value, monthKpi.value, openFn);
   }
   if (key === "expense") {
-    const { columns, rows } = budgetItemRows(expenseItems.value, "budget", openFn);
-    return {
-      title: "Totaal Uitgaven",
-      formula: "Som van begrote uitgavenposten (budget)",
-      subtitle: props.onOpenItemTransactions
-        ? "Klik op een post om banktransacties te openen"
-        : "Begroot per uitgavenpost, met bankbedrag ernaast",
-      columns,
-      rows,
-      totalValue: totalExpenseBudget.value,
-      totalColorClass: "text-rose-400",
-    };
+    return buildBudgetExpenseModalBreakdown(expenseItems.value, monthKpi.value, openFn);
   }
   if (key === "savings") {
-    const { columns, rows } = budgetItemRows(savingsItems.value, "budget", openFn);
-    return {
-      title: "Totaal Spaargeld",
-      formula: "Som van begrote spaardoelen (budget)",
-      subtitle: props.onOpenItemTransactions
-        ? "Klik op een post om banktransacties te openen"
-        : "Begroot per spaardoel, met bankbedrag ernaast",
-      columns,
-      rows,
-      totalValue: totalSavingsBudget.value,
-      totalColorClass: "text-blue-400",
-    };
+    return buildBudgetSavingsModalBreakdown(savingsItems.value, monthKpi.value, openFn);
   }
-  const { columns, rows, total } = formulaRows([
-    { id: "received", label: "Ontvangen", amount: totalIncomeReceived.value, tone: "plus" },
-    { id: "paid", label: "Betaald", amount: -totalExpensePaid.value, tone: "minus" },
-    { id: "saved", label: "Gespaard", amount: -totalSavingsPaid.value, tone: "minus" },
-    { id: "actual", label: "Werkelijk netto", amount: actualCashflow.value, tone: "result" },
-    { id: "planned", label: "Begroot", amount: plannedSurplus.value },
-    { id: "expected", label: "Verwacht eind", amount: expectedEndOfMonth.value },
-  ]);
-  return {
-    title: "Netto Overschot / Saldo",
-    formula: "Ontvangen − betaald − gespaard = werkelijk netto",
-    subtitle: "Begroot en verwacht eind ter vergelijking",
-    columns,
-    rows,
-    totalValue: total,
-    totalColorClass: actualCashflow.value >= 0 ? "text-emerald-400" : "text-rose-400",
-  };
+  return buildNettoModalBreakdown(monthKpi.value, {
+    mode: "budget",
+    bankBalance: periodStartBalance.value,
+    includeStartBalance: isCurrentReportingMonth.value,
+  });
 });
 
 const filteredGroups = computed(() =>
@@ -323,13 +309,16 @@ function groupItems(grp: CategoryGroupDef) {
 
 function groupTotals(grp: CategoryGroupDef) {
   const items = groupItems(grp);
-  const totalBudget = items.reduce((s, i) => s + i.actual, 0);
-  const totalPaidOrReceived = items.reduce((s, i) => s + i.paidOrReceived, 0);
-  const totalPaymentCount = items.reduce((s, i) => s + (i.paymentCount || 0), 0);
-  const incomeSurplus = grp.type === "inkomsten" ? Math.max(0, totalPaidOrReceived - totalBudget) : 0;
-  const incomeRemaining = grp.type === "inkomsten" ? Math.max(0, totalBudget - totalPaidOrReceived) : 0;
-  const expenseOverpaid = grp.type !== "inkomsten" ? Math.max(0, totalPaidOrReceived - totalBudget) : 0;
-  const expenseRemaining = grp.type !== "inkomsten" ? Math.max(0, totalBudget - totalPaidOrReceived) : 0;
+  const totalBudget = sumBudgetedAmount(items);
+  const totalPaidOrReceived = sumBudgetedPaid(items);
+  const totalPaymentCount = items.reduce(
+    (s, i) => s + (hasBudget(i) ? paymentCount(i) : 0),
+    0
+  );
+  const incomeSurplus = grp.type === "inkomsten" ? sumBudgetedOver(items) : 0;
+  const incomeRemaining = grp.type === "inkomsten" ? sumBudgetedRemaining(items) : 0;
+  const expenseOverpaid = grp.type !== "inkomsten" ? sumBudgetedOver(items) : 0;
+  const expenseRemaining = grp.type !== "inkomsten" ? sumBudgetedRemaining(items) : 0;
   return {
     items,
     totalBudget,
@@ -409,11 +398,14 @@ function cardId(groupKey: string) {
           >
             <ChevronLeft class="w-4 h-4" />
           </button>
-          <div class="px-3 py-1 flex items-center gap-2">
-            <Calendar class="w-4 h-4 text-indigo-400" />
-            <span class="font-bold text-white text-sm font-sans tracking-wide">
-              {{ currentMonth.monthName }} {{ currentMonth.year }}
-            </span>
+          <div class="px-3 py-1 flex flex-col">
+            <div class="flex items-center gap-2">
+              <Calendar class="w-4 h-4 text-indigo-400" />
+              <span class="font-bold text-white text-sm font-sans tracking-wide">
+                {{ currentMonth.monthName }} {{ currentMonth.year }}
+              </span>
+            </div>
+            <span class="text-[11px] text-slate-400 pl-6">{{ currentPeriodLabel }}</span>
           </div>
           <button
             type="button"
@@ -506,10 +498,10 @@ function cardId(groupKey: string) {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5 items-stretch">
       <button
         type="button"
-        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors"
+        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
         @click="kpiKey = 'income'"
       >
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
@@ -528,34 +520,52 @@ function cardId(groupKey: string) {
             <span>Nog te ontvangen</span><span>€ {{ euro(totalIncomeRemaining) }}</span>
           </div>
         </div>
-        <p class="mt-2 text-[10px] text-slate-500">klik voor detail</p>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
       <button
         type="button"
-        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors"
+        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
         @click="kpiKey = 'expense'"
       >
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span>Totaal Uitgaven</span>
-          <span class="text-rose-400 font-semibold">{{ expenseItems.length }} posten</span>
+          <span class="text-rose-400 font-semibold">{{ expenseFixedCount }} vast</span>
         </div>
-        <div class="text-lg font-bold text-white font-mono">€ {{ euro(totalExpenseBudget) }}</div>
+        <div class="text-lg font-bold text-white font-mono">€ {{ euro(totalExpenseFixedBudget) }}</div>
         <div class="mt-1.5 space-y-0.5 text-[11px] font-mono">
           <div class="flex justify-between text-rose-400">
-            <span>Betaald</span><span>€ {{ euro(totalExpensePaid) }}</span>
+            <span>Betaald</span><span>€ {{ euro(totalExpenseFixedPaid) }}</span>
           </div>
           <div
             class="flex justify-between"
-            :class="totalExpenseRemaining > 0 ? 'text-amber-400' : 'text-slate-500'"
+            :class="totalExpenseFixedRemaining > 0 ? 'text-amber-400' : 'text-slate-500'"
           >
-            <span>Nog te betalen</span><span>€ {{ euro(totalExpenseRemaining) }}</span>
+            <span>Nog te betalen</span><span>€ {{ euro(totalExpenseFixedRemaining) }}</span>
+          </div>
+          <div
+            v-if="totalExpenseRulesBudget > 0 || totalExpenseOver > 0"
+            class="mt-2 pt-1.5 border-t border-slate-800/70 space-y-0.5"
+          >
+            <div
+              v-if="totalExpenseRulesBudget > 0"
+              class="flex justify-between text-indigo-300/90"
+            >
+              <span>Buiten budget</span>
+              <span>€ {{ euro(totalExpenseRulesBudget) }}</span>
+            </div>
+            <div
+              v-if="totalExpenseOver > 0"
+              class="flex justify-between text-rose-400/90"
+            >
+              <span>Overschrijding</span><span>€ {{ euro(totalExpenseOver) }}</span>
+            </div>
           </div>
         </div>
-        <p class="mt-2 text-[10px] text-slate-500">klik voor detail</p>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
       <button
         type="button"
-        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors"
+        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
         @click="kpiKey = 'savings'"
       >
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
@@ -573,31 +583,39 @@ function cardId(groupKey: string) {
           >
             <span>Nog te sparen</span><span>€ {{ euro(totalSavingsRemaining) }}</span>
           </div>
+          <div
+            v-if="totalSavingsOver > 0"
+            class="mt-2 pt-1.5 border-t border-slate-800/70"
+          >
+            <div class="flex justify-between text-indigo-300/90">
+              <span>Buiten budget gespaard</span><span>€ {{ euro(totalSavingsOver) }}</span>
+            </div>
+          </div>
         </div>
-        <p class="mt-2 text-[10px] text-slate-500">klik voor detail</p>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
       <button
         type="button"
-        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors"
+        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
         @click="kpiKey = 'netto'"
       >
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span>Netto Overschot / Saldo</span>
-          <span class="text-indigo-400 font-semibold">Werkelijk</span>
+          <span class="text-emerald-400 font-semibold">Begroot</span>
         </div>
         <div
           class="text-lg font-bold font-mono"
-          :class="actualCashflow >= 0 ? 'text-emerald-400' : 'text-rose-400'"
-          title="Ontvangen − betaald − gespaard"
+          :class="plannedSurplus >= 0 ? 'text-white' : 'text-rose-400'"
+          title="Inkomsten − vast begroot − spaargeld (zonder regels)"
         >
-          € {{ euro(actualCashflow) }}
+          € {{ euro(plannedSurplus) }}
         </div>
         <div class="mt-1.5 space-y-0.5 text-[11px] font-mono">
           <div
-            class="flex justify-between"
-            :class="plannedSurplus >= 0 ? 'text-slate-300' : 'text-rose-400'"
+            v-if="isCurrentReportingMonth"
+            class="flex justify-between text-slate-300"
           >
-            <span>Begroot</span><span>€ {{ euro(plannedSurplus) }}</span>
+            <span>Huidig saldo</span><span>€ {{ euro(periodStartBalance) }}</span>
           </div>
           <div
             class="flex justify-between"
@@ -605,8 +623,34 @@ function cardId(groupKey: string) {
           >
             <span>Verwacht eind</span><span>€ {{ euro(expectedEndOfMonth) }}</span>
           </div>
+          <div
+            v-if="totalExpenseOutsideBudget > 0"
+            class="mt-1 pt-1 border-t border-slate-800/70 space-y-0.5"
+          >
+            <div
+              v-if="totalIncomeOver > 0 || totalIncomeOver > 0"
+              class="flex justify-between text-slate-400"
+            >
+              <span>Inkomsten buiten begroting</span>
+              <span class="text-indigo-400">+€ {{ euro(totalIncomeOver) }}</span>
+            </div>
+            <div
+              v-if="totalExpenseRulesBudget > 0"
+              class="flex justify-between text-slate-400"
+            >
+              <span>Buiten budget (regels)</span>
+              <span class="text-indigo-300">−€ {{ euro(totalExpenseRulesBudget) }}</span>
+            </div>
+            <div
+              v-if="totalExpenseOver > 0"
+              class="flex justify-between text-slate-400"
+            >
+              <span>Overschrijding</span>
+              <span class="text-rose-400">−€ {{ euro(totalExpenseOver) }}</span>
+            </div>
+          </div>
         </div>
-        <p class="mt-2 text-[10px] text-slate-500">klik voor detail</p>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
     </div>
 
@@ -725,6 +769,12 @@ function cardId(groupKey: string) {
                             >
                               {{ item.name }}
                             </span>
+                            <span
+                              v-if="hasPotEnvelope(item)"
+                              class="mt-0.5 inline-flex text-[9px] uppercase tracking-wide font-semibold text-amber-300/90 bg-amber-950/40 border border-amber-800/50 px-1.5 py-px rounded"
+                            >
+                              Potje
+                            </span>
                             <ul
                               v-if="item.monthEntries && item.monthEntries.length > 0"
                               class="mt-1 space-y-0.5 text-[10px] text-slate-500 font-normal"
@@ -788,29 +838,61 @@ function cardId(groupKey: string) {
                         € {{ item.actual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
                       </td>
                       <td class="py-2.5 px-3 text-right text-slate-200">
-                        <button
-                          v-if="onOpenItemTransactions"
-                          type="button"
-                          class="hover:text-indigo-300 hover:underline font-mono transition-colors"
-                          title="Klik om gekoppelde bankmutaties te inspecteren"
-                          @click="onOpenItemTransactions(item)"
-                        >
-                          €
-                          {{
-                            item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                          }}
-                        </button>
-                        <template v-else>
-                          €
-                          {{
-                            item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                          }}
-                        </template>
+                        <div class="flex flex-col items-end gap-0.5">
+                          <button
+                            v-if="onOpenItemTransactions && hasBudget(item)"
+                            type="button"
+                            class="hover:text-indigo-300 hover:underline font-mono transition-colors"
+                            title="Klik om gekoppelde bankmutaties te inspecteren"
+                            @click="onOpenItemTransactions(item)"
+                          >
+                            €
+                            {{
+                              item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+                            }}
+                          </button>
+                          <span
+                            v-else-if="!hasBudget(item)"
+                            class="text-slate-500"
+                            title="Geen begroting deze maand — telt niet mee in totaal"
+                          >
+                            —
+                          </span>
+                          <span v-else>
+                            €
+                            {{
+                              item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+                            }}
+                          </span>
+                          <span
+                            v-if="hasPotEnvelope(item) && (item.shadowSpent ?? 0) > 0"
+                            class="text-[10px] font-sans font-medium"
+                            :class="shadowOverspend(item) > 0 ? 'text-rose-400' : 'text-amber-400/90'"
+                            :title="
+                              shadowOverspend(item) > 0
+                                ? 'Schaduwuitgaven vanuit het potje, inclusief overschrijding'
+                                : 'Schaduwuitgaven vanuit het potje (tellen niet mee in de begroting)'
+                            "
+                          >
+                            schaduw €
+                            {{
+                              item.shadowSpent!.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+                            }}
+                            <template v-if="shadowOverspend(item) > 0">
+                              · +€
+                              {{
+                                shadowOverspend(item).toLocaleString("nl-NL", {
+                                  minimumFractionDigits: 2,
+                                })
+                              }}
+                            </template>
+                          </span>
+                        </div>
                       </td>
                       <td class="py-2.5 px-4 text-right font-medium">
                         <template v-if="grp.type === 'inkomsten'">
                           <span
-                            v-if="item.paidOrReceived > item.actual"
+                            v-if="hasBudget(item) && item.paidOrReceived > item.actual"
                             class="text-emerald-400 font-bold"
                           >
                             +€
@@ -821,7 +903,7 @@ function cardId(groupKey: string) {
                             }}
                           </span>
                           <span
-                            v-else-if="item.paidOrReceived < item.actual && item.actual > 0"
+                            v-else-if="hasBudget(item) && item.paidOrReceived < item.actual"
                             class="text-amber-400 font-bold"
                           >
                             €
@@ -831,11 +913,17 @@ function cardId(groupKey: string) {
                               })
                             }}
                           </span>
+                          <span v-else-if="!hasBudget(item) && item.paidOrReceived > 0" class="text-indigo-400">
+                            +€
+                            {{
+                              item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+                            }}
+                          </span>
                           <span v-else class="text-slate-400">€ 0,00</span>
                         </template>
                         <template v-else>
                           <span
-                            v-if="item.paidOrReceived > item.actual"
+                            v-if="hasBudget(item) && item.paidOrReceived > item.actual"
                             class="text-rose-400 font-bold"
                           >
                             € -
@@ -846,7 +934,7 @@ function cardId(groupKey: string) {
                             }}
                           </span>
                           <span
-                            v-else-if="item.paidOrReceived < item.actual && item.paidOrReceived > 0"
+                            v-else-if="hasBudget(item) && item.paidOrReceived < item.actual && item.paidOrReceived > 0"
                             class="text-amber-400"
                           >
                             €
@@ -857,10 +945,16 @@ function cardId(groupKey: string) {
                             }}
                           </span>
                           <span
-                            v-else-if="item.paidOrReceived < item.actual && item.paidOrReceived === 0"
+                            v-else-if="hasBudget(item) && item.paidOrReceived < item.actual && item.paidOrReceived === 0"
                             class="text-slate-300"
                           >
                             € {{ item.actual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                          </span>
+                          <span v-else-if="!hasBudget(item) && item.paidOrReceived > 0" class="text-rose-400">
+                            € -
+                            {{
+                              item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+                            }}
                           </span>
                           <span v-else class="text-slate-400">€ 0,00</span>
                         </template>
@@ -1054,6 +1148,10 @@ function cardId(groupKey: string) {
                   <p class="font-semibold text-white text-sm">{{ item.name }}</p>
                   <p class="text-xs text-slate-400">
                     {{ item.paymentCount || 0 }} gekoppelde transacties
+                    <template v-if="hasPotEnvelope(item) && (item.shadowSpent ?? 0) > 0">
+                      · schaduw €
+                      {{ item.shadowSpent!.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                    </template>
                   </p>
                 </div>
                 <div class="flex items-center gap-3">
@@ -1157,6 +1255,7 @@ function cardId(groupKey: string) {
       :columns="kpiBreakdown?.columns ?? []"
       :rows="kpiBreakdown?.rows ?? []"
       :total-value="kpiBreakdown?.totalValue ?? 0"
+      :total-label="kpiBreakdown?.totalLabel"
       :total-color-class="kpiBreakdown?.totalColorClass"
       :on-close="() => (kpiKey = null)"
     />
