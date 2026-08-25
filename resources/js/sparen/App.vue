@@ -1246,7 +1246,6 @@ function closeSavingsGoalModal() {
           :transactions="transactions"
           :bank-account="primaryBankAccount"
           :savings-goals="savingsGoals"
-          :on-select-month="handleSelectMonth"
           :on-update-budget-item="handleUpdateBudgetItem"
           :on-open-add-budget-item="() => handleOpenAddBudgetItemModal()"
           :on-open-edit-budget-item="handleOpenEditBudgetItem"

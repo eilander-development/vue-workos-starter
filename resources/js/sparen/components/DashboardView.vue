@@ -13,15 +13,14 @@ import {
   Car,
   Receipt,
   ShoppingBag,
-  ExternalLink,
   Filter,
   Layers,
+  LayoutDashboard,
 } from "lucide-vue-next";
 import type { MonthlyBudget, Transaction, BankAccount, ActiveTab, BudgetItem } from "../types";
 import TransactionDate from "./TransactionDate.vue";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
 import { defaultReportingMonth } from "../month";
-import { formatIbanDisplay } from "../auth";
 import {
   buildBalanceModalBreakdown,
   buildBudgetExpenseModalBreakdown,
@@ -67,14 +66,6 @@ const reportingAnchor = computed(() => defaultReportingMonth());
 
 const liveAccountBalance = computed(() => Number(props.bankAccount.balance ?? 0));
 
-const linkedCheckingIban = computed(
-  () => formatIbanDisplay(props.bankAccount.iban) || null
-);
-
-const linkedBankName = computed(
-  () => props.bankAccount.bankName || props.bankAccount.name || "bank"
-);
-
 const isCurrentReportingMonth = computed(() =>
   isActiveReportingMonth(props.currentMonth, reportingAnchor.value)
 );
@@ -106,7 +97,6 @@ const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
 const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
 const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemaining);
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
-const freeToSpend = computed(() => monthKpi.value.expectedEndOfMonth);
 
 const unpaidExpenses = computed(() =>
   expenseItems.value.filter((i) => budgetAmount(i) > paidAmount(i) && budgetAmount(i) > 0)
@@ -270,58 +260,16 @@ function catStats(cat: CatDef) {
 
 <template>
   <div id="dashboard-view" class="space-y-6">
-    <div
-      class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-5 rounded-2xl shadow-sm"
-    >
-      <div>
-        <h2 class="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-          Financieel Overzicht • {{ currentMonth.monthName }} {{ currentMonth.year }}
+    <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm">
+      <div class="flex items-center gap-2">
+        <LayoutDashboard class="w-5 h-5 text-indigo-400" />
+        <h2 class="text-xl font-bold text-white tracking-tight">
+          Dashboard • {{ currentMonth.monthName }} {{ currentMonth.year }}
         </h2>
-        <p class="text-sm text-slate-400 mt-0.5">
-          <template v-if="linkedCheckingIban">
-            Realtime status via {{ linkedBankName }} (IBAN:
-            <button
-              type="button"
-              class="font-mono text-slate-300 hover:text-indigo-300 hover:underline"
-              title="Open bankkoppeling"
-              @click="onNavigateTab('enablebanking')"
-            >
-              {{ linkedCheckingIban }}
-            </button>
-            )
-          </template>
-          <template v-else>
-            Nog geen betaalrekening gekoppeld —
-            <button
-              type="button"
-              class="text-indigo-400 hover:text-indigo-300 hover:underline"
-              @click="onNavigateTab('enablebanking')"
-            >
-              open bankkoppeling
-            </button>
-          </template>
-        </p>
       </div>
-      <div class="flex items-center gap-3">
-        <div class="bg-slate-800/80 border border-slate-700 px-3.5 py-2 rounded-xl text-right">
-          <span class="text-[11px] text-slate-400 block font-medium">Verwacht eind saldo:</span>
-          <span
-            class="text-base font-bold font-mono"
-            :class="freeToSpend >= 0 ? 'text-emerald-400' : 'text-rose-400'"
-          >
-            € {{ freeToSpend.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-          </span>
-        </div>
-        <button
-          id="dashboard-view-full-budget-btn"
-          type="button"
-          class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-indigo-600/20 transition-all"
-          @click="onNavigateTab('maandbegroting')"
-        >
-          <span>PDF Begroting</span>
-          <ExternalLink class="w-3.5 h-3.5" />
-        </button>
-      </div>
+      <p class="text-xs text-slate-400 mt-1">
+        Realtime overzicht van saldo, inkomsten, uitgaven en sparen voor deze rapportageperiode
+      </p>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">

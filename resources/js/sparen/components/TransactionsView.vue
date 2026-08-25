@@ -448,9 +448,9 @@ function createRuleFromTx(tx: Transaction) {
       </button>
     </div>
 
-    <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm space-y-3">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div class="relative flex-1">
+    <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
+      <div class="flex items-center gap-2 overflow-x-auto">
+        <div class="relative flex-1 min-w-[12rem]">
           <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             v-model="searchTerm"
@@ -459,7 +459,7 @@ function createRuleFromTx(tx: Transaction) {
             class="w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
           />
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0">
           <Filter class="w-4 h-4 text-slate-400" />
           <select
             v-model="selectedCategory"
@@ -469,55 +469,54 @@ function createRuleFromTx(tx: Transaction) {
             <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
           </select>
         </div>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
-        <button
-          v-for="tab in filterTabs"
-          :key="tab.id"
-          type="button"
-          class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5"
-          :class="
-            filterType === tab.id
-              ? tab.id === 'UNLINKED' && tab.isWarning
-                ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
-                : 'bg-indigo-600 text-white font-semibold shadow-sm'
-              : tab.id === 'UNLINKED' && tab.isWarning
-                ? 'bg-amber-950/50 text-amber-300 border border-amber-800/60 hover:bg-amber-900/60 font-semibold'
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            v-for="tab in filterTabs"
+            :key="tab.id"
+            type="button"
+            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
+            :class="
+              filterType === tab.id
+                ? tab.id === 'UNLINKED' && tab.isWarning
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                  : 'bg-indigo-600 text-white font-semibold shadow-sm'
+                : tab.id === 'UNLINKED' && tab.isWarning
+                  ? 'bg-amber-950/50 text-amber-300 border border-amber-800/60 hover:bg-amber-900/60 font-semibold'
+                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+            "
+            @click="filterType = tab.id"
+          >
+            <AlertCircle v-if="tab.id === 'UNLINKED' && tab.isWarning" class="w-3.5 h-3.5" />
+            <span>{{ tab.label }}</span>
+          </button>
+          <span class="w-px h-5 bg-slate-700 mx-0.5" aria-hidden="true" />
+          <button
+            type="button"
+            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
+            :class="
+              amountDirection === 'out'
+                ? 'bg-rose-600 text-white font-semibold shadow-sm'
                 : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
-          "
-          @click="filterType = tab.id"
-        >
-          <AlertCircle v-if="tab.id === 'UNLINKED' && tab.isWarning" class="w-3.5 h-3.5" />
-          <span>{{ tab.label }}</span>
-        </button>
-        <span class="w-px h-5 bg-slate-700 mx-0.5 hidden sm:block" aria-hidden="true" />
-        <button
-          type="button"
-          class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5"
-          :class="
-            amountDirection === 'out'
-              ? 'bg-rose-600 text-white font-semibold shadow-sm'
-              : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
-          "
-          @click="toggleAmountDirection('out')"
-        >
-          <ArrowDownRight class="w-3.5 h-3.5" />
-          <span>Eraf ({{ outgoingCount }})</span>
-        </button>
-        <button
-          type="button"
-          class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5"
-          :class="
-            amountDirection === 'in'
-              ? 'bg-emerald-600 text-white font-semibold shadow-sm'
-              : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
-          "
-          @click="toggleAmountDirection('in')"
-        >
-          <ArrowUpRight class="w-3.5 h-3.5" />
-          <span>Erbij ({{ incomingCount }})</span>
-        </button>
+            "
+            @click="toggleAmountDirection('out')"
+          >
+            <ArrowDownRight class="w-3.5 h-3.5" />
+            <span>Eraf ({{ outgoingCount }})</span>
+          </button>
+          <button
+            type="button"
+            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
+            :class="
+              amountDirection === 'in'
+                ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+            "
+            @click="toggleAmountDirection('in')"
+          >
+            <ArrowUpRight class="w-3.5 h-3.5" />
+            <span>Erbij ({{ incomingCount }})</span>
+          </button>
+        </div>
       </div>
     </div>
 

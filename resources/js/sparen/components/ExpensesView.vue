@@ -309,43 +309,45 @@ function closePotDetail() {
       </button>
     </div>
 
-    <div class="bg-[#101726] border border-slate-800 p-4 rounded-2xl shadow-sm space-y-3">
-      <div class="relative">
-        <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          v-model="searchTerm"
-          type="text"
-          placeholder="Zoek in uitgavenposten (bv. Hypotheek, GreenChoice, Benzine)..."
-          class="w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-        />
-      </div>
-      <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
-        <button
-          type="button"
-          class="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors"
-          :class="
-            selectedGroup === 'ALL'
-              ? 'bg-indigo-600 text-white font-semibold'
-              : 'bg-slate-800 text-slate-400 hover:text-white'
-          "
-          @click="selectedGroup = 'ALL'"
-        >
-          Alle Rubrieken ({{ expenseItems.length }})
-        </button>
-        <button
-          v-for="grp in expenseGroups"
-          :key="grp"
-          type="button"
-          class="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors"
-          :class="
-            selectedGroup === grp
-              ? 'bg-indigo-600 text-white font-semibold'
-              : 'bg-slate-800 text-slate-400 hover:text-white'
-          "
-          @click="selectedGroup = grp"
-        >
-          {{ grp }} ({{ groupItemCount(grp) }})
-        </button>
+    <div class="bg-[#101726] border border-slate-800 p-4 rounded-2xl shadow-sm">
+      <div class="flex items-center gap-2 overflow-x-auto">
+        <div class="relative flex-1 min-w-[12rem]">
+          <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            v-model="searchTerm"
+            type="text"
+            placeholder="Zoek in uitgavenposten (bv. Hypotheek, GreenChoice, Benzine)..."
+            class="w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors whitespace-nowrap"
+            :class="
+              selectedGroup === 'ALL'
+                ? 'bg-indigo-600 text-white font-semibold'
+                : 'bg-slate-800 text-slate-400 hover:text-white'
+            "
+            @click="selectedGroup = 'ALL'"
+          >
+            Alle Rubrieken ({{ expenseItems.length }})
+          </button>
+          <button
+            v-for="grp in expenseGroups"
+            :key="grp"
+            type="button"
+            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors whitespace-nowrap"
+            :class="
+              selectedGroup === grp
+                ? 'bg-indigo-600 text-white font-semibold'
+                : 'bg-slate-800 text-slate-400 hover:text-white'
+            "
+            @click="selectedGroup = grp"
+          >
+            {{ grp }} ({{ groupItemCount(grp) }})
+          </button>
+        </div>
       </div>
     </div>
 

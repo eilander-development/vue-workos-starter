@@ -2,6 +2,8 @@
 import { computed } from "vue";
 import {
   Calendar,
+  ChevronLeft,
+  ChevronRight,
   RefreshCw,
   Plus,
   ArrowDownCircle,
@@ -13,7 +15,6 @@ import {
 } from "lucide-vue-next";
 import type { Component } from "vue";
 import type { MonthlyBudget, BankAccount, SaveState } from "../types";
-import { formatReportingPeriodShort, reportingPeriodForMonth } from "../month";
 
 const props = withDefaults(
   defineProps<{
@@ -62,33 +63,19 @@ const save = computed(() =>
   props.saveState === "idle" ? null : SAVE_LABELS[props.saveState]
 );
 
-const quickMonthIds = ["mei", "jun", "jul", "aug", "sep", "okt"];
+const currentIndex = computed(() =>
+  props.allMonths.findIndex((m) => m.monthId === props.currentMonth.monthId)
+);
 
-function monthById(mId: string) {
-  return props.allMonths.find((x) => x.monthId === mId);
-}
+const prevMonth = computed(() =>
+  currentIndex.value > 0 ? props.allMonths[currentIndex.value - 1] : null
+);
 
-function monthShortName(mId: string) {
-  return monthById(mId)?.monthName.slice(0, 3) ?? "";
-}
-
-function monthPeriodShort(mId: string) {
-  const month = monthById(mId);
-  if (!month) {
-    return "";
-  }
-
-  const period =
-    month.periodStart && month.periodEnd
-      ? { start: month.periodStart, end: month.periodEnd }
-      : reportingPeriodForMonth(month);
-
-  return formatReportingPeriodShort(period);
-}
-
-function onMonthSelectChange(event: Event) {
-  emit("selectMonth", (event.target as HTMLSelectElement).value);
-}
+const nextMonth = computed(() =>
+  currentIndex.value >= 0 && currentIndex.value < props.allMonths.length - 1
+    ? props.allMonths[currentIndex.value + 1]
+    : null
+);
 </script>
 
 <template>
@@ -108,58 +95,38 @@ function onMonthSelectChange(event: Event) {
       </button>
 
       <div
-        class="flex items-center gap-1.5 sm:gap-2 bg-slate-800/90 border border-slate-700/80 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-sm"
+        id="header-month-nav"
+        class="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700/80 shadow-sm"
       >
-        <Calendar class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400 shrink-0" />
-        <select
-          id="header-month-select"
-          :value="currentMonth.monthId"
-          class="bg-transparent text-xs sm:text-sm font-semibold text-white focus:outline-none cursor-pointer pr-1"
-          @change="onMonthSelectChange"
+        <button
+          type="button"
+          :disabled="!prevMonth"
+          class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors rounded-lg"
+          title="Vorige maand"
+          @click="prevMonth && emit('selectMonth', prevMonth.monthId)"
         >
-          <option
-            v-for="m in allMonths"
-            :key="m.monthId"
-            :value="m.monthId"
-            class="bg-slate-800 text-white"
-          >
-            {{ m.monthName }} {{ m.year }}
-            ({{
-              m.periodStart && m.periodEnd
-                ? formatReportingPeriodShort({ start: m.periodStart, end: m.periodEnd })
-                : formatReportingPeriodShort(reportingPeriodForMonth(m))
-            }})
-          </option>
-        </select>
-      </div>
-
-      <div
-        class="flex items-center bg-slate-800/60 border border-slate-700/60 rounded-xl px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] text-slate-300 max-w-[9rem] sm:max-w-none"
-        :title="`Rapportageperiode: ${reportingPeriodLabel}`"
-      >
-        <span class="text-slate-400 hidden md:inline">Periode</span>
-        <span class="font-medium text-slate-200 md:ml-1.5 truncate">{{ reportingPeriodLabel }}</span>
-      </div>
-
-      <div
-        class="hidden xl:flex items-center gap-1 bg-slate-800/40 p-1 rounded-xl border border-slate-800"
-      >
-        <template v-for="mId in quickMonthIds" :key="mId">
-          <button
-            v-if="monthById(mId)"
-            type="button"
-            class="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
-            :class="
-              currentMonth.monthId === mId
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            "
-            :title="monthPeriodShort(mId)"
-            @click="emit('selectMonth', mId)"
-          >
-            {{ monthShortName(mId) }}
-          </button>
-        </template>
+          <ChevronLeft class="w-4 h-4" />
+        </button>
+        <div class="px-2 sm:px-3 py-0.5 flex flex-col min-w-0">
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <Calendar class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400 shrink-0" />
+            <span class="font-bold text-white text-xs sm:text-sm font-sans tracking-wide truncate">
+              {{ currentMonth.monthName }} {{ currentMonth.year }}
+            </span>
+          </div>
+          <span class="text-[10px] sm:text-[11px] text-slate-400 pl-5 sm:pl-6 truncate">
+            {{ reportingPeriodLabel }}
+          </span>
+        </div>
+        <button
+          type="button"
+          :disabled="!nextMonth"
+          class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors rounded-lg"
+          title="Volgende maand"
+          @click="nextMonth && emit('selectMonth', nextMonth.monthId)"
+        >
+          <ChevronRight class="w-4 h-4" />
+        </button>
       </div>
     </div>
 

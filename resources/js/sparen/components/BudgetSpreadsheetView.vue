@@ -1,13 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from "vue";
 import {
-  ChevronLeft,
-  ChevronRight,
   Edit2,
   Check,
   X,
   Plus,
-  Calendar,
   Wallet,
   Utensils,
   Home,
@@ -21,6 +18,7 @@ import {
   Download,
   Eye,
   AlertTriangle,
+  Table,
 } from "lucide-vue-next";
 import type {
   MonthlyBudget,
@@ -31,7 +29,7 @@ import type {
   BankAccount,
   SavingsGoal,
 } from "../types";
-import { isTransactionInReportingMonth, formatReportingPeriodLabel, reportingPeriodForMonth, defaultReportingMonth } from "../month";
+import { isTransactionInReportingMonth, defaultReportingMonth } from "../month";
 import { isLinkExcludedTransaction } from "../matchRule";
 import { computePotSettlement, hasPotEnvelope, potGoalsLinkedToItem, shadowOverspend, type PotSettlement } from "../potSettlement";
 import {
@@ -65,7 +63,6 @@ const props = withDefaults(
     transactions: Transaction[];
     bankAccount?: BankAccount;
     savingsGoals?: SavingsGoal[];
-    onSelectMonth: (monthId: string) => void;
     onUpdateBudgetItem: (itemId: string, updates: Partial<BudgetItem>) => void;
     onOpenAddBudgetItem: () => void;
     onOpenEditBudgetItem?: (item: BudgetItem) => void;
@@ -191,18 +188,6 @@ const editingId = ref<string | null>(null);
 const editActual = ref(0);
 const kpiKey = ref<SpreadsheetKpiKey | null>(null);
 
-const currentIndex = computed(() =>
-  props.allMonths.findIndex((m) => m.monthId === props.currentMonth.monthId)
-);
-const prevMonth = computed(() =>
-  currentIndex.value > 0 ? props.allMonths[currentIndex.value - 1] : null
-);
-const nextMonth = computed(() =>
-  currentIndex.value < props.allMonths.length - 1
-    ? props.allMonths[currentIndex.value + 1]
-    : null
-);
-
 const monthTransactions = computed(() =>
   props.transactions.filter(
     (t) =>
@@ -210,15 +195,6 @@ const monthTransactions = computed(() =>
       !isLinkExcludedTransaction(t)
   )
 );
-
-const currentPeriodLabel = computed(() => {
-  const month = props.currentMonth;
-  const period =
-    month.periodStart && month.periodEnd
-      ? { start: month.periodStart, end: month.periodEnd }
-      : reportingPeriodForMonth(month);
-  return formatReportingPeriodLabel(period);
-});
 
 const incomeItems = computed(() => props.currentMonth.items.filter((i) => i.type === "inkomsten"));
 const expenseItems = computed(() => props.currentMonth.items.filter((i) => i.type === "uitgaven"));
@@ -420,117 +396,17 @@ function cardId(groupKey: string) {
 <template>
   <div id="budget-cards-view" class="space-y-6">
     <div
-      class="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-4"
+      class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm"
     >
-      <div class="flex items-center gap-3">
-        <div class="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700">
-          <button
-            type="button"
-            :disabled="!prevMonth"
-            class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors rounded-lg"
-            title="Vorige maand"
-            @click="prevMonth && onSelectMonth(prevMonth.monthId)"
-          >
-            <ChevronLeft class="w-4 h-4" />
-          </button>
-          <div class="px-3 py-1 flex flex-col">
-            <div class="flex items-center gap-2">
-              <Calendar class="w-4 h-4 text-indigo-400" />
-              <span class="font-bold text-white text-sm font-sans tracking-wide">
-                {{ currentMonth.monthName }} {{ currentMonth.year }}
-              </span>
-            </div>
-            <span class="text-[11px] text-slate-400 pl-6">{{ currentPeriodLabel }}</span>
-          </div>
-          <button
-            type="button"
-            :disabled="!nextMonth"
-            class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors rounded-lg"
-            title="Volgende maand"
-            @click="nextMonth && onSelectMonth(nextMonth.monthId)"
-          >
-            <ChevronRight class="w-4 h-4" />
-          </button>
-        </div>
-        <div class="hidden lg:flex items-center gap-1 overflow-x-auto max-w-xl py-0.5">
-          <button
-            v-for="m in allMonths"
-            :key="m.monthId"
-            type="button"
-            class="text-xs px-2.5 py-1.5 rounded-xl font-medium transition-all"
-            :class="
-              m.monthId === currentMonth.monthId
-                ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            "
-            @click="onSelectMonth(m.monthId)"
-          >
-            {{ m.monthName.slice(0, 3) }}
-          </button>
-        </div>
+      <div class="flex items-center gap-2">
+        <Table class="w-5 h-5 text-indigo-400" />
+        <h2 class="text-xl font-bold text-white tracking-tight">
+          Maandbegroting • {{ currentMonth.monthName }} {{ currentMonth.year }}
+        </h2>
       </div>
-
-      <div class="flex items-center gap-2.5 flex-wrap">
-        <div class="relative">
-          <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Zoek budgetpost..."
-            class="bg-slate-800 border border-slate-700 text-xs text-slate-200 pl-8 pr-3 py-1.5 rounded-xl focus:outline-none focus:border-indigo-500 w-36 sm:w-48 placeholder-slate-500"
-          />
-        </div>
-        <div class="hidden sm:flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700 text-xs">
-          <button
-            type="button"
-            class="px-2.5 py-1 rounded-lg font-medium transition-all"
-            :class="filterType === 'alle' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
-            @click="filterType = 'alle'"
-          >
-            Alle
-          </button>
-          <button
-            type="button"
-            class="px-2.5 py-1 rounded-lg font-medium transition-all"
-            :class="filterType === 'inkomsten' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
-            @click="filterType = 'inkomsten'"
-          >
-            Inkomsten
-          </button>
-          <button
-            type="button"
-            class="px-2.5 py-1 rounded-lg font-medium transition-all"
-            :class="filterType === 'uitgaven' ? 'bg-rose-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
-            @click="filterType = 'uitgaven'"
-          >
-            Uitgaven
-          </button>
-          <button
-            type="button"
-            class="px-2.5 py-1 rounded-lg font-medium transition-all"
-            :class="filterType === 'sparen' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
-            @click="filterType = 'sparen'"
-          >
-            Sparen
-          </button>
-        </div>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all active:scale-95"
-          @click="onOpenAddBudgetItem"
-        >
-          <Plus class="w-3.5 h-3.5" />
-          <span>Nieuwe Post</span>
-        </button>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-700 transition-colors"
-          @click="handleExportCSV"
-        >
-          <Download class="w-3.5 h-3.5" />
-          <span class="hidden md:inline">CSV</span>
-        </button>
-      </div>
+      <p class="text-xs text-slate-400 mt-1">
+        Overzicht van inkomsten, uitgaven en sparen voor deze rapportageperiode, met live bankkoppeling
+      </p>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5 items-stretch">
@@ -665,6 +541,73 @@ function cardId(groupKey: string) {
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
+    </div>
+
+    <div
+      class="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3 overflow-x-auto"
+    >
+      <div class="relative flex-1 min-w-[12rem]">
+        <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Zoek budgetpost..."
+          class="w-full bg-slate-800 border border-slate-700 text-sm text-slate-200 pl-10 pr-3 py-2 rounded-xl focus:outline-none focus:border-indigo-500 placeholder-slate-500"
+        />
+      </div>
+
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700 text-xs">
+          <button
+            type="button"
+            class="px-2.5 py-1 rounded-lg font-medium transition-all"
+            :class="filterType === 'alle' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+            @click="filterType = 'alle'"
+          >
+            Alle
+          </button>
+          <button
+            type="button"
+            class="px-2.5 py-1 rounded-lg font-medium transition-all"
+            :class="filterType === 'inkomsten' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+            @click="filterType = 'inkomsten'"
+          >
+            Inkomsten
+          </button>
+          <button
+            type="button"
+            class="px-2.5 py-1 rounded-lg font-medium transition-all"
+            :class="filterType === 'uitgaven' ? 'bg-rose-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+            @click="filterType = 'uitgaven'"
+          >
+            Uitgaven
+          </button>
+          <button
+            type="button"
+            class="px-2.5 py-1 rounded-lg font-medium transition-all"
+            :class="filterType === 'sparen' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+            @click="filterType = 'sparen'"
+          >
+            Sparen
+          </button>
+        </div>
+        <button
+          type="button"
+          class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all active:scale-95"
+          @click="onOpenAddBudgetItem"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          <span>Nieuwe Post</span>
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-700 transition-colors"
+          @click="handleExportCSV"
+        >
+          <Download class="w-3.5 h-3.5" />
+          <span class="hidden md:inline">CSV</span>
+        </button>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
