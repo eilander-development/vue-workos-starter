@@ -20,6 +20,7 @@ import {
   Search,
   Download,
   Eye,
+  AlertTriangle,
 } from "lucide-vue-next";
 import type {
   MonthlyBudget,
@@ -28,13 +29,23 @@ import type {
   Transaction,
   ActiveTab,
   BankAccount,
+  SavingsGoal,
 } from "../types";
 import { isTransactionInReportingMonth, formatReportingPeriodLabel, reportingPeriodForMonth, defaultReportingMonth } from "../month";
 import { isLinkExcludedTransaction } from "../matchRule";
-import { hasPotEnvelope, shadowOverspend } from "../potSettlement";
+import { computePotSettlement, hasPotEnvelope, potGoalsLinkedToItem, shadowOverspend, type PotSettlement } from "../potSettlement";
+import {
+  sumBudgetedAmount,
+  sumBudgetedPaid,
+  sumBudgetedRemaining,
+  sumBudgetedOver,
+  hasBudget,
+  withinBudgetPaid,
+  budgetOverspend,
+} from "../kpiBreakdown";
 import TransactionDate from "./TransactionDate.vue";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
-import { sumBudgetedAmount, sumBudgetedPaid, sumBudgetedRemaining, sumBudgetedOver, hasBudget } from "../kpiBreakdown";
+import PotSettlementModal from "./PotSettlementModal.vue";
 import {
   buildBudgetExpenseModalBreakdown,
   buildBudgetIncomeModalBreakdown,
@@ -47,18 +58,24 @@ import {
 
 type SpreadsheetKpiKey = "income" | "expense" | "savings" | "netto";
 
-const props = defineProps<{
-  currentMonth: MonthlyBudget;
-  allMonths: MonthlyBudget[];
-  transactions: Transaction[];
-  bankAccount?: BankAccount;
-  onSelectMonth: (monthId: string) => void;
-  onUpdateBudgetItem: (itemId: string, updates: Partial<BudgetItem>) => void;
-  onOpenAddBudgetItem: () => void;
-  onOpenEditBudgetItem?: (item: BudgetItem) => void;
-  onOpenItemTransactions?: (item: BudgetItem) => void;
-  onNavigateTab?: (tab: ActiveTab) => void;
-}>();
+const props = withDefaults(
+  defineProps<{
+    currentMonth: MonthlyBudget;
+    allMonths: MonthlyBudget[];
+    transactions: Transaction[];
+    bankAccount?: BankAccount;
+    savingsGoals?: SavingsGoal[];
+    onSelectMonth: (monthId: string) => void;
+    onUpdateBudgetItem: (itemId: string, updates: Partial<BudgetItem>) => void;
+    onOpenAddBudgetItem: () => void;
+    onOpenEditBudgetItem?: (item: BudgetItem) => void;
+    onOpenItemTransactions?: (item: BudgetItem) => void;
+    onNavigateTab?: (tab: ActiveTab) => void;
+  }>(),
+  {
+    savingsGoals: () => [],
+  }
+);
 
 const euro = (n: number) =>
   n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -244,11 +261,7 @@ const totalIncomeBudget = computed(() => monthKpi.value.totalIncomeBudget);
 const totalIncomeReceived = computed(() => monthKpi.value.totalIncomeReceived);
 const totalIncomeRemaining = computed(() => monthKpi.value.totalIncomeRemaining);
 const totalExpenseBudget = computed(() => monthKpi.value.totalExpenseBudget);
-const totalExpenseFixedBudget = computed(() => monthKpi.value.totalExpenseFixedBudget);
-const totalExpenseRulesBudget = computed(() => monthKpi.value.totalExpenseRulesBudget);
-const expenseFixedCount = computed(() => monthKpi.value.expenseFixedCount);
-const totalExpenseFixedPaid = computed(() => monthKpi.value.totalExpenseFixedPaid);
-const totalExpenseFixedRemaining = computed(() => monthKpi.value.totalExpenseFixedRemaining);
+const expenseBudgetedCount = computed(() => monthKpi.value.expenseBudgetedCount);
 const totalExpensePaid = computed(() => monthKpi.value.totalExpensePaid);
 const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
 const totalSavingsBudget = computed(() => monthKpi.value.totalSavingsBudget);
@@ -257,18 +270,40 @@ const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemainin
 const totalSavingsOver = computed(() => monthKpi.value.totalSavingsOver);
 const totalIncomeOver = computed(() => monthKpi.value.totalIncomeOver);
 const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
-const totalExpenseOutsideBudget = computed(() => monthKpi.value.totalExpenseOutsideBudget);
-const totalIncomeBank = computed(() => monthKpi.value.totalIncomeBank);
-const totalExpenseBank = computed(() => monthKpi.value.totalExpenseBank);
-const totalSavingsBank = computed(() => monthKpi.value.totalSavingsBank);
-const actualCashflow = computed(() => monthKpi.value.actualCashflow);
-const plannedSurplus = computed(() => monthKpi.value.plannedSurplus);
-const plannedSurplusWithRules = computed(() => monthKpi.value.plannedSurplusWithRules);
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
 
 function openItemFromKpi(item: BudgetItem) {
   kpiKey.value = null;
   props.onOpenItemTransactions?.(item);
+}
+
+function linkedPotGoal(item: BudgetItem): SavingsGoal | undefined {
+  return potGoalsLinkedToItem(item.id, props.savingsGoals)[0];
+}
+
+function potSettlementFor(item: BudgetItem): PotSettlement | null {
+  const goal = linkedPotGoal(item);
+  if (!goal) return null;
+  return computePotSettlement(goal, props.currentMonth, props.transactions);
+}
+
+const potDetailItem = ref<BudgetItem | null>(null);
+
+const potDetailGoal = computed(() =>
+  potDetailItem.value ? linkedPotGoal(potDetailItem.value) ?? null : null
+);
+
+const potDetailSettlement = computed((): PotSettlement | null => {
+  if (!potDetailItem.value) return null;
+  return potSettlementFor(potDetailItem.value);
+});
+
+function openPotDetail(item: BudgetItem) {
+  potDetailItem.value = item;
+}
+
+function closePotDetail() {
+  potDetailItem.value = null;
 }
 
 const kpiBreakdown = computed(() => {
@@ -519,6 +554,14 @@ function cardId(groupKey: string) {
           >
             <span>Nog te ontvangen</span><span>€ {{ euro(totalIncomeRemaining) }}</span>
           </div>
+          <div
+            v-if="totalIncomeOver > 0"
+            class="mt-2 pt-1.5 border-t border-slate-800/70"
+          >
+            <div class="flex justify-between text-emerald-400">
+              <span>Meer ontvangen</span><span>+€ {{ euro(totalIncomeOver) }}</span>
+            </div>
+          </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
@@ -529,34 +572,24 @@ function cardId(groupKey: string) {
       >
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span>Totaal Uitgaven</span>
-          <span class="text-rose-400 font-semibold">{{ expenseFixedCount }} vast</span>
+          <span class="text-rose-400 font-semibold">{{ expenseBudgetedCount }} posten</span>
         </div>
-        <div class="text-lg font-bold text-white font-mono">€ {{ euro(totalExpenseFixedBudget) }}</div>
+        <div class="text-lg font-bold text-white font-mono">€ {{ euro(totalExpenseBudget) }}</div>
         <div class="mt-1.5 space-y-0.5 text-[11px] font-mono">
           <div class="flex justify-between text-rose-400">
-            <span>Betaald</span><span>€ {{ euro(totalExpenseFixedPaid) }}</span>
+            <span>Betaald</span><span>€ {{ euro(totalExpensePaid) }}</span>
           </div>
           <div
             class="flex justify-between"
-            :class="totalExpenseFixedRemaining > 0 ? 'text-amber-400' : 'text-slate-500'"
+            :class="totalExpenseRemaining > 0 ? 'text-amber-400' : 'text-slate-500'"
           >
-            <span>Nog te betalen</span><span>€ {{ euro(totalExpenseFixedRemaining) }}</span>
+            <span>Nog te betalen</span><span>€ {{ euro(totalExpenseRemaining) }}</span>
           </div>
           <div
-            v-if="totalExpenseRulesBudget > 0 || totalExpenseOver > 0"
+            v-if="totalExpenseOver > 0"
             class="mt-2 pt-1.5 border-t border-slate-800/70 space-y-0.5"
           >
-            <div
-              v-if="totalExpenseRulesBudget > 0"
-              class="flex justify-between text-indigo-300/90"
-            >
-              <span>Buiten budget</span>
-              <span>€ {{ euro(totalExpenseRulesBudget) }}</span>
-            </div>
-            <div
-              v-if="totalExpenseOver > 0"
-              class="flex justify-between text-rose-400/90"
-            >
+            <div class="flex justify-between text-rose-400/90">
               <span>Overschrijding</span><span>€ {{ euro(totalExpenseOver) }}</span>
             </div>
           </div>
@@ -587,8 +620,8 @@ function cardId(groupKey: string) {
             v-if="totalSavingsOver > 0"
             class="mt-2 pt-1.5 border-t border-slate-800/70"
           >
-            <div class="flex justify-between text-indigo-300/90">
-              <span>Buiten budget gespaard</span><span>€ {{ euro(totalSavingsOver) }}</span>
+            <div class="flex justify-between text-emerald-400">
+              <span>Meer gespaard</span><span>+€ {{ euro(totalSavingsOver) }}</span>
             </div>
           </div>
         </div>
@@ -601,14 +634,14 @@ function cardId(groupKey: string) {
       >
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span>Netto Overschot / Saldo</span>
-          <span class="text-emerald-400 font-semibold">Begroot</span>
+          <span class="text-indigo-400 font-semibold">Verwacht eind</span>
         </div>
         <div
           class="text-lg font-bold font-mono"
-          :class="plannedSurplus >= 0 ? 'text-white' : 'text-rose-400'"
-          title="Inkomsten − vast begroot − spaargeld (zonder regels)"
+          :class="expectedEndOfMonth >= 0 ? 'text-white' : 'text-rose-400'"
+          title="Huidig saldo + nog te ontvangen − nog te betalen − nog te sparen"
         >
-          € {{ euro(plannedSurplus) }}
+          € {{ euro(expectedEndOfMonth) }}
         </div>
         <div class="mt-1.5 space-y-0.5 text-[11px] font-mono">
           <div
@@ -618,36 +651,16 @@ function cardId(groupKey: string) {
             <span>Huidig saldo</span><span>€ {{ euro(periodStartBalance) }}</span>
           </div>
           <div
-            class="flex justify-between"
-            :class="expectedEndOfMonth >= 0 ? 'text-indigo-300' : 'text-rose-400'"
+            v-if="totalIncomeRemaining > 0"
+            class="flex justify-between text-emerald-400"
           >
-            <span>Verwacht eind</span><span>€ {{ euro(expectedEndOfMonth) }}</span>
+            <span>Nog te ontvangen</span><span>+€ {{ euro(totalIncomeRemaining) }}</span>
           </div>
-          <div
-            v-if="totalExpenseOutsideBudget > 0"
-            class="mt-1 pt-1 border-t border-slate-800/70 space-y-0.5"
-          >
-            <div
-              v-if="totalIncomeOver > 0 || totalIncomeOver > 0"
-              class="flex justify-between text-slate-400"
-            >
-              <span>Inkomsten buiten begroting</span>
-              <span class="text-indigo-400">+€ {{ euro(totalIncomeOver) }}</span>
-            </div>
-            <div
-              v-if="totalExpenseRulesBudget > 0"
-              class="flex justify-between text-slate-400"
-            >
-              <span>Buiten budget (regels)</span>
-              <span class="text-indigo-300">−€ {{ euro(totalExpenseRulesBudget) }}</span>
-            </div>
-            <div
-              v-if="totalExpenseOver > 0"
-              class="flex justify-between text-slate-400"
-            >
-              <span>Overschrijding</span>
-              <span class="text-rose-400">−€ {{ euro(totalExpenseOver) }}</span>
-            </div>
+          <div class="flex justify-between text-rose-400">
+            <span>Nog te betalen</span><span>−€ {{ euro(totalExpenseRemaining) }}</span>
+          </div>
+          <div class="flex justify-between text-blue-400">
+            <span>Nog te sparen</span><span>−€ {{ euro(totalSavingsRemaining) }}</span>
           </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
@@ -837,73 +850,96 @@ function cardId(groupKey: string) {
                       <td class="py-2.5 px-3 text-right text-slate-200">
                         € {{ item.actual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
                       </td>
-                      <td class="py-2.5 px-3 text-right text-slate-200">
+                      <td class="py-2.5 px-3 text-right">
                         <div class="flex flex-col items-end gap-0.5">
-                          <button
-                            v-if="onOpenItemTransactions && hasBudget(item)"
-                            type="button"
-                            class="hover:text-indigo-300 hover:underline font-mono transition-colors"
-                            title="Klik om gekoppelde bankmutaties te inspecteren"
-                            @click="onOpenItemTransactions(item)"
-                          >
-                            €
-                            {{
-                              item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                            }}
-                          </button>
-                          <span
-                            v-else-if="!hasBudget(item)"
-                            class="text-slate-500"
-                            title="Geen begroting deze maand — telt niet mee in totaal"
-                          >
-                            —
-                          </span>
-                          <span v-else>
-                            €
-                            {{
-                              item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                            }}
-                          </span>
-                          <span
-                            v-if="hasPotEnvelope(item) && (item.shadowSpent ?? 0) > 0"
-                            class="text-[10px] font-sans font-medium"
-                            :class="shadowOverspend(item) > 0 ? 'text-rose-400' : 'text-amber-400/90'"
-                            :title="
-                              shadowOverspend(item) > 0
-                                ? 'Schaduwuitgaven vanuit het potje, inclusief overschrijding'
-                                : 'Schaduwuitgaven vanuit het potje (tellen niet mee in de begroting)'
-                            "
-                          >
-                            schaduw €
-                            {{
-                              item.shadowSpent!.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                            }}
-                            <template v-if="shadowOverspend(item) > 0">
-                              · +€
+                          <div class="flex items-baseline justify-end gap-1.5 whitespace-nowrap">
+                            <button
+                              v-if="onOpenItemTransactions && hasBudget(item)"
+                              type="button"
+                              class="hover:underline font-mono transition-colors"
+                              :class="
+                                withinBudgetPaid(item) > 0
+                                  ? item.paidOrReceived > item.actual
+                                    ? 'text-rose-400 hover:text-rose-300'
+                                    : 'text-emerald-400 hover:text-emerald-300'
+                                  : 'text-slate-400 hover:text-indigo-300'
+                              "
+                              title="Klik om gekoppelde bankmutaties te inspecteren"
+                              @click="onOpenItemTransactions(item)"
+                            >
+                              €
                               {{
-                                shadowOverspend(item).toLocaleString("nl-NL", {
+                                withinBudgetPaid(item).toLocaleString("nl-NL", {
                                   minimumFractionDigits: 2,
                                 })
                               }}
-                            </template>
+                            </button>
+                            <span
+                              v-else-if="!hasBudget(item)"
+                              class="text-slate-500"
+                              title="Geen begroting deze maand — telt niet mee in totaal"
+                            >
+                              —
+                            </span>
+                            <span
+                              v-else
+                              :class="
+                                withinBudgetPaid(item) > 0
+                                  ? item.paidOrReceived > item.actual
+                                    ? 'text-rose-400'
+                                    : 'text-emerald-400'
+                                  : 'text-slate-400'
+                              "
+                            >
+                              €
+                              {{
+                                withinBudgetPaid(item).toLocaleString("nl-NL", {
+                                  minimumFractionDigits: 2,
+                                })
+                              }}
+                            </span>
+                          </div>
+                          <button
+                            v-if="hasPotEnvelope(item) && (item.shadowSpent ?? 0) > 0"
+                            type="button"
+                            class="inline-flex items-center gap-1 text-[10px] font-sans font-semibold rounded px-1.5 py-0.5 text-white hover:brightness-110"
+                            :class="shadowOverspend(item) > 0 ? 'bg-rose-600' : 'bg-emerald-600'"
+                            title="Bekijk potje"
+                            @click.stop="openPotDetail(item)"
+                          >
+                            +€
+                            {{
+                              item.shadowSpent!.toLocaleString("nl-NL", {
+                                minimumFractionDigits: 2,
+                              })
+                            }}
+                            <AlertTriangle
+                              v-if="shadowOverspend(item) > 0"
+                              class="w-3 h-3"
+                            />
+                          </button>
+                          <span
+                            v-if="budgetOverspend(item) > 0"
+                            class="inline-flex text-[10px] font-sans font-semibold rounded px-1.5 py-0.5"
+                            :class="
+                              grp.type === 'uitgaven'
+                                ? 'bg-rose-600 text-white'
+                                : 'bg-emerald-600 text-white'
+                            "
+                          >
+                            +€
+                            {{
+                              budgetOverspend(item).toLocaleString("nl-NL", {
+                                minimumFractionDigits: 2,
+                              })
+                            }}
                           </span>
                         </div>
                       </td>
                       <td class="py-2.5 px-4 text-right font-medium">
                         <template v-if="grp.type === 'inkomsten'">
                           <span
-                            v-if="hasBudget(item) && item.paidOrReceived > item.actual"
-                            class="text-emerald-400 font-bold"
-                          >
-                            +€
-                            {{
-                              (item.paidOrReceived - item.actual).toLocaleString("nl-NL", {
-                                minimumFractionDigits: 2,
-                              })
-                            }}
-                          </span>
-                          <span
-                            v-else-if="hasBudget(item) && item.paidOrReceived < item.actual"
+                            v-if="hasBudget(item) && item.paidOrReceived < item.actual"
                             class="text-amber-400 font-bold"
                           >
                             €
@@ -913,28 +949,11 @@ function cardId(groupKey: string) {
                               })
                             }}
                           </span>
-                          <span v-else-if="!hasBudget(item) && item.paidOrReceived > 0" class="text-indigo-400">
-                            +€
-                            {{
-                              item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                            }}
-                          </span>
                           <span v-else class="text-slate-400">€ 0,00</span>
                         </template>
                         <template v-else>
                           <span
-                            v-if="hasBudget(item) && item.paidOrReceived > item.actual"
-                            class="text-rose-400 font-bold"
-                          >
-                            € -
-                            {{
-                              (item.paidOrReceived - item.actual).toLocaleString("nl-NL", {
-                                minimumFractionDigits: 2,
-                              })
-                            }}
-                          </span>
-                          <span
-                            v-else-if="hasBudget(item) && item.paidOrReceived < item.actual && item.paidOrReceived > 0"
+                            v-if="hasBudget(item) && item.paidOrReceived < item.actual && item.paidOrReceived > 0"
                             class="text-amber-400"
                           >
                             €
@@ -949,12 +968,6 @@ function cardId(groupKey: string) {
                             class="text-slate-300"
                           >
                             € {{ item.actual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-                          </span>
-                          <span v-else-if="!hasBudget(item) && item.paidOrReceived > 0" class="text-rose-400">
-                            € -
-                            {{
-                              item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                            }}
                           </span>
                           <span v-else class="text-slate-400">€ 0,00</span>
                         </template>
@@ -1020,19 +1033,7 @@ function cardId(groupKey: string) {
 
           <template v-if="grp.type === 'inkomsten'">
             <div
-              v-if="groupTotals(grp).incomeSurplus > 0"
-              class="bg-emerald-600 text-white font-bold px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
-            >
-              <span>Teveel ontvangen</span>
-              <span class="font-mono text-sm font-extrabold">
-                +€
-                {{
-                  groupTotals(grp).incomeSurplus.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                }}
-              </span>
-            </div>
-            <div
-              v-else-if="groupTotals(grp).incomeRemaining > 0"
+              v-if="groupTotals(grp).incomeRemaining > 0"
               class="bg-amber-950/60 border-t border-amber-800/40 text-amber-300 font-medium px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
             >
               <span>Nog te ontvangen deze maand</span>
@@ -1046,7 +1047,19 @@ function cardId(groupKey: string) {
               </span>
             </div>
             <div
-              v-else
+              v-if="groupTotals(grp).incomeSurplus > 0"
+              class="bg-emerald-600 text-white font-bold px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
+            >
+              <span>Meer ontvangen</span>
+              <span class="font-mono text-sm font-extrabold">
+                +€
+                {{
+                  groupTotals(grp).incomeSurplus.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+                }}
+              </span>
+            </div>
+            <div
+              v-if="groupTotals(grp).incomeRemaining === 0 && groupTotals(grp).incomeSurplus === 0"
               class="bg-slate-800/60 border-t border-slate-700/60 text-slate-300 font-medium px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
             >
               <span>Inkomsten volledig ontvangen</span>
@@ -1055,21 +1068,7 @@ function cardId(groupKey: string) {
           </template>
           <template v-else>
             <div
-              v-if="groupTotals(grp).expenseOverpaid > 0"
-              class="bg-red-600 text-white font-bold px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
-            >
-              <span>Teveel betaald</span>
-              <span class="font-mono text-sm font-extrabold">
-                € -
-                {{
-                  groupTotals(grp).expenseOverpaid.toLocaleString("nl-NL", {
-                    minimumFractionDigits: 2,
-                  })
-                }}
-              </span>
-            </div>
-            <div
-              v-else-if="groupTotals(grp).expenseRemaining > 0"
+              v-if="groupTotals(grp).expenseRemaining > 0"
               class="bg-slate-800/50 border-t border-slate-700/50 text-slate-300 font-medium px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
             >
               <span>{{
@@ -1085,7 +1084,35 @@ function cardId(groupKey: string) {
               </span>
             </div>
             <div
-              v-else
+              v-if="groupTotals(grp).expenseOverpaid > 0 && grp.type === 'sparen'"
+              class="bg-emerald-600 text-white font-bold px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
+            >
+              <span>Meer gespaard</span>
+              <span class="font-mono text-sm font-extrabold">
+                +€
+                {{
+                  groupTotals(grp).expenseOverpaid.toLocaleString("nl-NL", {
+                    minimumFractionDigits: 2,
+                  })
+                }}
+              </span>
+            </div>
+            <div
+              v-else-if="groupTotals(grp).expenseOverpaid > 0"
+              class="bg-red-600 text-white font-bold px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
+            >
+              <span>Teveel betaald</span>
+              <span class="font-mono text-sm font-extrabold">
+                € -
+                {{
+                  groupTotals(grp).expenseOverpaid.toLocaleString("nl-NL", {
+                    minimumFractionDigits: 2,
+                  })
+                }}
+              </span>
+            </div>
+            <div
+              v-if="groupTotals(grp).expenseRemaining === 0 && groupTotals(grp).expenseOverpaid === 0"
               class="bg-emerald-950/40 border-t border-emerald-800/40 text-emerald-300 font-medium px-4 py-2.5 flex items-center justify-between text-xs tracking-wide"
             >
               <span>Alles voldaan binnen budget</span>
@@ -1258,6 +1285,14 @@ function cardId(groupKey: string) {
       :total-label="kpiBreakdown?.totalLabel"
       :total-color-class="kpiBreakdown?.totalColorClass"
       :on-close="() => (kpiKey = null)"
+    />
+
+    <PotSettlementModal
+      :is-open="!!potDetailGoal && !!potDetailSettlement"
+      :on-close="closePotDetail"
+      :goal="potDetailGoal"
+      :settlement="potDetailSettlement"
+      :current-month="currentMonth"
     />
   </div>
 </template>

@@ -2,6 +2,8 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import {
   ArrowLeftRight,
+  ArrowDownRight,
+  ArrowUpRight,
   Search,
   Filter,
   Plus,
@@ -63,6 +65,7 @@ const props = defineProps<{
 
 const searchTerm = ref("");
 const filterType = ref<"ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen">("ALL");
+const amountDirection = ref<"all" | "out" | "in">("all");
 const selectedCategory = ref("ALL");
 const selectedTxIds = ref<string[]>([]);
 const bulkCategory = ref<BudgetCategoryGroup>("Dagelijks Leven");
@@ -102,23 +105,118 @@ const excludedCount = computed(
 const linkedCount = computed(
   () => props.transactions.filter((t) => !isUnlinkedTransaction(t) && !isLinkExcludedTransaction(t)).length
 );
+const outgoingCount = computed(
+  () => props.transactions.filter((t) => t.amount < 0).length
+);
+const incomingCount = computed(
+  () => props.transactions.filter((t) => t.amount > 0).length
+);
+
+function toggleAmountDirection(next: "out" | "in") {
+  amountDirection.value = amountDirection.value === next ? "all" : next;
+}
+
+function parseSearchAmount(
+  raw: string
+): { value: number; sign: "in" | "out" | null } | null {
+  let value = raw.replace(/€/g, "").replace(/\s/g, "").trim();
+  if (!value || !/\d/.test(value)) {
+    return null;
+  }
+
+  let sign: "in" | "out" | null = null;
+  if (value.startsWith("+")) {
+    sign = "in";
+    value = value.slice(1);
+  } else if (value.startsWith("-") || value.startsWith("−")) {
+    sign = "out";
+    value = value.slice(1);
+  }
+
+  if (!/^\d[\d.,]*$/.test(value)) {
+    return null;
+  }
+
+  const lastComma = value.lastIndexOf(",");
+  const lastDot = value.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    value =
+      lastComma > lastDot
+        ? value.replace(/\./g, "").replace(",", ".")
+        : value.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    value = value.replace(/\./g, "").replace(",", ".");
+  } else if (lastDot >= 0) {
+    const decimals = value.length - lastDot - 1;
+    if (decimals === 3) {
+      value = value.replace(/\./g, "");
+    }
+  }
+
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+  return { value: Math.abs(amount), sign };
+}
+
+function amountsMatchSearch(absTx: number, parsed: number, rawToken: string): boolean {
+  if (Math.abs(absTx - parsed) < 0.005) {
+    return true;
+  }
+  const compact = rawToken.replace(/€/g, "").replace(/[+\-−\s]/g, "");
+  const hasDecimal = /[.,]/.test(compact);
+  if (!hasDecimal && Number.isInteger(parsed)) {
+    return Math.floor(absTx + 1e-9) === parsed;
+  }
+  return false;
+}
+
+function transactionMatchesSearchToken(
+  tx: Transaction,
+  token: string,
+  itemName: string | undefined
+): boolean {
+  const parsed = parseSearchAmount(token);
+  if (parsed) {
+    const signOk =
+      (parsed.sign !== "out" || tx.amount < 0) &&
+      (parsed.sign !== "in" || tx.amount > 0);
+    if (signOk && amountsMatchSearch(Math.abs(tx.amount), parsed.value, token)) {
+      return true;
+    }
+    if (parsed.sign) {
+      return false;
+    }
+  }
+
+  const needle = token.toLowerCase();
+  return (
+    tx.description.toLowerCase().includes(needle) ||
+    (tx.counterparty && tx.counterparty.toLowerCase().includes(needle)) ||
+    (!!itemName && itemName.toLowerCase().includes(needle)) ||
+    tx.date.includes(needle)
+  );
+}
 
 const filtered = computed(() =>
   props.transactions.filter((tx) => {
     const isUnlinked = isUnlinkedTransaction(tx);
     const isExcluded = isLinkExcludedTransaction(tx);
-    const matchesSearch =
-      tx.description.toLowerCase().includes(searchTerm.value.toLowerCase()) ||
-      (tx.counterparty &&
-        tx.counterparty.toLowerCase().includes(searchTerm.value.toLowerCase())) ||
-      (tx.budgetItemId &&
-        budgetItemMap.value
-          .get(tx.budgetItemId)
-          ?.name.toLowerCase()
-          .includes(searchTerm.value.toLowerCase())) ||
-      tx.amount.toString().includes(searchTerm.value);
+    const query = searchTerm.value.trim();
+    if (query) {
+      const itemName = tx.budgetItemId
+        ? budgetItemMap.value.get(tx.budgetItemId)?.name
+        : undefined;
+      const tokens = query.split(/\s+/).filter(Boolean);
+      const matchesSearch = tokens.every((token) =>
+        transactionMatchesSearchToken(tx, token, itemName)
+      );
+      if (!matchesSearch) return false;
+    }
 
-    if (!matchesSearch) return false;
+    if (amountDirection.value === "out" && tx.amount >= 0) return false;
+    if (amountDirection.value === "in" && tx.amount <= 0) return false;
 
     const isJustLinked = justLinked.value?.txId === tx.id;
     if (filterType.value === "UNLINKED" && (!isUnlinked || isExcluded) && !isJustLinked) return false;
@@ -234,7 +332,8 @@ function handleLink(
           props.transactions,
           createRule.keyword,
           createRule.matchField,
-          txId
+          txId,
+          createRule.targetType
         ).length
       : 0,
   };
@@ -356,7 +455,7 @@ function createRuleFromTx(tx: Transaction) {
           <input
             v-model="searchTerm"
             type="text"
-            placeholder="Zoek op omschrijving, bedrijf, begrotingspost of bedrag (bv. Albert Heijn, Boodschappen, € 45,80)..."
+            placeholder="Zoek op omschrijving, bedrijf of bedrag (bv. Albert Heijn, 45,80, -8,39)..."
             class="w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
           />
         </div>
@@ -391,6 +490,33 @@ function createRuleFromTx(tx: Transaction) {
         >
           <AlertCircle v-if="tab.id === 'UNLINKED' && tab.isWarning" class="w-3.5 h-3.5" />
           <span>{{ tab.label }}</span>
+        </button>
+        <span class="w-px h-5 bg-slate-700 mx-0.5 hidden sm:block" aria-hidden="true" />
+        <button
+          type="button"
+          class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5"
+          :class="
+            amountDirection === 'out'
+              ? 'bg-rose-600 text-white font-semibold shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+          "
+          @click="toggleAmountDirection('out')"
+        >
+          <ArrowDownRight class="w-3.5 h-3.5" />
+          <span>Eraf ({{ outgoingCount }})</span>
+        </button>
+        <button
+          type="button"
+          class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5"
+          :class="
+            amountDirection === 'in'
+              ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+              : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+          "
+          @click="toggleAmountDirection('in')"
+        >
+          <ArrowUpRight class="w-3.5 h-3.5" />
+          <span>Erbij ({{ incomingCount }})</span>
         </button>
       </div>
     </div>
@@ -517,13 +643,24 @@ function createRuleFromTx(tx: Transaction) {
               </td>
               <td class="py-3 px-3">
                 <div v-if="tx.linkExcluded" class="space-y-1">
-                  <span
-                    class="inline-flex items-center gap-1 bg-slate-700/60 text-slate-300 border border-slate-600 px-2 py-0.5 rounded-lg font-medium text-[11px]"
-                    :title="tx.linkExclusionReason || 'Deze mutatie wordt niet gekoppeld aan een rubriek'"
-                  >
-                    <CheckCircle2 class="w-3 h-3 text-slate-400" />
-                    Niet koppelen
-                  </span>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span
+                      class="inline-flex items-center gap-1 bg-slate-700/60 text-slate-300 border border-slate-600 px-2 py-0.5 rounded-lg font-medium text-[11px]"
+                      :title="tx.linkExclusionReason || 'Deze mutatie wordt niet gekoppeld aan een rubriek'"
+                    >
+                      <CheckCircle2 class="w-3 h-3 text-slate-400" />
+                      Niet koppelen
+                    </span>
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-all shadow-sm active:scale-95"
+                      title="Toch aan een begrotingspost koppelen"
+                      @click="selectedTxForLinking = tx"
+                    >
+                      <Link2 class="w-3 h-3" />
+                      <span>Toch koppelen</span>
+                    </button>
+                  </div>
                   <div v-if="tx.linkExclusionReason" class="text-[10px] text-slate-500 leading-snug">
                     {{ tx.linkExclusionReason }}
                   </div>

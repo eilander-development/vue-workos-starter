@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { Calendar } from "lucide-vue-next";
 import type { MonthlyBudget } from "../types";
+import { kpiFromMonthlyBudget } from "../monthKpi";
 
 const props = defineProps<{
   allMonths: MonthlyBudget[];
@@ -10,36 +11,18 @@ const props = defineProps<{
 
 const monthData = computed(() =>
   props.allMonths.map((m) => {
-    const incomeBudget = m.items
-      .filter((i) => i.type === "inkomsten")
-      .reduce((s, i) => s + (i.actual ?? i.estimated ?? 0), 0);
-    const expenseBudget = m.items
-      .filter((i) => i.type === "uitgaven")
-      .reduce((s, i) => s + (i.actual ?? i.estimated ?? 0), 0);
-    const savingsBudget = m.items
-      .filter((i) => i.type === "sparen")
-      .reduce((s, i) => s + (i.actual ?? i.estimated ?? 0), 0);
-    const income = m.items
-      .filter((i) => i.type === "inkomsten")
-      .reduce((s, i) => s + Number(i.paidOrReceived ?? 0), 0);
-    const expense = m.items
-      .filter((i) => i.type === "uitgaven")
-      .reduce((s, i) => s + Number(i.paidOrReceived ?? 0), 0);
-    const savings = m.items
-      .filter((i) => i.type === "sparen")
-      .reduce((s, i) => s + Number(i.paidOrReceived ?? 0), 0);
-    const net = income - expense - savings;
+    const kpi = kpiFromMonthlyBudget(m, m.opRekening ?? 0);
     return {
       monthId: m.monthId,
       name: m.monthName,
       opRekening: m.opRekening,
-      income,
-      expense,
-      savings,
-      net,
-      incomeBudget,
-      expenseBudget,
-      savingsBudget,
+      income: kpi.totalIncomeReceived,
+      expense: kpi.totalExpensePaid,
+      savings: kpi.totalSavingsPaid,
+      net: kpi.totalIncomeReceived - kpi.totalExpensePaid - kpi.totalSavingsPaid,
+      incomeBudget: kpi.totalIncomeBudget,
+      expenseBudget: kpi.totalExpenseBudget,
+      savingsBudget: kpi.totalSavingsBudget,
     };
   })
 );
@@ -65,8 +48,7 @@ const totalYearNet = computed(
           </h2>
         </div>
         <p class="text-xs text-slate-400 mt-1">
-          Werkelijke bankmutaties per maand. Begrote bedragen staan in de maandbegroting; die zijn nog niet
-          per maand ingevuld.
+          Zelfde cijfers als dashboard en maandbegroting: ontvangen, betaald en gespaard binnen de envelop.
         </p>
       </div>
     </div>

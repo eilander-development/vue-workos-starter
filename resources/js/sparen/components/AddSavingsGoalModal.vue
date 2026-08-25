@@ -59,7 +59,8 @@ watch(
       accountIban.value = g.accountIban;
       bankName.value = g.bankName || "Spaarrekening";
       targetAmount.value = g.targetAmount ? g.targetAmount.toString() : "";
-      initialAmount.value = g.initialAmount ? g.initialAmount.toString() : "";
+      initialAmount.value =
+        g.initialAmount != null && Number.isFinite(g.initialAmount) ? String(g.initialAmount) : "";
       monthlyContribution.value = g.monthlyContribution ? g.monthlyContribution.toString() : "";
       color.value = g.color || "emerald";
       iconName.value = g.iconName || "ShieldCheck";
@@ -404,11 +405,14 @@ function pickBankSuggestion(value: string) {
               v-model="initialAmount"
               type="number"
               step="0.01"
-              min="0"
               inputmode="decimal"
-              placeholder="Bijv. 313,91"
+              placeholder="Bijv. 313,91 of -250"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
+            <p class="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+              Wordt opgeteld bij de geïmporteerde stortingen en opnames. Negatief mag: zo compenseer je
+              mutaties uit het verleden die het getoonde saldo te hoog zouden zetten.
+            </p>
           </div>
 
           <div>

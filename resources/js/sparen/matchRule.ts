@@ -1,6 +1,7 @@
-import type { Transaction } from "./types";
+import type { BudgetType, Rule, Transaction } from "./types";
 
 export type RuleMatchField = "description" | "counterparty" | "both";
+export type RuleAmountDirection = "in" | "out" | "any";
 
 export function isLinkExcludedTransaction(
   tx: Pick<Transaction, "linkExcluded">
@@ -41,17 +42,46 @@ export function transactionMatchesKeyword(
   return inDescription || inCounterparty;
 }
 
+/** Inkomsten = alleen erbij; uitgaven = alleen eraf; sparen = beide (Naar/Van). */
+export function ruleAmountDirection(targetType: BudgetType): RuleAmountDirection {
+  if (targetType === "inkomsten") return "in";
+  if (targetType === "uitgaven") return "out";
+  return "any";
+}
+
+export function transactionMatchesRuleDirection(
+  tx: Pick<Transaction, "amount">,
+  direction: RuleAmountDirection
+): boolean {
+  if (direction === "in") return tx.amount > 0;
+  if (direction === "out") return tx.amount < 0;
+  return true;
+}
+
+export function transactionMatchesRule(
+  tx: Pick<Transaction, "description" | "counterparty" | "amount">,
+  rule: Pick<Rule, "keyword" | "matchField" | "targetType">
+): boolean {
+  return (
+    transactionMatchesKeyword(tx, rule.keyword, rule.matchField) &&
+    transactionMatchesRuleDirection(tx, ruleAmountDirection(rule.targetType))
+  );
+}
+
 export function matchingUnlinkedTransactions(
   transactions: Transaction[],
   keyword: string,
   matchField: RuleMatchField,
-  exceptId?: string
+  exceptId?: string,
+  targetType?: BudgetType
 ): Transaction[] {
+  const direction = targetType ? ruleAmountDirection(targetType) : "any";
   return transactions.filter(
     (tx) =>
       tx.id !== exceptId &&
       isUnlinkedTransaction(tx) &&
-      transactionMatchesKeyword(tx, keyword, matchField)
+      transactionMatchesKeyword(tx, keyword, matchField) &&
+      transactionMatchesRuleDirection(tx, direction)
   );
 }
 

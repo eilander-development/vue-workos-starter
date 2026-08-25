@@ -4,6 +4,7 @@ import type { KpiBreakdownColumn, KpiBreakdownRow } from "./components/KpiBreakd
 import {
   budgetItemRows,
   formulaRows,
+  hasBudget,
   isFixedBudgetItem,
   isMonthEntryBudgetItem,
   sumAllPaid,
@@ -95,6 +96,7 @@ export type MonthKpiSnapshot = {
   netBudget: number;
   netBudgetDelta: number;
   expenseFixedCount: number;
+  expenseBudgetedCount: number;
 };
 
 export type KpiModalBreakdown = {
@@ -127,7 +129,7 @@ export function computeMonthKpi(input: MonthKpiInput): MonthKpiSnapshot {
   const totalExpensePaid = sumBudgetedPaid(expenseItems);
   const totalExpenseRemaining = sumBudgetedRemaining(expenseItems);
   const totalExpenseOver = sumBudgetedOver(expenseItems);
-  const totalExpenseOutsideBudget = totalExpenseRulesBudget + totalExpenseOver;
+  const totalExpenseOutsideBudget = totalExpenseOver;
   let totalExpenseBank = sumAllPaid(expenseItems);
   const totalExpenseDelta = sumBudgetDelta(expenseItems);
 
@@ -145,15 +147,13 @@ export function computeMonthKpi(input: MonthKpiInput): MonthKpiSnapshot {
     totalSavingsBank = raw.totalSavingsBank;
   }
 
-  const plannedSurplus = totalIncomeBudget - totalExpenseFixedBudget - totalSavingsBudget;
-  const plannedSurplusWithRules = totalIncomeBudget - totalExpenseBudget - totalSavingsBudget;
+  const plannedSurplus = totalIncomeBudget - totalExpenseBudget - totalSavingsBudget;
+  const plannedSurplusWithRules = plannedSurplus;
   const expectedEndOfMonth =
     bankBalance +
     totalIncomeRemaining -
-    totalExpenseFixedRemaining -
-    totalSavingsRemaining -
-    totalExpenseRulesBudget -
-    totalExpenseOver;
+    totalExpenseRemaining -
+    totalSavingsRemaining;
   const actualCashflow = totalIncomeBank - totalExpenseBank - totalSavingsBank;
   const netActual = actualCashflow;
   const netBudget = totalIncomeBudget - totalExpenseBudget - totalSavingsBudget;
@@ -192,7 +192,21 @@ export function computeMonthKpi(input: MonthKpiInput): MonthKpiSnapshot {
     netBudget,
     netBudgetDelta,
     expenseFixedCount: expenseItems.filter(isFixedBudgetItem).length,
+    expenseBudgetedCount: expenseItems.filter(hasBudget).length,
   };
+}
+
+/** Zelfde KPI-snapshot als dashboard/maandbegroting, per maand (envelop). */
+export function kpiFromMonthlyBudget(
+  month: Pick<MonthlyBudget, "items">,
+  bankBalance = 0
+): MonthKpiSnapshot {
+  return computeMonthKpi({
+    incomeItems: month.items.filter((item) => item.type === "inkomsten"),
+    expenseItems: month.items.filter((item) => item.type === "uitgaven"),
+    savingsItems: month.items.filter((item) => item.type === "sparen"),
+    bankBalance,
+  });
 }
 
 export function isActiveReportingMonth(
@@ -235,33 +249,17 @@ export function buildForecastFormulaLines(
     },
     {
       id: "exp-rem",
-      label: "− Nog te betalen (vast)",
-      amount: -kpi.totalExpenseFixedRemaining,
+      label: "− Nog te betalen (vaste kosten)",
+      amount: -kpi.totalExpenseRemaining,
       tone: "minus",
     },
     {
       id: "sav-rem",
-      label: "− Nog te sparen (begroot)",
+      label: "− Nog te sparen",
       amount: -kpi.totalSavingsRemaining,
       tone: "minus",
     }
   );
-  if (kpi.totalExpenseRulesBudget > 0) {
-    lines.push({
-      id: "exp-rules-out",
-      label: "− Buiten budget (regels)",
-      amount: -kpi.totalExpenseRulesBudget,
-      tone: "minus",
-    });
-  }
-  if (kpi.totalExpenseOver > 0) {
-    lines.push({
-      id: "exp-over",
-      label: "− Overschrijding",
-      amount: -kpi.totalExpenseOver,
-      tone: "minus",
-    });
-  }
   lines.push({
     id: "expected",
     label: "= Verwacht saldo eind maand",
@@ -282,8 +280,8 @@ export function buildBalanceModalBreakdown(
   return {
     title: "Huidig Saldo (ING)",
     formula: includeStartBalance
-      ? "Huidig saldo − openstaand − buiten budget − overschrijving = verwacht eind"
-      : "Nog te ontvangen − nog te betalen − nog te sparen − buiten budget − overschrijving",
+      ? "Huidig saldo + nog te ontvangen − nog te betalen − nog te sparen = verwacht eind"
+      : "Nog te ontvangen − nog te betalen − nog te sparen",
     subtitle: "Zelfde prognose als op maandbegroting",
     columns,
     rows,
@@ -300,19 +298,11 @@ export function buildDashboardExpenseModalBreakdown(
   const lines: FormulaLine[] = [
     {
       id: "within",
-      label: "Binnen begroting (vast)",
-      amount: -kpi.totalExpenseFixedPaid,
+      label: "Binnen begroting",
+      amount: -kpi.totalExpensePaid,
       tone: "minus",
     },
   ];
-  if (kpi.totalExpenseRulesPaid > 0) {
-    lines.push({
-      id: "rules-paid",
-      label: "Buiten budget (regels, betaald)",
-      amount: -kpi.totalExpenseRulesPaid,
-      tone: "minus",
-    });
-  }
   if (kpi.totalExpenseOver > 0) {
     lines.push({
       id: "over",
@@ -327,19 +317,11 @@ export function buildDashboardExpenseModalBreakdown(
     amount: -kpi.totalExpenseBank,
     tone: "result",
   });
-  if (kpi.totalExpenseRulesBudget > 0) {
-    lines.push({
-      id: "rules-open",
-      label: "Nog open buiten budget (regels)",
-      amount: -Math.max(0, kpi.totalExpenseRulesBudget - kpi.totalExpenseRulesPaid),
-      tone: "minus",
-    });
-  }
   const { columns, rows } = formulaRows(lines);
   return {
     title: `Uitgaven (${monthName})`,
-    formula: "Vast + regels + overschrijding = totaal betaald (bank)",
-    subtitle: `Vast begroot: € ${euro(kpi.totalExpenseFixedBudget)} · Buiten budget (regels): € ${euro(kpi.totalExpenseRulesBudget)}`,
+    formula: "Begroot betaald + overschrijding = totaal betaald (bank)",
+    subtitle: `Begroot: € ${euro(kpi.totalExpenseBudget)} · waarvan regels per maand: € ${euro(kpi.totalExpenseRulesBudget)}`,
     columns,
     rows,
     totalValue: kpi.totalExpenseBank,
@@ -415,13 +397,6 @@ export function buildNettoModalBreakdown(
   }
 
   const nettoLines: FormulaLine[] = [
-    {
-      id: "planned-card",
-      label: "Netto overschot (vast) — hoofdgetal kaart",
-      amount: kpi.plannedSurplus,
-      tone: "neutral",
-    },
-    { id: "sec-forecast", label: "Prognose saldo eind maand", tone: "section" },
     ...buildForecastFormulaLines(
       kpi,
       options.bankBalance,
@@ -433,9 +408,9 @@ export function buildNettoModalBreakdown(
   return {
     title: "Netto Overschot / Saldo",
     formula: (options.includeStartBalance ?? true)
-      ? "Huidig saldo − openstaand − buiten budget (regels) − overschrijding"
-      : "Nog te ontvangen − nog te betalen − nog te sparen − buiten budget − overschrijding",
-    subtitle: `Hoofdgetal kaart = begroot netto (vast) € ${euro(kpi.plannedSurplus)}`,
+      ? "Huidig saldo + nog te ontvangen − nog te betalen (vast) − nog te sparen"
+      : "Nog te ontvangen − nog te betalen (vast) − nog te sparen",
+    subtitle: "Alleen posten met een budget. Categorieën zonder budget tellen niet mee.",
     columns,
     rows,
     totalLabel: "Verwacht saldo eind maand",
@@ -468,19 +443,19 @@ export function buildBudgetExpenseModalBreakdown(
   kpi: MonthKpiSnapshot,
   onOpenItem?: (item: BudgetItem) => void
 ): KpiModalBreakdown {
-  const fixedItems = expenseItems.filter(isFixedBudgetItem);
-  const ruleItems = expenseItems.filter(isMonthEntryBudgetItem);
-  const { columns, rows } = budgetItemRows(fixedItems, "budget", onOpenItem);
+  const budgetedItems = expenseItems.filter(hasBudget);
+  const ruleCount = expenseItems.filter(isMonthEntryBudgetItem).length;
+  const { columns, rows } = budgetItemRows(budgetedItems, "budget", onOpenItem);
   return {
     title: "Totaal Uitgaven",
-    formula: "Vaste begrote uitgaven (zonder regels per maand)",
+    formula: "Som van alle begrote uitgaven (vast + regels per maand)",
     subtitle:
-      ruleItems.length > 0
-        ? `${fixedItems.length} vast · buiten budget (regels): € ${euro(kpi.totalExpenseRulesBudget)}`
-        : `${fixedItems.length} vaste begrotingsposten`,
+      ruleCount > 0
+        ? `${budgetedItems.length} posten · waarvan ${ruleCount} met regels per maand: € ${euro(kpi.totalExpenseRulesBudget)}`
+        : `${budgetedItems.length} begrotingsposten`,
     columns,
     rows,
-    totalValue: kpi.totalExpenseFixedBudget,
+    totalValue: kpi.totalExpenseBudget,
     totalColorClass: "text-rose-400",
   };
 }

@@ -66,7 +66,7 @@ class CsvTransactionImporter
                 continue;
             }
 
-            $matchedRule = $this->ruleMatcher->findMatch($rules, $iban, $description);
+            $matchedRule = $this->ruleMatcher->findMatch($rules, $iban, $description, $amount);
             $payload = [
                 'source_hash' => $hash,
                 'amount' => $amount,

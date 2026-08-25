@@ -100,10 +100,7 @@ const goalsWithCalculations = computed(() =>
 
     const totalFromTxs = matchingTxs.reduce((sum, tx) => sum + savingsBalanceDelta(tx), 0);
     const currentBalance = goal.initialAmount + totalFromTxs;
-    const progressPercent =
-      goal.targetAmount > 0
-        ? Math.min(100, Math.round((currentBalance / goal.targetAmount) * 100))
-        : 0;
+    const progressPercent = savingsProgressPercent(currentBalance, goal.targetAmount);
 
     const depositTxs = matchingTxs.filter((tx) =>
       transactionMatchesSavingsGoalDeposit(tx, goal)
@@ -142,10 +139,13 @@ const totalTargetSavings = computed(() =>
     .reduce((sum, g) => sum + g.targetAmount, 0)
 );
 const overallProgress = computed(() =>
-  totalTargetSavings.value > 0
-    ? Math.min(100, Math.round((totalCalculatedSavings.value / totalTargetSavings.value) * 100))
-    : 0
+  savingsProgressPercent(totalCalculatedSavings.value, totalTargetSavings.value)
 );
+
+function savingsProgressPercent(current: number, target: number): number {
+  if (target <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((current / target) * 100)));
+}
 
 const chartMax = computed(() =>
   Math.max(1, ...props.savingsHistory.map((r) => r.totaal))
@@ -163,6 +163,7 @@ function potStatus(goal: SavingsGoal) {
 }
 
 function barHeight(totaal: number) {
+  if (totaal <= 0) return "0%";
   return `${Math.max(4, Math.round((totaal / chartMax.value) * 100))}%`;
 }
 </script>
@@ -383,7 +384,7 @@ function barHeight(totaal: number) {
             >
               <div class="flex justify-between">
                 <span>Beginsaldo</span>
-                <span class="text-slate-300">
+                <span :class="goal.initialAmount < 0 ? 'text-rose-400/90' : 'text-slate-300'">
                   € {{ goal.initialAmount.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
                 </span>
               </div>
@@ -403,14 +404,20 @@ function barHeight(totaal: number) {
 
             <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden my-2.5">
               <div
-                class="bg-emerald-500 h-full rounded-full transition-all"
+                class="h-full rounded-full transition-all"
+                :class="goal.currentBalance > 0 ? 'bg-emerald-500' : 'bg-transparent'"
                 :style="{ width: `${goal.progressPercent}%` }"
               />
             </div>
 
             <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono">
               <span>Doel: €{{ goal.targetAmount.toLocaleString("nl-NL") }}</span>
-              <span class="font-bold text-slate-300">{{ goal.progressPercent }}%</span>
+              <span
+                class="font-bold"
+                :class="goal.currentBalance >= 0 ? 'text-slate-300' : 'text-rose-400'"
+              >
+                {{ goal.progressPercent }}%
+              </span>
             </div>
           </div>
 
@@ -529,7 +536,10 @@ function barHeight(totaal: number) {
                   <component :is="getGoalIcon(goal.iconName)" class="w-3.5 h-3.5 text-indigo-400" />
                   <span class="text-xs font-semibold text-white truncate max-w-[130px]">{{ goal.name }}</span>
                 </div>
-                <span class="text-xs font-mono font-bold text-emerald-400">
+                <span
+                  class="text-xs font-mono font-bold"
+                  :class="goal.currentBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+                >
                   €{{ goal.currentBalance.toFixed(0) }}
                 </span>
               </div>

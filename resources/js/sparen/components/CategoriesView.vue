@@ -15,6 +15,7 @@ import {
   FolderPlus,
   HelpCircle,
   Sparkles,
+  ArrowLeftRight,
 } from "lucide-vue-next";
 import type {
   MonthlyBudget,
@@ -116,6 +117,21 @@ function itemsFor(cat: CategoryDefinition) {
 
 function totalActual(cat: CategoryDefinition) {
   return itemsFor(cat).reduce((s, i) => s + (i.actual ?? i.estimated ?? 0), 0);
+}
+
+function moveTargets(cat: CategoryDefinition) {
+  return allCategories.value.filter((c) => c.type === cat.type);
+}
+
+function moveItem(item: BudgetItem, groupName: string) {
+  if (groupName === item.group) {
+    return;
+  }
+  const target = allCategories.value.find((c) => c.name === groupName);
+  props.onUpdateBudgetItem(item.id, {
+    group: groupName as BudgetCategoryGroup,
+    type: target?.type ?? item.type,
+  });
 }
 </script>
 
@@ -338,22 +354,41 @@ function totalActual(cat: CategoryDefinition) {
             <div
               v-for="item in itemsFor(cat)"
               :key="item.id"
-              class="p-2.5 bg-slate-900/80 hover:bg-slate-850 border border-slate-800/80 hover:border-slate-700 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer group"
-              title="Klik om deze post aan te passen"
-              @click="onOpenEditBudgetItem?.(item)"
+              class="p-2.5 bg-slate-900/80 hover:bg-slate-850 border border-slate-800/80 hover:border-slate-700 rounded-xl flex items-center justify-between gap-2 text-xs transition-all group"
             >
-              <div class="flex items-center gap-2 truncate pr-2">
+              <button
+                type="button"
+                class="flex items-center gap-2 truncate min-w-0 text-left flex-1"
+                title="Klik om deze post aan te passen"
+                @click="onOpenEditBudgetItem?.(item)"
+              >
                 <span
-                  class="w-1.5 h-1.5 rounded-full bg-slate-600 group-hover:bg-indigo-400 transition-colors"
+                  class="w-1.5 h-1.5 rounded-full bg-slate-600 group-hover:bg-indigo-400 transition-colors shrink-0"
                 />
                 <span class="font-medium text-slate-200 group-hover:text-white truncate">{{ item.name }}</span>
-              </div>
+              </button>
 
-              <div class="flex items-center gap-2 shrink-0 font-mono">
-                <span class="font-bold text-white text-xs">
+              <div class="flex items-center gap-1.5 shrink-0">
+                <label
+                  v-if="moveTargets(cat).length > 1"
+                  class="relative flex items-center"
+                  title="Verplaats naar andere rubriek"
+                >
+                  <ArrowLeftRight class="w-3 h-3 text-slate-500 pointer-events-none absolute left-1.5" />
+                  <select
+                    :value="item.group"
+                    class="max-w-[7.5rem] bg-slate-800 border border-slate-700 hover:border-indigo-500 text-[10px] text-slate-300 rounded-lg pl-6 pr-1 py-1 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                    @click.stop
+                    @change="moveItem(item, ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option v-for="target in moveTargets(cat)" :key="target.id || target.name" :value="target.name">
+                      {{ target.name }}
+                    </option>
+                  </select>
+                </label>
+                <span class="font-bold text-white text-xs font-mono whitespace-nowrap">
                   € {{ item.actual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
                 </span>
-                <Edit2 class="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             </div>
           </div>

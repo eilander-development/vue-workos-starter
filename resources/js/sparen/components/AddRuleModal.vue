@@ -70,7 +70,7 @@ watch(
 );
 
 const extraMatches = computed(() =>
-  matchingUnlinkedTransactions(props.transactions, keyword.value, matchField.value)
+  matchingUnlinkedTransactions(props.transactions, keyword.value, matchField.value, undefined, targetType.value)
 );
 
 const availableGroups = computed(() =>
@@ -171,7 +171,13 @@ function handleSubmit() {
             <p class="text-[11px] text-indigo-200 font-semibold">
               {{
                 extraMatches.length === 0
-                  ? "Geen ongekoppelde rijen voldoen aan dit trefwoord."
+                  ? `Geen ongekoppelde rijen met dit trefwoord (${
+                      targetType === "inkomsten"
+                        ? "alleen erbij"
+                        : targetType === "uitgaven"
+                          ? "alleen eraf"
+                          : "erbij en eraf"
+                    }).`
                   : `${extraMatches.length} ongekoppelde ${extraMatches.length === 1 ? "rij wordt" : "rijen worden"} nu ook gekoppeld.`
               }}
             </p>
@@ -181,7 +187,9 @@ function handleSubmit() {
                 :key="tx.id"
                 class="text-[10px] text-slate-400 truncate"
               >
-                {{ tx.date }} · {{ tx.description }}
+                {{ tx.date }} · {{ tx.amount > 0 ? "+" : "−" }}€
+                {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                · {{ tx.description }}
               </li>
               <li v-if="extraMatches.length > 4" class="text-[10px] text-slate-500">
                 + {{ extraMatches.length - 4 }} meer

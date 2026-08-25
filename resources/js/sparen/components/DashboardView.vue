@@ -21,17 +21,17 @@ import type { MonthlyBudget, Transaction, BankAccount, ActiveTab, BudgetItem } f
 import TransactionDate from "./TransactionDate.vue";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
 import { defaultReportingMonth } from "../month";
+import { formatIbanDisplay } from "../auth";
 import {
   buildBalanceModalBreakdown,
-  buildDashboardExpenseModalBreakdown,
-  buildDashboardIncomeModalBreakdown,
+  buildBudgetExpenseModalBreakdown,
+  buildBudgetIncomeModalBreakdown,
   buildNettoModalBreakdown,
   computeMonthKpi,
+  kpiFromMonthlyBudget,
   isActiveReportingMonth,
   resolvePeriodStartBalance,
-  sumRawBankTotals,
 } from "../monthKpi";
-import { isTransactionInReportingMonth } from "../month";
 
 type DashboardKpiKey = "balance" | "income" | "expense" | "netto";
 
@@ -67,6 +67,14 @@ const reportingAnchor = computed(() => defaultReportingMonth());
 
 const liveAccountBalance = computed(() => Number(props.bankAccount.balance ?? 0));
 
+const linkedCheckingIban = computed(
+  () => formatIbanDisplay(props.bankAccount.iban) || null
+);
+
+const linkedBankName = computed(
+  () => props.bankAccount.bankName || props.bankAccount.name || "bank"
+);
+
 const isCurrentReportingMonth = computed(() =>
   isActiveReportingMonth(props.currentMonth, reportingAnchor.value)
 );
@@ -79,38 +87,25 @@ const periodStartBalance = computed(() =>
   )
 );
 
-const monthTransactions = computed(() =>
-  props.transactions.filter(
-    (tx) => isTransactionInReportingMonth(tx, props.currentMonth) && !tx.isPending
-  )
-);
-
 const monthKpi = computed(() =>
   computeMonthKpi({
     incomeItems: incomeItems.value,
     expenseItems: expenseItems.value,
     savingsItems: savingsItems.value,
     bankBalance: periodStartBalance.value,
-    monthTransactions: monthTransactions.value,
-    bankTotalsFromTransactions: true,
   })
 );
 
 const totalIncomeBudget = computed(() => monthKpi.value.totalIncomeBudget);
-const totalIncomeReceived = computed(() => monthKpi.value.totalIncomeBank);
-const totalIncomeDelta = computed(() => monthKpi.value.totalIncomeDelta);
+const totalIncomeReceived = computed(() => monthKpi.value.totalIncomeReceived);
+const totalIncomeRemaining = computed(() => monthKpi.value.totalIncomeRemaining);
 const totalIncomeOver = computed(() => monthKpi.value.totalIncomeOver);
-const totalExpenseFixedBudget = computed(() => monthKpi.value.totalExpenseFixedBudget);
-const totalExpenseRulesBudget = computed(() => monthKpi.value.totalExpenseRulesBudget);
-const totalExpensePaid = computed(() => monthKpi.value.totalExpenseBank);
-const totalExpenseFixedPaid = computed(() => monthKpi.value.totalExpenseFixedPaid);
+const totalExpenseBudget = computed(() => monthKpi.value.totalExpenseBudget);
+const totalExpensePaid = computed(() => monthKpi.value.totalExpensePaid);
 const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
-const totalExpenseDelta = computed(() => monthKpi.value.totalExpenseDelta);
-const totalExpenseFixedRemaining = computed(() => monthKpi.value.totalExpenseFixedRemaining);
 const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
+const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemaining);
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
-const netActual = computed(() => monthKpi.value.netActual);
-const netBudgetDelta = computed(() => monthKpi.value.netBudgetDelta);
 const freeToSpend = computed(() => monthKpi.value.expectedEndOfMonth);
 
 const unpaidExpenses = computed(() =>
@@ -200,40 +195,27 @@ const categoryGroups = computed((): CatDef[] => {
 
 const annualChartData = computed(() =>
   props.allMonths.map((m) => {
+    const kpi = kpiFromMonthlyBudget(m);
     if (chartMode.value === "budget") {
-      const inc = m.items
-        .filter((i) => i.type === "inkomsten")
-        .reduce((acc, x) => acc + budgetAmount(x), 0);
-      const exp = m.items
-        .filter((i) => i.type === "uitgaven")
-        .reduce((acc, x) => acc + budgetAmount(x), 0);
-      const sav = m.items
-        .filter((i) => i.type === "sparen")
-        .reduce((acc, x) => acc + budgetAmount(x), 0);
       return {
         month: monthLabel(m),
         fullName: m.monthName,
-        Inkomsten: Math.round(inc),
-        Uitgaven: Math.round(exp),
-        Sparen: Math.round(sav),
-        Netto: Math.round(inc - exp - sav),
+        Inkomsten: Math.round(kpi.totalIncomeBudget),
+        Uitgaven: Math.round(kpi.totalExpenseBudget),
+        Sparen: Math.round(kpi.totalSavingsBudget),
+        Netto: Math.round(kpi.netBudget),
       };
     }
 
-    const monthTxs = props.transactions.filter(
-      (tx) => isTransactionInReportingMonth(tx, m) && !tx.isPending
-    );
-    const raw = sumRawBankTotals(monthTxs);
-
+    const netActual =
+      kpi.totalIncomeReceived - kpi.totalExpensePaid - kpi.totalSavingsPaid;
     return {
       month: monthLabel(m),
       fullName: m.monthName,
-      Inkomsten: Math.round(raw.totalIncomeBank),
-      Uitgaven: Math.round(raw.totalExpenseBank),
-      Sparen: Math.round(raw.totalSavingsBank),
-      Netto: Math.round(
-        raw.totalIncomeBank - raw.totalExpenseBank - raw.totalSavingsBank
-      ),
+      Inkomsten: Math.round(kpi.totalIncomeReceived),
+      Uitgaven: Math.round(kpi.totalExpensePaid),
+      Sparen: Math.round(kpi.totalSavingsPaid),
+      Netto: Math.round(netActual),
     };
   })
 );
@@ -260,17 +242,13 @@ const kpiBreakdown = computed(() => {
     );
   }
   if (key === "income") {
-    return buildDashboardIncomeModalBreakdown(
-      incomeItems.value,
-      kpi,
-      props.currentMonth.monthName
-    );
+    return buildBudgetIncomeModalBreakdown(incomeItems.value, kpi);
   }
   if (key === "expense") {
-    return buildDashboardExpenseModalBreakdown(kpi, props.currentMonth.monthName);
+    return buildBudgetExpenseModalBreakdown(expenseItems.value, kpi);
   }
   return buildNettoModalBreakdown(kpi, {
-    mode: "dashboard",
+    mode: "budget",
     bankBalance: periodStartBalance.value,
     includeStartBalance: isCurrentReportingMonth.value,
   });
@@ -300,8 +278,28 @@ function catStats(cat: CatDef) {
           Financieel Overzicht • {{ currentMonth.monthName }} {{ currentMonth.year }}
         </h2>
         <p class="text-sm text-slate-400 mt-0.5">
-          Realtime status gesynchroniseerd met ING Bank (IBAN:
-          <span class="font-mono text-slate-300">NL83 INGB 0004 5658 68</span>)
+          <template v-if="linkedCheckingIban">
+            Realtime status via {{ linkedBankName }} (IBAN:
+            <button
+              type="button"
+              class="font-mono text-slate-300 hover:text-indigo-300 hover:underline"
+              title="Open bankkoppeling"
+              @click="onNavigateTab('enablebanking')"
+            >
+              {{ linkedCheckingIban }}
+            </button>
+            )
+          </template>
+          <template v-else>
+            Nog geen betaalrekening gekoppeld —
+            <button
+              type="button"
+              class="text-indigo-400 hover:text-indigo-300 hover:underline"
+              @click="onNavigateTab('enablebanking')"
+            >
+              open bankkoppeling
+            </button>
+          </template>
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -354,9 +352,9 @@ function catStats(cat: CatDef) {
             </span>
           </div>
           <div class="flex items-center justify-between text-slate-400">
-            <span>Nog te betalen (vast)</span>
+            <span>Nog te betalen</span>
             <span class="font-semibold text-amber-400">
-              −€ {{ totalExpenseFixedRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              −€ {{ totalExpenseRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
             </span>
           </div>
         </div>
@@ -379,13 +377,33 @@ function catStats(cat: CatDef) {
           </div>
         </div>
         <div class="text-2xl font-black text-emerald-400 font-mono tracking-tight">
-          € {{ totalIncomeReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+          € {{ totalIncomeBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
-        <div class="mt-3 flex items-center justify-between text-xs pt-3 border-t border-slate-800/80">
-          <span class="text-slate-400">Begroot:</span>
-          <span class="font-mono font-medium text-slate-300">
-            € {{ totalIncomeBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-          </span>
+        <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
+          <div class="flex items-center justify-between text-emerald-400">
+            <span class="text-slate-400">Ontvangen</span>
+            <span class="font-medium">
+              € {{ totalIncomeReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div
+            class="flex items-center justify-between"
+            :class="totalIncomeRemaining > 0 ? 'text-amber-400' : 'text-slate-500'"
+          >
+            <span class="text-slate-400">Nog te ontvangen</span>
+            <span class="font-medium">
+              € {{ totalIncomeRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div
+            v-if="totalIncomeOver > 0"
+            class="flex items-center justify-between pt-1.5 mt-1 border-t border-slate-800/70 text-emerald-400"
+          >
+            <span class="text-slate-400">Meer ontvangen</span>
+            <span class="font-medium">
+              +€ {{ totalIncomeOver.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
@@ -406,38 +424,26 @@ function catStats(cat: CatDef) {
           </div>
         </div>
         <div class="text-2xl font-black text-rose-400 font-mono tracking-tight">
-          € {{ totalExpensePaid.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+          € {{ totalExpenseBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
         <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
           <div class="flex items-center justify-between">
-            <span class="text-slate-400">Vast begroot</span>
-            <span class="font-medium text-slate-300">
-              € {{ totalExpenseFixedBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            <span class="text-slate-400">Betaald</span>
+            <span class="font-medium text-rose-300">
+              € {{ totalExpensePaid.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
             </span>
           </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Binnen begroting</span>
-            <span class="font-medium text-rose-300">
-              € {{ totalExpenseFixedPaid.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+          <div class="flex items-center justify-between text-amber-400">
+            <span class="text-slate-400">Nog te betalen</span>
+            <span class="font-medium">
+              € {{ totalExpenseRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
             </span>
           </div>
           <div
-            v-if="totalExpenseRulesBudget > 0 || totalExpenseOver > 0"
-            class="mt-2 pt-1.5 border-t border-slate-800/70 space-y-1"
+            v-if="totalExpenseOver > 0"
+            class="mt-2 pt-1.5 border-t border-slate-800/70"
           >
-            <div
-              v-if="totalExpenseRulesBudget > 0"
-              class="flex items-center justify-between text-indigo-300/90"
-            >
-              <span>Buiten budget (regels)</span>
-              <span>
-                € {{ totalExpenseRulesBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-              </span>
-            </div>
-            <div
-              v-if="totalExpenseOver > 0"
-              class="flex items-center justify-between"
-            >
+            <div class="flex items-center justify-between">
               <span class="text-slate-400">Overschrijding</span>
               <span class="font-medium text-rose-400">
                 € {{ totalExpenseOver.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
@@ -455,15 +461,14 @@ function catStats(cat: CatDef) {
       >
         <div class="flex items-center justify-between text-slate-400 mb-3">
           <span class="text-xs font-semibold uppercase tracking-wider">Netto Overschot / Saldo</span>
-          <span class="text-[10px] font-semibold text-indigo-400 uppercase tracking-wide">Werkelijk</span>
+          <span class="text-[10px] font-semibold text-indigo-400 uppercase tracking-wide">Verwacht eind</span>
         </div>
         <div
           class="text-2xl font-black font-mono tracking-tight"
-          :class="netActual >= 0 ? 'text-emerald-400' : 'text-rose-400'"
-          title="Ontvangen − betaald − gespaard"
+          :class="expectedEndOfMonth >= 0 ? 'text-white' : 'text-rose-400'"
+          title="Huidig saldo + nog te ontvangen − nog te betalen − nog te sparen"
         >
-          {{ netActual >= 0 ? "+" : "" }}€
-          {{ netActual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+          € {{ expectedEndOfMonth.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
         <div class="mt-3 space-y-1 text-[11px] font-mono pt-3 border-t border-slate-800/80">
           <div
@@ -474,32 +479,19 @@ function catStats(cat: CatDef) {
             <span>€ {{ periodStartBalance.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
           </div>
           <div
-            class="flex items-center justify-between"
-            :class="expectedEndOfMonth >= 0 ? 'text-indigo-300' : 'text-rose-400'"
+            v-if="totalIncomeRemaining > 0"
+            class="flex items-center justify-between text-emerald-400"
           >
-            <span class="text-slate-400">Verwacht eind</span>
-            <span>€ {{ expectedEndOfMonth.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
+            <span class="text-slate-400">Nog te ontvangen</span>
+            <span>+€ {{ totalIncomeRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
           </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Inkomsten vs begroting</span>
-            <span :class="totalIncomeDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ totalIncomeDelta >= 0 ? "+" : "" }}€
-              {{ totalIncomeDelta.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-            </span>
+          <div class="flex items-center justify-between text-rose-400">
+            <span class="text-slate-400">Nog te betalen</span>
+            <span>−€ {{ totalExpenseRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
           </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Uitgaven vs begroting</span>
-            <span :class="totalExpenseDelta <= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ totalExpenseDelta >= 0 ? "+" : "" }}€
-              {{ totalExpenseDelta.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-            </span>
-          </div>
-          <div class="flex items-center justify-between text-slate-300">
-            <span class="text-slate-400">Netto vs begroting</span>
-            <span :class="netBudgetDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ netBudgetDelta >= 0 ? "+" : "" }}€
-              {{ netBudgetDelta.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-            </span>
+          <div class="flex items-center justify-between text-blue-400">
+            <span class="text-slate-400">Nog te sparen</span>
+            <span>−€ {{ totalSavingsRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
           </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
@@ -514,7 +506,7 @@ function catStats(cat: CatDef) {
             <p class="text-xs text-slate-400">
               {{
                 chartMode === "actual"
-                  ? "Werkelijke bankmutaties per maand — maanden zonder mutaties blijven leeg"
+                  ? "Zelfde envelop als de kaarten: ontvangen / betaald / gespaard binnen begroting"
                   : "Gepland budget per maand (zelfde template tot je een maand aanpast)"
               }}
             </p>

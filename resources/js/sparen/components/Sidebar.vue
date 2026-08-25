@@ -47,7 +47,7 @@ function handleToggle() {
   <aside
     id="app-sidebar-desktop"
     class="hidden md:flex bg-slate-900 border-r border-slate-800 flex-col shrink-0 h-screen sticky top-0 z-30 transition-[width] duration-200 ease-in-out"
-    :class="isCollapsed ? 'w-18' : 'w-64'"
+    :class="isCollapsed ? 'w-16' : 'w-64'"
   >
     <SidebarPanel
       :collapsed="isCollapsed"

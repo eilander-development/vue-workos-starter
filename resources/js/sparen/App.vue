@@ -71,7 +71,7 @@ import {
 import {
   isUnlinkedTransaction,
   matchingUnlinkedTransactions,
-  transactionMatchesKeyword,
+  transactionMatchesRule,
 } from "./matchRule";
 import { transactionMatchesSavingsGoalDeposit, transactionMatchesSavingsGoalWithdrawal } from "./matchSavings";
 import {
@@ -271,15 +271,7 @@ function applyRulesToTransactions(txs: Transaction[], rls: Rule[], sGoals: Savin
       };
     }
 
-    const match = rls.find((r) => {
-      if (!r.isActive) return false;
-      const kw = r.keyword.toLowerCase();
-      const inDesc = tx.description.toLowerCase().includes(kw);
-      const inCounterparty = tx.counterparty?.toLowerCase().includes(kw) || false;
-      if (r.matchField === "description") return inDesc;
-      if (r.matchField === "counterparty") return inCounterparty;
-      return inDesc || inCounterparty;
-    });
+    const match = rls.find((r) => r.isActive && transactionMatchesRule(tx, r));
 
     if (match && isUnlinkedTransaction(tx)) {
       return {
@@ -315,23 +307,22 @@ const monthlyBudgets = computed(() => {
 
       if (isPotEnvelope) {
         const envelopePaid = item.actual ?? 0;
+        const hasPotActivity = totalFromTxs > 0;
         return {
           ...item,
-          paidOrReceived: envelopePaid,
+          paidOrReceived: hasPotActivity ? envelopePaid : 0,
           shadowSpent: totalFromTxs,
-          paymentCount: paymentCount > 0 ? paymentCount : item.paymentCount,
-          isPaid: envelopePaid > 0,
+          paymentCount,
+          isPaid: hasPotActivity && envelopePaid > 0,
         };
       }
 
-      const finalPaid = Math.max(item.paidOrReceived, totalFromTxs);
-
       return {
         ...item,
-        paidOrReceived: finalPaid,
+        paidOrReceived: totalFromTxs,
         shadowSpent: undefined,
-        paymentCount: paymentCount > 0 ? paymentCount : item.paymentCount,
-        isPaid: finalPaid >= item.actual && item.actual > 0,
+        paymentCount,
+        isPaid: totalFromTxs >= item.actual && item.actual > 0,
       };
     });
 
@@ -578,13 +569,15 @@ function handleLinkTransaction(
         budgetItemId,
         type: targetType,
         matchedRuleId: createdRule?.id ?? tx.matchedRuleId,
+        linkExcluded: false,
+        linkExclusionReason: undefined,
       };
     }
 
     if (
       !createdRule ||
       !isUnlinkedTransaction(tx) ||
-      !transactionMatchesKeyword(tx, createdRule.keyword, createdRule.matchField)
+      !transactionMatchesRule(tx, createdRule)
     ) {
       return tx;
     }
@@ -595,6 +588,8 @@ function handleLinkTransaction(
       budgetItemId,
       type: targetType,
       matchedRuleId: createdRule.id,
+      linkExcluded: false,
+      linkExclusionReason: undefined,
     };
   });
 
@@ -603,7 +598,8 @@ function handleLinkTransaction(
         transactions.value,
         createdRule.keyword,
         createdRule.matchField,
-        txId
+        txId,
+        createdRule.targetType
       ).length
     : 0;
 
@@ -653,7 +649,9 @@ function handleAddRule(ruleData: Omit<Rule, "id" | "matchedCount">) {
   const extraLinked = matchingUnlinkedTransactions(
     transactions.value,
     newRule.keyword,
-    newRule.matchField
+    newRule.matchField,
+    undefined,
+    newRule.targetType
   ).length;
   const updatedRules = [...rules.value, newRule];
   const nextTxs = applyRulesToTransactions(transactions.value, updatedRules, savingsGoals.value);
@@ -827,19 +825,61 @@ function handleAutoProcessSave(assignments: AutoProcessSaveAssignment[]) {
   );
 }
 
+function retargetLinksForBudgetItem(
+  itemId: string,
+  group: BudgetCategoryGroup,
+  type: BudgetType
+) {
+  const txType = transactionTypeFromBudgetType(type);
+  const previousTxs = transactions.value;
+  const nextTxs = previousTxs.map((tx) =>
+    tx.budgetItemId === itemId ? { ...tx, categoryGroup: group, type: txType } : tx
+  );
+  const nextRules = rules.value.map((rule) =>
+    rule.targetBudgetItemId === itemId
+      ? { ...rule, targetGroup: group, targetType: type }
+      : rule
+  );
+  const changedRules = nextRules.filter((rule, index) => rule !== rules.value[index]);
+
+  transactions.value = nextTxs;
+  rules.value = nextRules;
+  void persistChangedTransactions(previousTxs, nextTxs);
+  for (const rule of changedRules) {
+    void saveRule(rule);
+  }
+}
+
 function handleUpdateBudgetItem(itemId: string, updates: Partial<BudgetItem>) {
   const current = currentMonth.value.items.find((item) => item.id === itemId);
   const next = { ...current, ...updates } as BudgetItem;
   const amount = next.estimated ?? next.actual ?? 0;
+  const identityUpdate: Partial<BudgetItem> = {};
+  if (updates.name !== undefined) identityUpdate.name = updates.name;
+  if (updates.group !== undefined) identityUpdate.group = updates.group;
+  if (updates.type !== undefined) identityUpdate.type = updates.type;
+  if (updates.notes !== undefined) identityUpdate.notes = updates.notes;
 
-  baseMonthlyBudgets.value = baseMonthlyBudgets.value.map((m) =>
-    m.monthId === selectedMonthId.value
-      ? {
-          ...m,
-          items: m.items.map((item) => (item.id === itemId ? { ...item, ...updates } : item)),
-        }
-      : m
-  );
+  baseMonthlyBudgets.value = baseMonthlyBudgets.value.map((m) => ({
+    ...m,
+    items: m.items.map((item) => {
+      if (item.id !== itemId) {
+        return item;
+      }
+      if (m.monthId === selectedMonthId.value) {
+        return { ...item, ...updates };
+      }
+      return Object.keys(identityUpdate).length > 0 ? { ...item, ...identityUpdate } : item;
+    }),
+  }));
+
+  const moved =
+    (updates.group !== undefined && current?.group !== undefined && updates.group !== current.group) ||
+    (updates.type !== undefined && current?.type !== undefined && updates.type !== current.type);
+
+  if (moved) {
+    retargetLinksForBudgetItem(itemId, next.group, next.type);
+  }
 
   void persistBudgetChange(
     itemId,
@@ -851,7 +891,8 @@ function handleUpdateBudgetItem(itemId: string, updates: Partial<BudgetItem>) {
       monthId: selectedMonthId.value,
       year: currentMonth.value.year,
     },
-    ""
+    moved ? "Post verplaatst" : "",
+    moved ? `${next.name} → ${next.group}` : undefined
   );
 }
 
@@ -865,6 +906,12 @@ function handleSaveBudgetItemDetails(
     monthlyEntries?: Record<string, { id: string; description: string; amount: number }[]>;
   }
 ) {
+  const existing = currentMonth.value.items.find((item) => item.id === itemId);
+  const nextType = updatedData.type || existing?.type || "uitgaven";
+  const moved =
+    Boolean(existing) &&
+    (existing!.group !== updatedData.group || existing!.type !== nextType);
+
   baseMonthlyBudgets.value = baseMonthlyBudgets.value.map((m) => {
     const monthAmount = updatedData.monthlyAmounts[m.monthId];
     const monthEntries = updatedData.monthlyEntries?.[m.monthId];
@@ -887,6 +934,10 @@ function handleSaveBudgetItemDetails(
       }),
     };
   });
+
+  if (moved) {
+    retargetLinksForBudgetItem(itemId, updatedData.group, nextType);
+  }
 
   void persistBudgetChange(
     itemId,
@@ -1082,7 +1133,16 @@ function handleUnlinkTransaction(txId: string) {
   if (!tx) {
     return;
   }
-  const next = { ...tx, budgetItemId: undefined, matchedRuleId: undefined };
+  const fromName = tx.budgetItemId ? budgetItemName(tx.budgetItemId) : null;
+  const next: Transaction = {
+    ...tx,
+    budgetItemId: undefined,
+    matchedRuleId: undefined,
+    linkExcluded: true,
+    linkExclusionReason: fromName
+      ? `Handmatig ontkoppeld van ${fromName}`
+      : "Handmatig ontkoppeld",
+  };
   void runSave(
     async () => {
       await saveTransaction(next);
@@ -1167,7 +1227,7 @@ function closeSavingsGoalModal() {
       />
 
       <main
-        class="flex-1 p-3 sm:p-5 md:p-6 pb-24 md:pb-8 max-w-7xl w-full mx-auto space-y-6"
+        class="flex-1 px-3 md:px-4 py-3 md:py-4 pb-24 md:pb-6 w-full space-y-5"
         :data-page="activeTab"
       >
         <DashboardView
@@ -1185,6 +1245,7 @@ function closeSavingsGoalModal() {
           :all-months="monthlyBudgets"
           :transactions="transactions"
           :bank-account="primaryBankAccount"
+          :savings-goals="savingsGoals"
           :on-select-month="handleSelectMonth"
           :on-update-budget-item="handleUpdateBudgetItem"
           :on-open-add-budget-item="() => handleOpenAddBudgetItemModal()"
@@ -1199,6 +1260,7 @@ function closeSavingsGoalModal() {
           :all-months="monthlyBudgets"
           :transactions="transactions"
           :categories="categories"
+          :savings-goals="savingsGoals"
           :on-update-budget-item="handleUpdateBudgetItem"
           :on-open-add-budget-item="() => handleOpenAddBudgetItemModal()"
           :on-open-edit-budget-item="handleOpenEditBudgetItem"
@@ -1370,6 +1432,8 @@ function closeSavingsGoalModal() {
       :current-month="currentMonth"
       :all-months="monthlyBudgets"
       :transactions="transactions"
+      :savings-goals="savingsGoals"
+      :own-ibans="bankAccounts.map((account) => account.iban).filter(Boolean)"
       :on-unlink-transaction="handleUnlinkTransaction"
       :on-link-transaction="(txId, group, itemId) => handleLinkTransaction(txId, group, itemId)"
       :on-open-edit-budget-item="handleOpenEditBudgetItem"

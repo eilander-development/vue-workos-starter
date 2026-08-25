@@ -80,7 +80,9 @@ class SparenStateService
                 $txPaid = round((float) $matching->sum(fn (array $tx) => abs((float) $tx['amount'])), 2);
                 $sparenType = $this->toSparenType($budget->category?->type);
                 $isPotEnvelope = $sparenType === 'uitgaven' && in_array($budget->key, $potBudgetKeys, true);
-                $paid = $isPotEnvelope ? round((float) $estimated, 2) : $txPaid;
+                $paid = $isPotEnvelope
+                    ? ($txPaid > 0 ? round((float) $estimated, 2) : 0.0)
+                    : $txPaid;
 
                 return [
                     'id' => $budget->key,
@@ -312,6 +314,8 @@ class SparenStateService
     public function persistBudgetItem(array $item): void
     {
         $category = Category::query()->where('name', $item['group'] ?? '')->first();
+        $existing = Budget::query()->where('key', $item['id'])->first();
+        $previousCategoryId = $existing?->category_id;
         $budget = Budget::query()->updateOrCreate(
             ['key' => $item['id']],
             [
@@ -321,6 +325,22 @@ class SparenStateService
                 'notes' => $item['notes'] ?? null,
             ]
         );
+        $budget->load('category');
+
+        if ($budget->category_id && $budget->category_id !== $previousCategoryId) {
+            $txType = match ($budget->category?->type) {
+                'income' => 'income',
+                'saving' => 'saving',
+                default => 'expense',
+            };
+            Transaction::query()->where('budget_id', $budget->id)->update([
+                'category_id' => $budget->category_id,
+                'type' => $txType,
+            ]);
+            ImportRule::query()->where('budget_id', $budget->id)->update([
+                'category_id' => $budget->category_id,
+            ]);
+        }
 
         $year = (int) ($item['year'] ?? 2026);
         $amounts = $item['monthlyAmounts'] ?? [];

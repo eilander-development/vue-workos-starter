@@ -29,14 +29,14 @@ export function sumMonthEntryBudgetedAmount(items: BudgetItem[]): number {
 
 export function sumFixedBudgetedPaid(items: BudgetItem[]): number {
   return items.reduce(
-    (sum, item) => sum + (isFixedBudgetItem(item) ? item.paidOrReceived : 0),
+    (sum, item) => sum + (isFixedBudgetItem(item) ? withinBudgetPaid(item) : 0),
     0
   );
 }
 
 export function sumMonthEntryBudgetedPaid(items: BudgetItem[]): number {
   return items.reduce(
-    (sum, item) => sum + (isMonthEntryBudgetItem(item) ? item.paidOrReceived : 0),
+    (sum, item) => sum + (isMonthEntryBudgetItem(item) ? withinBudgetPaid(item) : 0),
     0
   );
 }
@@ -61,12 +61,25 @@ export function sumBudgetedAmount(items: BudgetItem[]): number {
   return items.reduce((sum, item) => sum + item.actual, 0);
 }
 
-/** Reeds bijgeschreven / afgeschreven: alleen bankbedragen van begrote posten. */
+/** Deel van de bankmutatie dat binnen het budget valt. */
+export function withinBudgetPaid(item: BudgetItem): number {
+  if (!hasBudget(item)) {
+    return 0;
+  }
+  return Math.min(item.paidOrReceived, item.actual);
+}
+
+/** Overschot boven budget, of het hele bedrag bij een onbegrote post. */
+export function budgetOverspend(item: BudgetItem): number {
+  if (hasBudget(item)) {
+    return Math.max(0, item.paidOrReceived - item.actual);
+  }
+  return Math.max(0, item.paidOrReceived);
+}
+
+/** Reeds bijgeschreven / afgeschreven: tot aan het budget, geen overschot. */
 export function sumBudgetedPaid(items: BudgetItem[]): number {
-  return items.reduce(
-    (sum, item) => sum + (hasBudget(item) ? item.paidOrReceived : 0),
-    0
-  );
+  return items.reduce((sum, item) => sum + withinBudgetPaid(item), 0);
 }
 
 export function sumBudgetedRemaining(items: BudgetItem[]): number {
@@ -156,14 +169,14 @@ export function budgetItemRows(
 
   const rows: KpiBreakdownRow[] = filtered.map((item) => {
     const remaining = Math.max(0, item.actual - item.paidOrReceived);
-    const over = Math.max(0, item.paidOrReceived - item.actual);
+    const over = budgetOverspend(item);
     return {
       id: item.id,
       cells: {
         name: item.name,
         group: item.group,
         budget: item.actual,
-        paid: item.paidOrReceived,
+        paid: metric === "paidAll" ? item.paidOrReceived : withinBudgetPaid(item),
         remaining,
         over,
       },
@@ -173,7 +186,8 @@ export function budgetItemRows(
 
   const total = filtered.reduce((sum, item) => {
     if (metric === "budget") return sum + item.actual;
-    if (metric === "paid" || metric === "paidAll") return sum + item.paidOrReceived;
+    if (metric === "paid") return sum + withinBudgetPaid(item);
+    if (metric === "paidAll") return sum + item.paidOrReceived;
     if (metric === "remaining") return sum + Math.max(0, item.actual - item.paidOrReceived);
     if (hasBudget(item)) return sum + Math.max(0, item.paidOrReceived - item.actual);
     return sum + Math.max(0, item.paidOrReceived);

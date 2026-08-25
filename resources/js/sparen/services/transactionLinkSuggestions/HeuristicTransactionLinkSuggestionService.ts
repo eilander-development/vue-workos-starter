@@ -7,10 +7,16 @@ import {
 } from "../../matchKeywords";
 import { isPotGoal } from "../../potSettlement";
 import {
+  isIngSpaarpotTransfer,
   transactionMatchesSavingsGoalDeposit,
   transactionMatchesSavingsGoalWithdrawal,
 } from "../../matchSavings";
 import { isTransactionInReportingMonth } from "../../month";
+import {
+  extractSmartKeyword,
+  isUnlinkedTransaction,
+  transactionMatchesRule,
+} from "../../matchRule";
 import type {
   BudgetCategoryGroup,
   BudgetItem,
@@ -168,7 +174,7 @@ function findFirstBudgetItemInGroup(
 }
 
 function findMatchingRule(tx: Transaction, rules: Rule[]): Rule | undefined {
-  return rules.find((rule) => rule.isActive && transactionMatchesKeyword(tx, rule.keyword, rule.matchField));
+  return rules.find((rule) => rule.isActive && transactionMatchesRule(tx, rule));
 }
 
 function buildLinkedProfiles(transactions: Transaction[], rules: Rule[]): LinkedTransactionProfile[] {
@@ -648,7 +654,7 @@ export class HeuristicTransactionLinkSuggestionService implements TransactionLin
 
   suggest(context: TransactionLinkSuggestionContext): TransactionLinkSuggestionResult {
     const unlinked = context.transactions.filter((tx) => {
-      if (!isUnlinkedTransaction(tx)) {
+      if (!isUnlinkedTransaction(tx) || isIngSpaarpotTransfer(tx)) {
         return false;
       }
       if (context.reportingMonth) {

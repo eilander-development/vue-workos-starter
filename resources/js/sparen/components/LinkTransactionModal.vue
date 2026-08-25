@@ -98,7 +98,8 @@ const extraMatches = computed(() =>
         props.transactions,
         ruleKeyword.value,
         ruleMatchField.value,
-        props.transaction?.id
+        props.transaction?.id,
+        ruleTargetType.value
       )
     : []
 );
@@ -110,18 +111,27 @@ const selectedItemObj = computed(() =>
   props.budgetItems.find((i) => i.id === selectedBudgetItemId.value)
 );
 const isIncome = computed(() => (props.transaction?.amount ?? 0) > 0);
+const ruleTargetType = computed((): BudgetType => {
+  const matchedCat = props.categories.find((c) => c.name === selectedGroup.value);
+  if (selectedGroup.value === "Inkomsten" || matchedCat?.type === "inkomsten") {
+    return "inkomsten";
+  }
+  if (selectedGroup.value === "Spaargeld" || matchedCat?.type === "sparen") {
+    return "sparen";
+  }
+  return "uitgaven";
+});
+const extraMatchDirectionLabel = computed(() => {
+  if (ruleTargetType.value === "inkomsten") return "alleen erbij";
+  if (ruleTargetType.value === "uitgaven") return "alleen eraf";
+  return "erbij en eraf";
+});
 
 function handleSubmit() {
   const transaction = props.transaction;
   if (!transaction || !selectedBudgetItemId.value) return;
 
-  const matchedCat = props.categories.find((c) => c.name === selectedGroup.value);
-  const targetType: BudgetType =
-    selectedGroup.value === "Inkomsten" || matchedCat?.type === "inkomsten"
-      ? "inkomsten"
-      : selectedGroup.value === "Spaargeld" || matchedCat?.type === "sparen"
-        ? "sparen"
-        : "uitgaven";
+  const targetType = ruleTargetType.value;
 
   const ruleData =
     shouldCreateRule.value && ruleKeyword.value.trim()
@@ -356,8 +366,8 @@ function openAddBudgetItem() {
                 <p class="text-[11px] text-indigo-200 font-semibold">
                   {{
                     extraMatches.length === 0
-                      ? "Geen andere ongekoppelde rijen voldoen aan dit trefwoord."
-                      : `${extraMatches.length} ${extraMatches.length === 1 ? "andere ongekoppelde rij voldoet" : "andere ongekoppelde rijen voldoen"} en worden nu ook gekoppeld.`
+                      ? `Geen andere ongekoppelde rijen met dit trefwoord (${extraMatchDirectionLabel}).`
+                      : `${extraMatches.length} ${extraMatches.length === 1 ? "andere ongekoppelde rij voldoet" : "andere ongekoppelde rijen voldoen"} (${extraMatchDirectionLabel}) en worden nu ook gekoppeld.`
                   }}
                 </p>
                 <ul v-if="extraMatches.length > 0" class="space-y-1">
@@ -366,7 +376,9 @@ function openAddBudgetItem() {
                     :key="tx.id"
                     class="text-[10px] text-slate-400 truncate"
                   >
-                    {{ tx.date }} · {{ tx.description }}
+                    {{ tx.date }} · {{ tx.amount > 0 ? "+" : "−" }}€
+                    {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                    · {{ tx.description }}
                   </li>
                   <li v-if="extraMatches.length > 4" class="text-[10px] text-slate-500">
                     + {{ extraMatches.length - 4 }} meer

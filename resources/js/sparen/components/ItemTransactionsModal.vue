@@ -11,10 +11,28 @@ import {
   Plus,
   Unlink,
 } from "lucide-vue-next";
-import type { BudgetItem, MonthlyBudget, Transaction, BudgetCategoryGroup } from "../types";
+import type {
+  BudgetItem,
+  MonthlyBudget,
+  Transaction,
+  BudgetCategoryGroup,
+  SavingsGoal,
+} from "../types";
 import { isTransactionInReportingMonth } from "../month";
-import { hasPotEnvelope, shadowOverspend } from "../potSettlement";
+import {
+  hasPotEnvelope,
+  potTransfersForBudgetItem,
+  shadowOverspend,
+  type PotTransferRole,
+} from "../potSettlement";
 import TransactionDate from "./TransactionDate.vue";
+
+type ListedTxRole = "spend" | PotTransferRole;
+
+type ListedTx = {
+  tx: Transaction;
+  role: ListedTxRole;
+};
 
 const props = withDefaults(
   defineProps<{
@@ -24,6 +42,8 @@ const props = withDefaults(
     currentMonth: MonthlyBudget;
     allMonths?: MonthlyBudget[];
     transactions: Transaction[];
+    savingsGoals?: SavingsGoal[];
+    ownIbans?: string[];
     onUnlinkTransaction?: (txId: string) => void;
     onLinkTransaction?: (txId: string, group: BudgetCategoryGroup, itemId: string) => void;
     onOpenEditBudgetItem?: (item: BudgetItem) => void;
@@ -31,34 +51,71 @@ const props = withDefaults(
   }>(),
   {
     allMonths: () => [],
+    savingsGoals: () => [],
+    ownIbans: () => [],
   }
 );
 
 const filterScope = ref<"current_month" | "all_history">("current_month");
 const searchTerm = ref("");
 
+function inActiveScope(tx: Transaction): boolean {
+  if (filterScope.value === "current_month") {
+    return isTransactionInReportingMonth(tx, props.currentMonth);
+  }
+  return true;
+}
+
+function compareTxNewestFirst(a: Transaction, b: Transaction): number {
+  const dateCmp = b.date.localeCompare(a.date);
+  if (dateCmp !== 0) return dateCmp;
+  return (b.time ?? "").localeCompare(a.time ?? "");
+}
+
 const linkedTransactions = computed(() => {
   if (!props.budgetItem) return [];
-  return props.transactions.filter((t) => {
-    if (t.budgetItemId !== props.budgetItem!.id) return false;
-    if (filterScope.value === "current_month") {
-      return isTransactionInReportingMonth(t, props.currentMonth);
-    }
-    return true;
-  });
+  return props.transactions.filter(
+    (t) => t.budgetItemId === props.budgetItem!.id && inActiveScope(t)
+  );
+});
+
+const listedTransactions = computed((): ListedTx[] => {
+  if (!props.budgetItem) return [];
+
+  const spend: ListedTx[] = linkedTransactions.value.map((tx) => ({
+    tx,
+    role: "spend" as const,
+  }));
+  const spendIds = new Set(spend.map((row) => row.tx.id));
+
+  const transfers: ListedTx[] = potTransfersForBudgetItem(
+    props.budgetItem.id,
+    props.transactions,
+    props.savingsGoals,
+    props.ownIbans,
+    props.budgetItem.actual
+  )
+    .filter((row) => inActiveScope(row.tx) && !spendIds.has(row.tx.id))
+    .map((row) => ({ tx: row.tx, role: row.role }));
+
+  return [...spend, ...transfers].sort((a, b) => compareTxNewestFirst(a.tx, b.tx));
 });
 
 const filteredList = computed(() =>
-  linkedTransactions.value.filter((t) => {
+  listedTransactions.value.filter(({ tx }) => {
     if (!searchTerm.value) return true;
     const term = searchTerm.value.toLowerCase();
     return (
-      t.description.toLowerCase().includes(term) ||
-      (t.counterparty && t.counterparty.toLowerCase().includes(term)) ||
-      t.amount.toString().includes(term) ||
-      t.date.includes(term)
+      tx.description.toLowerCase().includes(term) ||
+      (tx.counterparty && tx.counterparty.toLowerCase().includes(term)) ||
+      tx.amount.toString().includes(term) ||
+      tx.date.includes(term)
     );
   })
+);
+
+const listedTransferIds = computed(
+  () => new Set(listedTransactions.value.filter((row) => row.role !== "spend").map((row) => row.tx.id))
 );
 
 const suggestedUnlinkedTransactions = computed(() => {
@@ -72,6 +129,8 @@ const suggestedUnlinkedTransactions = computed(() => {
   return props.transactions
     .filter((t) => {
       if (t.budgetItemId === props.budgetItem!.id) return false;
+      if (listedTransferIds.value.has(t.id)) return false;
+      if (t.linkExcluded) return false;
       if (t.budgetItemId && t.categoryGroup !== "Ongecategoriseerd") return false;
       const desc = (t.description + " " + (t.counterparty || "")).toLowerCase();
       return keywords.some((kw) => desc.includes(kw.toLowerCase()));
@@ -82,11 +141,39 @@ const suggestedUnlinkedTransactions = computed(() => {
 const totalPaidInView = computed(() =>
   linkedTransactions.value.reduce((sum, t) => sum + Math.abs(t.amount), 0)
 );
+const listedCount = computed(() => listedTransactions.value.length);
+const potDepositCount = computed(
+  () => listedTransactions.value.filter((row) => row.role === "deposit").length
+);
 const isIncome = computed(() => props.budgetItem?.type === "inkomsten");
 const isSaving = computed(() => props.budgetItem?.type === "sparen");
 const budgetAmount = computed(() => props.budgetItem?.actual ?? 0);
 const isPotItem = computed(() => !!props.budgetItem && hasPotEnvelope(props.budgetItem));
 const envelopePaid = computed(() => props.budgetItem?.paidOrReceived ?? 0);
+const remainingAmount = computed(() => {
+  if (budgetAmount.value <= 0) {
+    return 0;
+  }
+  const paid = isPotItem.value ? envelopePaid.value : totalPaidInView.value;
+  return Math.max(0, budgetAmount.value - paid);
+});
+const remainingLabel = computed(() => {
+  if (isIncome.value) return "Nog te ontvangen";
+  if (isSaving.value) return "Nog te sparen";
+  return "Nog te betalen";
+});
+const potIdleThisMonth = computed(
+  () =>
+    isPotItem.value &&
+    filterScope.value === "current_month" &&
+    linkedTransactions.value.length === 0
+);
+
+function roleLabel(role: ListedTxRole): string | null {
+  if (role === "deposit") return "Storting naar potje";
+  if (role === "withdrawal") return "Opname van potje";
+  return null;
+}
 const difference = computed(() => {
   if (isPotItem.value) {
     return budgetAmount.value - envelopePaid.value;
@@ -140,7 +227,7 @@ function addTx() {
             <p class="text-xs text-slate-400 mt-0.5">
               {{
                 isPotItem
-                  ? "Bankmutaties zijn schaduwuitgaven vanuit het potje; de begroting gebruikt het envelopbedrag."
+                  ? "Pin-uitgaven vanuit het potje plus de storting naar het potje. Zonder pin-uitgaven deze maand telt de envelop niet als betaald."
                   : "Transactieoverzicht & gekoppelde bankmutaties voor deze begrotingspost"
               }}
             </p>
@@ -169,7 +256,7 @@ function addTx() {
       </div>
 
       <div class="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/40 space-y-3 shrink-0">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
           <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
             <span class="text-slate-400 text-[11px] block font-medium">
               Begroot ({{ currentMonth.monthName }}):
@@ -204,7 +291,7 @@ function addTx() {
             <span class="text-slate-400 text-[11px] block font-medium">
               {{
                 isPotItem
-                  ? "Schaduw (bank):"
+                  ? "Uitgegeven:"
                   : isIncome
                     ? "Verschil:"
                     : "Resterend / Verschil:"
@@ -233,16 +320,32 @@ function addTx() {
             </span>
           </div>
           <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-            <span class="text-slate-400 text-[11px] block font-medium">Mutaties gekoppeld:</span>
+            <span class="text-slate-400 text-[11px] block font-medium">{{ remainingLabel }}:</span>
+            <span
+              class="text-sm sm:text-base font-bold font-mono mt-0.5 block"
+              :class="remainingAmount > 0 ? 'text-amber-300' : 'text-emerald-400'"
+            >
+              € {{ remainingAmount.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
+            <span class="text-slate-400 text-[11px] block font-medium">Mutaties:</span>
             <div class="flex items-center gap-1.5 mt-0.5">
               <span class="text-sm sm:text-base font-bold text-white font-mono">
-                {{ linkedTransactions.length }}
+                {{ listedCount }}
               </span>
-              <CheckCircle2 v-if="linkedTransactions.length > 0" class="w-3.5 h-3.5 text-emerald-400" />
+              <CheckCircle2 v-if="listedCount > 0" class="w-3.5 h-3.5 text-emerald-400" />
               <Clock v-else class="w-3.5 h-3.5 text-amber-400" />
             </div>
           </div>
         </div>
+
+        <p
+          v-if="potIdleThisMonth"
+          class="text-[11px] text-amber-300/90 bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2"
+        >
+          Deze maand nog geen pin-uitgaven op deze post. De envelop telt daardoor nog niet als betaald.
+        </p>
 
         <div
           v-if="budgetItem.monthEntries && budgetItem.monthEntries.length > 0"
@@ -360,7 +463,13 @@ function addTx() {
 
         <div class="space-y-2">
           <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">
-            Gekoppelde Mutaties ({{ filteredList.length }})
+            {{ isPotItem ? "Mutaties" : "Gekoppelde Mutaties" }} ({{ filteredList.length }})
+            <span
+              v-if="isPotItem && potDepositCount > 0"
+              class="ml-1.5 normal-case font-medium text-slate-500"
+            >
+              · {{ linkedTransactions.length }} pin · {{ potDepositCount }} storting
+            </span>
           </h4>
 
           <div
@@ -395,18 +504,25 @@ function addTx() {
 
           <template v-else>
             <div
-              v-for="tx in filteredList"
+              v-for="{ tx, role } in filteredList"
               :key="tx.id"
               class="bg-slate-800/60 hover:bg-slate-800 border border-slate-700/70 p-3.5 rounded-xl transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              :class="role !== 'spend' ? 'border-blue-800/50' : ''"
             >
               <div class="space-y-1 min-w-0">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                   <TransactionDate :date="tx.date" :time="tx.time" size="sm" />
                   <span class="text-[10px] bg-slate-700/80 text-slate-300 px-1.5 py-0.2 rounded font-mono">
                     {{ tx.source }}
                   </span>
                   <span
-                    v-if="tx.matchedRuleId"
+                    v-if="roleLabel(role)"
+                    class="text-[9px] bg-blue-950 text-blue-300 border border-blue-800 px-1.5 py-0.2 rounded font-medium"
+                  >
+                    {{ roleLabel(role) }}
+                  </span>
+                  <span
+                    v-else-if="tx.matchedRuleId"
                     class="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1.5 py-0.2 rounded font-mono"
                   >
                     Auto-regel
@@ -429,7 +545,7 @@ function addTx() {
                   {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
                 </div>
                 <button
-                  v-if="onUnlinkTransaction"
+                  v-if="onUnlinkTransaction && role === 'spend'"
                   type="button"
                   class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/40 border border-transparent hover:border-rose-800/60 transition-all active:scale-90"
                   title="Ontkoppel deze transactie van deze post"

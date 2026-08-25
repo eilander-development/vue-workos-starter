@@ -10,11 +10,20 @@ import {
   HelpCircle,
   TrendingDown,
   Eye,
+  PiggyBank,
 } from "lucide-vue-next";
-import type { MonthlyBudget, BudgetItem, BudgetCategoryGroup, Transaction, CategoryDefinition } from "../types";
+import type { MonthlyBudget, BudgetItem, BudgetCategoryGroup, Transaction, CategoryDefinition, SavingsGoal } from "../types";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
 import { budgetItemRows, sumBudgetedAmount, sumBudgetedPaid, sumBudgetedRemaining, sumBudgetedOver } from "../kpiBreakdown";
-import { hasPotEnvelope, shadowOverspend } from "../potSettlement";
+import {
+  computePotSettlement,
+  hasPotEnvelope,
+  potCompensationStatus,
+  potGoalsLinkedToItem,
+  shadowOverspend,
+  type PotSettlement,
+} from "../potSettlement";
+import PotSettlementModal from "./PotSettlementModal.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -26,10 +35,12 @@ const props = withDefaults(
     onOpenEditBudgetItem?: (item: BudgetItem) => void;
     onOpenItemTransactions?: (item: BudgetItem) => void;
     categories?: CategoryDefinition[];
+    savingsGoals?: SavingsGoal[];
   }>(),
   {
     transactions: () => [],
     categories: () => [],
+    savingsGoals: () => [],
   }
 );
 
@@ -126,6 +137,52 @@ function itemState(item: BudgetItem) {
   const percent =
     item.actual > 0 ? Math.min(100, Math.round((item.paidOrReceived / item.actual) * 100)) : 0;
   return { isZeroNotApplicable, isPaid, isPartiallyPaid, isOverBudget, pending, percent };
+}
+
+function paidAmountClass(item: BudgetItem): string {
+  if (item.paidOrReceived <= 0) return "text-slate-400";
+  if (itemState(item).isOverBudget) return "text-rose-400";
+  return "text-emerald-400";
+}
+
+function pinAmountClass(item: BudgetItem): string {
+  return shadowOverspend(item) > 0 ? "text-rose-400" : "text-emerald-400";
+}
+
+function overspendAmount(item: BudgetItem): number {
+  if (hasPotEnvelope(item)) {
+    return shadowOverspend(item);
+  }
+  return itemState(item).isOverBudget ? item.paidOrReceived - item.actual : 0;
+}
+
+function linkedPotGoal(item: BudgetItem): SavingsGoal | undefined {
+  return potGoalsLinkedToItem(item.id, props.savingsGoals)[0];
+}
+
+function potSettlementFor(item: BudgetItem): PotSettlement | null {
+  const goal = linkedPotGoal(item);
+  if (!goal) return null;
+  return computePotSettlement(goal, props.currentMonth, props.transactions);
+}
+
+const potDetailItem = ref<BudgetItem | null>(null);
+
+const potDetailGoal = computed(() =>
+  potDetailItem.value ? linkedPotGoal(potDetailItem.value) ?? null : null
+);
+
+const potDetailSettlement = computed((): PotSettlement | null => {
+  if (!potDetailItem.value) return null;
+  return potSettlementFor(potDetailItem.value);
+});
+
+function openPotDetail(item: BudgetItem) {
+  potDetailItem.value = item;
+}
+
+function closePotDetail() {
+  potDetailItem.value = null;
 }
 </script>
 
@@ -296,66 +353,65 @@ function itemState(item: BudgetItem) {
       <div
         v-for="item in filteredItems"
         :key="item.id"
-        class="bg-[#101726] border border-slate-800 hover:border-slate-700 p-4 rounded-2xl shadow-sm transition-all flex flex-col justify-between"
+        class="bg-[#101726] border border-slate-800/90 hover:border-slate-700/80 p-5 rounded-2xl shadow-sm transition-all flex flex-col justify-between"
       >
         <div>
-          <div class="flex items-start justify-between mb-2">
+          <div class="flex items-start justify-between mb-4">
             <div>
-              <h4 class="font-bold text-white text-sm">{{ item.name }}</h4>
-              <span class="text-[11px] text-slate-400">{{ item.group }}</span>
-              <span v-if="hasPotEnvelope(item)" class="block text-[10px] text-amber-300/90 mt-0.5">
-                Potje · bankuitgaven als schaduw
+              <h4 class="font-bold text-white text-base">{{ item.name }}</h4>
+              <span class="text-xs text-slate-400">
+                {{ hasPotEnvelope(item) ? `${item.group} · potje` : item.group }}
               </span>
             </div>
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-2">
               <span
                 v-if="itemState(item).isZeroNotApplicable"
-                class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700"
+                class="text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700/80"
               >
                 Niet van toepassing (€0)
               </span>
               <span
                 v-else-if="itemState(item).isOverBudget"
-                class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-950/80 text-rose-400 border border-rose-800 flex items-center gap-1"
+                class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-rose-950/80 text-rose-400 border border-rose-800/80"
               >
                 Teveel betaald
               </span>
               <span
                 v-else-if="itemState(item).isPaid"
-                class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800 flex items-center gap-1"
+                class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center gap-1.5"
               >
-                <CheckCircle2 class="w-3 h-3" />
+                <CheckCircle2 class="w-3.5 h-3.5" />
                 <span>Voldaan via Bank</span>
               </span>
               <span
                 v-else-if="itemState(item).isPartiallyPaid"
-                class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800 flex items-center gap-1"
+                class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800/80 flex items-center gap-1.5"
               >
-                <Clock class="w-3 h-3" />
+                <Clock class="w-3.5 h-3.5" />
                 <span>Deels voldaan</span>
               </span>
               <span
                 v-else
-                class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1"
+                class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700/80 flex items-center gap-1.5"
               >
-                <Clock class="w-3 h-3" />
+                <Clock class="w-3.5 h-3.5" />
                 <span>Openstaand</span>
               </span>
               <button
                 v-if="onOpenEditBudgetItem"
                 type="button"
-                class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
                 title="Budget en frequentie aanpassen"
                 @click="onOpenEditBudgetItem(item)"
               >
-                <Edit2 class="w-3.5 h-3.5" />
+                <Edit2 class="w-4 h-4" />
               </button>
             </div>
           </div>
 
           <div
             v-if="!itemState(item).isZeroNotApplicable"
-            class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden my-3"
+            class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-3"
           >
             <div
               class="h-full rounded-full transition-all"
@@ -363,40 +419,40 @@ function itemState(item: BudgetItem) {
                 itemState(item).isOverBudget
                   ? 'bg-rose-500'
                   : itemState(item).isPaid
-                    ? 'bg-emerald-500'
+                    ? 'bg-emerald-400'
                     : itemState(item).isPartiallyPaid
-                      ? 'bg-amber-500'
-                      : 'bg-slate-700'
+                      ? 'bg-amber-400'
+                      : 'bg-slate-600'
               "
               :style="{ width: `${itemState(item).percent}%` }"
             />
           </div>
 
-          <div class="space-y-1 text-xs font-mono mt-3">
-            <div class="flex justify-between text-slate-300">
-              <span class="font-sans text-slate-400">Budget ({{ currentMonth.monthName }}):</span>
-              <span class="font-semibold text-white">
+          <div class="rounded-xl overflow-hidden border border-slate-800/80">
+          <div class="bg-slate-950/50 p-3.5 space-y-2.5 font-mono text-xs">
+            <div class="flex justify-between items-center text-slate-300">
+              <span class="font-sans font-medium text-slate-400">
+                Begroot voor {{ currentMonth.monthName }}:
+              </span>
+              <span class="font-bold text-white text-sm">
                 € {{ item.actual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </span>
             </div>
-            <div class="flex justify-between text-slate-300 pt-1 border-t border-slate-800">
-              <span class="font-sans text-slate-400">
-                {{ hasPotEnvelope(item) ? "Betaald (potje):" : "Betaald via rekening (Auto):" }}
+            <div class="flex justify-between items-center text-slate-300 pt-1.5 border-t border-slate-800">
+              <span class="font-sans font-medium text-slate-400">
+                {{ hasPotEnvelope(item) ? "Betaald (potje):" : "Betaald via rekening (Live bank):" }}
               </span>
-              <span
-                class="font-semibold"
-                :class="item.paidOrReceived > 0 ? 'text-rose-400' : 'text-slate-400'"
-              >
+              <span class="font-bold text-sm" :class="paidAmountClass(item)">
                 € {{ item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </span>
             </div>
             <div
               v-if="hasPotEnvelope(item) && (item.shadowSpent ?? 0) > 0"
-              class="flex justify-between font-semibold pt-1 border-t border-slate-800"
-              :class="shadowOverspend(item) > 0 ? 'text-rose-400' : 'text-amber-300'"
+              class="flex justify-between items-center pt-1.5 border-t border-slate-800"
+              :class="pinAmountClass(item)"
             >
-              <span class="font-sans">Schaduwuitgaven:</span>
-              <span>
+              <span class="font-sans font-medium">Uitgegeven:</span>
+              <span class="font-bold text-sm">
                 €
                 {{
                   item.shadowSpent!.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
@@ -405,44 +461,86 @@ function itemState(item: BudgetItem) {
             </div>
             <div
               v-if="itemState(item).pending > 0"
-              class="flex justify-between text-amber-400 font-semibold pt-1 border-t border-slate-800"
+              class="flex justify-between items-center text-amber-400 pt-1.5 border-t border-slate-800"
             >
-              <span class="font-sans">Nog te betalen:</span>
-              <span>
+              <span class="font-sans font-medium">Nog te betalen:</span>
+              <span class="font-bold">
                 €
                 {{
                   itemState(item).pending.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
                 }}
               </span>
             </div>
-            <div
-              v-if="itemState(item).isOverBudget"
-              class="flex justify-between text-rose-400 font-semibold pt-1 border-t border-slate-800"
+          </div>
+          <div
+            v-if="overspendAmount(item) > 0"
+            class="bg-red-600 text-white font-bold px-3.5 py-2 flex items-center justify-between text-xs tracking-wide"
+          >
+            <span>Overschrijding</span>
+            <span class="font-mono">
+              € −
+              {{
+                overspendAmount(item).toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+              }}
+            </span>
+          </div>
+          </div>
+
+          <div
+            v-if="hasPotEnvelope(item) && potSettlementFor(item)"
+            class="mt-3 bg-amber-950/30 border border-amber-800/50 rounded-xl px-3 py-2.5 space-y-1.5 text-[11px] font-mono"
+          >
+            <button
+              type="button"
+              class="w-full flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 border text-left"
+              :class="
+                potCompensationStatus(potSettlementFor(item)!).sufficient
+                  ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
+                  : 'bg-rose-950/30 border-rose-800/50 text-rose-300'
+              "
+              @click="openPotDetail(item)"
             >
-              <span class="font-sans">Overschrijding:</span>
-              <span>
-                € -
+              <span class="font-sans font-semibold text-[10px] uppercase tracking-wide">
                 {{
-                  (item.paidOrReceived - item.actual).toLocaleString("nl-NL", {
+                  potCompensationStatus(potSettlementFor(item)!).sufficient
+                    ? "Voldoende gecompenseerd"
+                    : "Nog niet voldoende"
+                }}
+              </span>
+              <PiggyBank class="w-3.5 h-3.5 shrink-0 opacity-80" />
+            </button>
+            <div class="flex justify-between text-slate-300">
+              <span>Gecompenseerd</span>
+              <span class="text-emerald-400">
+                €
+                {{
+                  potSettlementFor(item)!.compensated.toLocaleString("nl-NL", {
                     minimumFractionDigits: 2,
                   })
                 }}
               </span>
             </div>
             <div
-              v-else-if="hasPotEnvelope(item) && shadowOverspend(item) > 0"
-              class="flex justify-between text-rose-400 font-semibold pt-1 border-t border-slate-800"
+              v-if="!potCompensationStatus(potSettlementFor(item)!).sufficient"
+              class="flex justify-between font-bold text-amber-400"
             >
-              <span class="font-sans">Schaduw overschrijding:</span>
+              <span>Nog te compenseren</span>
               <span>
-                € -
+                €
                 {{
-                  shadowOverspend(item).toLocaleString("nl-NL", {
+                  potCompensationStatus(potSettlementFor(item)!).shortfall.toLocaleString("nl-NL", {
                     minimumFractionDigits: 2,
                   })
                 }}
               </span>
             </div>
+            <button
+              type="button"
+              class="w-full text-left text-indigo-400 hover:text-indigo-300 font-sans font-semibold pt-1"
+              @click="openPotDetail(item)"
+            >
+              Bekijk potje →
+            </button>
           </div>
         </div>
 
@@ -482,6 +580,14 @@ function itemState(item: BudgetItem) {
       :total-value="kpiBreakdown?.total ?? 0"
       :total-color-class="kpiKey ? kpiMeta[kpiKey].color : 'text-white'"
       :on-close="() => (kpiKey = null)"
+    />
+
+    <PotSettlementModal
+      :is-open="!!potDetailGoal && !!potDetailSettlement"
+      :on-close="closePotDetail"
+      :goal="potDetailGoal"
+      :settlement="potDetailSettlement"
+      :current-month="currentMonth"
     />
   </div>
 </template>

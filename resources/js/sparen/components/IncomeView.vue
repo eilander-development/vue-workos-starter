@@ -3,9 +3,6 @@ import { computed, ref } from "vue";
 import {
   ArrowUpCircle,
   TrendingUp,
-  Briefcase,
-  Baby,
-  Receipt,
   CheckCircle2,
   Clock,
   Plus,
@@ -76,13 +73,6 @@ const kpiBreakdown = computed(() =>
     : null
 );
 
-function itemIcon(name: string) {
-  const lower = name.toLowerCase();
-  if (lower.includes("salaris") || lower.includes("mark")) return Briefcase;
-  if (lower.includes("kind")) return Baby;
-  return Receipt;
-}
-
 function itemState(item: BudgetItem) {
   const isZeroBudget = item.actual === 0;
   const isZeroPaid = item.paidOrReceived === 0;
@@ -92,12 +82,15 @@ function itemState(item: BudgetItem) {
     !isZeroBudget && item.paidOrReceived > 0 && item.paidOrReceived < item.actual;
   const pendingAmount = Math.max(0, item.actual - item.paidOrReceived);
   const surplusAmount = Math.max(0, item.paidOrReceived - item.actual);
+  const percent =
+    item.actual > 0 ? Math.min(100, Math.round((item.paidOrReceived / item.actual) * 100)) : 0;
   return {
     isZeroNotApplicable,
     isReceived,
     isPartiallyReceived,
     pendingAmount,
     surplusAmount,
+    percent,
   };
 }
 </script>
@@ -222,7 +215,7 @@ function itemState(item: BudgetItem) {
       </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div
         v-for="item in incomeItems"
         :key="item.id"
@@ -230,118 +223,130 @@ function itemState(item: BudgetItem) {
       >
         <div>
           <div class="flex items-start justify-between mb-4">
-            <div class="flex items-center gap-3">
-              <div
-                class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0"
-              >
-                <component :is="itemIcon(item.name)" class="w-5 h-5" />
-              </div>
-              <div>
-                <h4 class="font-bold text-white text-base">{{ item.name }}</h4>
-                <span class="text-xs text-slate-400">
-                  {{
-                    item.name.toLowerCase().includes("kinderbijslag")
-                      ? "Kwartaalpost (Jan, Apr, Jul, Okt)"
-                      : "Maandelijkse inkomstenbron"
-                  }}
-                </span>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <span
-                v-if="itemState(item).isZeroNotApplicable"
-                class="text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700/80 flex items-center gap-1.5"
-              >
-                <span>Geen uitkering deze maand (€0)</span>
-              </span>
-              <span
-                v-else-if="itemState(item).isReceived"
-                class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center gap-1.5"
-              >
-                <CheckCircle2 class="w-3.5 h-3.5" />
-                <span>Bijgeschreven via Bank</span>
-              </span>
-              <span
-                v-else-if="itemState(item).isPartiallyReceived"
-                class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800/80 flex items-center gap-1.5"
-              >
-                <Clock class="w-3.5 h-3.5" />
-                <span>Deels ontvangen</span>
-              </span>
-              <span
-                v-else
-                class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800/80 flex items-center gap-1.5"
-              >
-                <Clock class="w-3.5 h-3.5" />
-                <span>In afwachting</span>
-              </span>
-              <button
-                v-if="onOpenEditBudgetItem"
-                type="button"
-                class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-                title="Post en maandbedragen aanpassen"
-                @click="onOpenEditBudgetItem(item)"
-              >
-                <Edit2 class="w-4 h-4" />
-              </button>
-            </div>
+          <div>
+            <h4 class="font-bold text-white text-base">{{ item.name }}</h4>
+            <span class="text-xs text-slate-400">
+              {{
+                item.name.toLowerCase().includes("kinderbijslag")
+                  ? "Kwartaalpost (Jan, Apr, Jul, Okt)"
+                  : "Maandelijkse inkomstenbron"
+              }}
+            </span>
           </div>
-
-          <div class="bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/80 space-y-2.5 font-mono text-xs">
-            <div class="flex justify-between items-center text-slate-300">
-              <span class="font-sans font-medium text-slate-400">
-                Begroot voor {{ currentMonth.monthName }}:
-              </span>
-              <span class="font-bold text-white text-sm">
-                € {{ item.actual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-              </span>
-            </div>
-            <div class="flex justify-between items-center text-slate-300 pt-1.5 border-t border-slate-800">
-              <span class="font-sans font-medium text-slate-400">
-                Ontvangen op rekening (Live bank):
-              </span>
-              <span
-                class="font-bold text-sm"
-                :class="item.paidOrReceived > 0 ? 'text-emerald-400' : 'text-slate-400'"
-              >
-                € {{ item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-              </span>
-            </div>
-            <div
-              v-if="itemState(item).pendingAmount > 0"
-              class="flex justify-between items-center text-amber-400 pt-1.5 border-t border-slate-800"
+          <div class="flex items-center gap-2">
+            <span
+              v-if="itemState(item).isZeroNotApplicable"
+              class="text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700/80"
             >
-              <span class="font-sans font-medium">Nog te ontvangen:</span>
-              <span class="font-bold">
-                €
-                {{
-                  itemState(item).pendingAmount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                }}
-              </span>
-            </div>
-            <div
-              v-if="itemState(item).surplusAmount > 0"
-              class="flex justify-between items-center text-emerald-400 pt-1.5 border-t border-slate-800"
+              Geen uitkering deze maand (€0)
+            </span>
+            <span
+              v-else-if="itemState(item).isReceived"
+              class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center gap-1.5"
             >
-              <span class="font-sans font-medium">Teveel / Extra ontvangen:</span>
-              <span class="font-bold">
-                +€
-                {{
-                  itemState(item).surplusAmount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
-                }}
-              </span>
-            </div>
+              <CheckCircle2 class="w-3.5 h-3.5" />
+              <span>Bijgeschreven via Bank</span>
+            </span>
+            <span
+              v-else-if="itemState(item).isPartiallyReceived"
+              class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800/80 flex items-center gap-1.5"
+            >
+              <Clock class="w-3.5 h-3.5" />
+              <span>Deels ontvangen</span>
+            </span>
+            <span
+              v-else
+              class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800/80 flex items-center gap-1.5"
+            >
+              <Clock class="w-3.5 h-3.5" />
+              <span>In afwachting</span>
+            </span>
+            <button
+              v-if="onOpenEditBudgetItem"
+              type="button"
+              class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              title="Post en maandbedragen aanpassen"
+              @click="onOpenEditBudgetItem(item)"
+            >
+              <Edit2 class="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-          <span class="text-slate-500 font-mono text-[11px]">
-            {{ item.paymentCount || (item.paidOrReceived > 0 ? 1 : 0) }} bankmutatie(s)
+        <div
+          v-if="!itemState(item).isZeroNotApplicable"
+          class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-3"
+        >
+          <div
+            class="h-full rounded-full transition-all"
+            :class="
+              itemState(item).surplusAmount > 0
+                ? 'bg-emerald-400'
+                : itemState(item).isReceived
+                  ? 'bg-emerald-400'
+                  : itemState(item).isPartiallyReceived
+                    ? 'bg-amber-400'
+                    : 'bg-slate-600'
+            "
+            :style="{ width: `${itemState(item).percent}%` }"
+          />
+        </div>
+
+        <div class="bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/80 space-y-2.5 font-mono text-xs">
+          <div class="flex justify-between items-center text-slate-300">
+            <span class="font-sans font-medium text-slate-400">
+              Begroot voor {{ currentMonth.monthName }}:
+            </span>
+            <span class="font-bold text-white text-sm">
+              € {{ item.actual.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div class="flex justify-between items-center text-slate-300 pt-1.5 border-t border-slate-800">
+            <span class="font-sans font-medium text-slate-400">
+              Ontvangen op rekening (Live bank):
+            </span>
+            <span
+              class="font-bold text-sm"
+              :class="item.paidOrReceived > 0 ? 'text-emerald-400' : 'text-slate-400'"
+            >
+              € {{ item.paidOrReceived.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div
+            v-if="itemState(item).pendingAmount > 0"
+            class="flex justify-between items-center text-amber-400 pt-1.5 border-t border-slate-800"
+          >
+            <span class="font-sans font-medium">Nog te ontvangen:</span>
+            <span class="font-bold">
+              €
+              {{
+                itemState(item).pendingAmount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+              }}
+            </span>
+          </div>
+          <div
+            v-if="itemState(item).surplusAmount > 0"
+            class="flex justify-between items-center text-emerald-400 pt-1.5 border-t border-slate-800"
+          >
+            <span class="font-sans font-medium">Teveel / Extra ontvangen:</span>
+            <span class="font-bold">
+              +€
+              {{
+                itemState(item).surplusAmount.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+              }}
+            </span>
+          </div>
+        </div>
+        </div>
+
+        <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <span class="text-slate-500 text-[11px] font-mono">
+            {{ item.paymentCount || (item.paidOrReceived > 0 ? 1 : 0) }} bijschrijving(en)
           </span>
           <button
             v-if="onOpenItemTransactions"
             type="button"
-            class="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1.5 hover:underline py-0.5 px-1 rounded transition-colors"
+            class="text-indigo-400 hover:text-indigo-300 font-semibold text-xs flex items-center gap-1.5 hover:underline py-0.5 px-1 rounded transition-colors"
             :title="`Bekijk alle gekoppelde bankmutaties voor ${item.name}`"
             @click="onOpenItemTransactions(item)"
           >
@@ -351,10 +356,10 @@ function itemState(item: BudgetItem) {
           <button
             v-else-if="onOpenEditBudgetItem"
             type="button"
-            class="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 hover:underline"
+            class="text-indigo-400 hover:text-indigo-300 font-medium text-xs hover:underline"
             @click="onOpenEditBudgetItem(item)"
           >
-            <span>Budget/Maanden bewerken</span>
+            Aanpassen
           </button>
         </div>
       </div>

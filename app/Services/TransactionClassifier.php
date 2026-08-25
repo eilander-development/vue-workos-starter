@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\ImportRule;
 use App\Models\SavingsGoal;
 use App\Models\Transaction;
+use App\Support\IngSavingsTransfer;
 use Illuminate\Support\Collection;
 
 class TransactionClassifier
@@ -18,6 +19,7 @@ class TransactionClassifier
     {
         $haystack = mb_strtolower(trim($description.' '.($counterpartyName ?? '').' '.($counterpartyIban ?? '')));
         $ibanHaystack = strtoupper(preg_replace('/\s+/', '', $description.' '.($counterpartyIban ?? '').' '.($counterpartyName ?? '')) ?? '');
+        $direction = $this->potTransferDirection($description);
 
         foreach (SavingsGoal::query()->where('kind', 'pot')->get() as $goal) {
             if (! $this->matchesSavingsTransfer($description, $goal, $haystack, $ibanHaystack)) {
@@ -25,20 +27,24 @@ class TransactionClassifier
             }
 
             $spaarCategory = Category::query()->where('type', 'saving')->orderBy('id')->first();
-            $direction = $this->potTransferDirection($description);
 
-            return [
-                'type' => 'saving',
-                'category_id' => $spaarCategory?->id,
-                'budget_id' => null,
-                'rule_id' => null,
-                'category_group' => $spaarCategory?->name ?? 'Spaargeld',
-                'budget_key' => null,
-                'link_excluded' => true,
-                'link_exclusion_reason' => $direction === 'naar'
-                    ? 'Pot-storting ('.$goal->name.') — apart bijgehouden in potje, niet koppelen aan rubriek'
-                    : 'Pot-opname ('.$goal->name.') — verrekening in potje, niet koppelen aan rubriek',
-            ];
+            return $this->potLinkExclusion(
+                $spaarCategory,
+                $direction === 'naar' ? 'naar' : 'van',
+                $goal->name,
+            );
+        }
+
+        if ($direction !== null && IngSavingsTransfer::isSpaarpotDescription($description)) {
+            $spaarCategory = Category::query()->where('type', 'saving')->orderBy('id')->first();
+            $parsed = IngSavingsTransfer::parseDestination($description);
+            $ref = is_array($parsed) ? ($parsed['ref'] ?? '') : '';
+
+            return $this->potLinkExclusion(
+                $spaarCategory,
+                $direction,
+                $ref !== '' ? 'spaarpotje '.$ref : 'spaarpotje',
+            );
         }
 
         foreach (SavingsGoal::query()->where('kind', '!=', 'pot')->get() as $goal) {
@@ -64,7 +70,7 @@ class TransactionClassifier
         $rules = ImportRule::query()->with(['category', 'budget'])->where('is_active', true)->orderBy('id')->get();
 
         foreach ($rules as $rule) {
-            if ($this->ruleMatches($rule, $description, $counterpartyIban, $counterpartyName, $haystack)) {
+            if ($this->ruleMatches($rule, $description, $counterpartyIban, $counterpartyName, $haystack, $amount)) {
                 $categoryType = $rule->category?->type;
 
                 return [
@@ -114,33 +120,41 @@ class TransactionClassifier
     public function reclassifyPotDeposits(): int
     {
         $updated = 0;
-        $spaarCategory = Category::query()->where('type', 'saving')->orderBy('id')->first();
+        $transactions = Transaction::query()
+            ->whereRaw('LOWER(description) LIKE ?', ['%spaarrekening%'])
+            ->get();
 
-        foreach (SavingsGoal::query()->where('kind', 'pot')->get() as $goal) {
-            $keyword = mb_strtolower(trim($goal->name));
-            if (mb_strlen($keyword) < 3) {
-                continue;
-            }
+        foreach ($transactions as $transaction) {
+            $result = $this->classify(
+                (string) $transaction->description,
+                $transaction->counterparty_iban,
+                $transaction->counterparty_name,
+                (float) $transaction->amount,
+            );
 
-            $transactions = Transaction::query()
-                ->whereRaw('LOWER(description) LIKE ?', ['%'.$keyword.'%'])
-                ->get();
+            $exclude = (bool) ($result['link_excluded'] ?? false);
+            $reason = $result['link_exclusion_reason'] ?? null;
+            $wasAutoPot = str_starts_with((string) $transaction->link_exclusion_reason, 'Pot-storting')
+                || str_starts_with((string) $transaction->link_exclusion_reason, 'Pot-opname');
 
-            foreach ($transactions as $transaction) {
-                $direction = $this->potTransferDirection((string) $transaction->description);
-                if ($direction === null) {
-                    continue;
-                }
-
+            if ($exclude) {
                 $transaction->fill([
-                    'type' => 'saving',
-                    'category_id' => $spaarCategory?->id,
+                    'type' => $result['type'] ?? $transaction->type,
+                    'category_id' => $result['category_id'],
                     'budget_id' => null,
                     'rule_id' => null,
                     'link_excluded' => true,
-                    'link_exclusion_reason' => $direction === 'naar'
-                        ? 'Pot-storting ('.$goal->name.') — apart bijgehouden in potje, niet koppelen aan rubriek'
-                        : 'Pot-opname ('.$goal->name.') — verrekening in potje, niet koppelen aan rubriek',
+                    'link_exclusion_reason' => $reason,
+                ]);
+                $transaction->save();
+                $updated++;
+                continue;
+            }
+
+            if ($wasAutoPot && $transaction->link_excluded) {
+                $transaction->fill([
+                    'link_excluded' => false,
+                    'link_exclusion_reason' => null,
                 ]);
                 $transaction->save();
                 $updated++;
@@ -150,11 +164,27 @@ class TransactionClassifier
         return $updated;
     }
 
-    private function ruleMatches(ImportRule $rule, string $description, ?string $iban, ?string $counterparty, string $haystack): bool
-    {
+    private function ruleMatches(
+        ImportRule $rule,
+        string $description,
+        ?string $iban,
+        ?string $counterparty,
+        string $haystack,
+        ?float $amount = null,
+    ): bool {
         $keyword = mb_strtolower((string) $rule->match_value);
         if ($keyword === '') {
             return false;
+        }
+
+        $categoryType = $rule->category?->type;
+        if ($amount !== null) {
+            if ($categoryType === 'income' && $amount <= 0) {
+                return false;
+            }
+            if ($categoryType === 'expense' && $amount >= 0) {
+                return false;
+            }
         }
 
         $inDescription = str_contains(mb_strtolower($description), $keyword);
@@ -168,6 +198,22 @@ class TransactionClassifier
         };
     }
 
+    private function potLinkExclusion(?Category $spaarCategory, string $direction, string $label): array
+    {
+        return [
+            'type' => 'saving',
+            'category_id' => $spaarCategory?->id,
+            'budget_id' => null,
+            'rule_id' => null,
+            'category_group' => $spaarCategory?->name ?? 'Spaargeld',
+            'budget_key' => null,
+            'link_excluded' => true,
+            'link_exclusion_reason' => $direction === 'naar'
+                ? 'Pot-storting ('.$label.') — apart bijgehouden in potje, niet koppelen aan rubriek'
+                : 'Pot-opname ('.$label.') — verrekening in potje, niet koppelen aan rubriek',
+        ];
+    }
+
     private function matchesSavingsTransfer(
         string $description,
         SavingsGoal $goal,
@@ -178,14 +224,12 @@ class TransactionClassifier
             return false;
         }
 
-        $keyword = mb_strtolower(trim($goal->name));
-        if (mb_strlen($keyword) >= 3 && str_contains($haystack, $keyword)) {
-            return true;
-        }
-
-        $cleanIban = strtoupper(preg_replace('/\s+/', '', $goal->account_iban) ?? '');
-
-        return $cleanIban !== '' && str_contains($ibanHaystack, $cleanIban);
+        return IngSavingsTransfer::matchesGoal(
+            $haystack,
+            (string) $goal->name,
+            $goal->account_iban,
+            $ibanHaystack,
+        );
     }
 
     private function potTransferDirection(string $description): ?string

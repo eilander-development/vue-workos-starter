@@ -1,8 +1,11 @@
 import type { BudgetItem, MonthlyBudget, SavingsGoal, Transaction } from "./types";
 import { isTransactionInReportingMonth } from "./month";
 import {
+  isIngSpaarpotTransfer,
   isSavingsWithdrawalTransaction,
+  parseIngSavingsDestination,
   savingsBalanceDelta,
+  savingsTransferDirection,
   transactionMatchesSavingsGoal,
   transactionMatchesSavingsGoalDeposit,
   transactionMatchesSavingsGoalWithdrawal,
@@ -11,8 +14,8 @@ import {
 export const POT_DEPOSIT_LINK_EXCLUSION_PREFIX = "Pot-storting";
 export const POT_WITHDRAWAL_LINK_EXCLUSION_PREFIX = "Pot-opname";
 
-function potTransferLinkExclusionForGoal(
-  goal: SavingsGoal,
+function potTransferLinkExclusionForLabel(
+  label: string,
   direction: "naar" | "van"
 ): {
   linkExcluded: true;
@@ -29,8 +32,28 @@ function potTransferLinkExclusionForGoal(
 
   return {
     linkExcluded: true,
-    linkExclusionReason: `${prefix} (${goal.name}) — ${detail}`,
+    linkExclusionReason: `${prefix} (${label}) — ${detail}`,
   };
+}
+
+function potTransferLinkExclusionForGoal(
+  goal: SavingsGoal,
+  direction: "naar" | "van"
+): {
+  linkExcluded: true;
+  linkExclusionReason: string;
+} {
+  return potTransferLinkExclusionForLabel(goal.name, direction);
+}
+
+export function isAutomaticPotLinkExclusion(reason?: string | null): boolean {
+  if (!reason) {
+    return false;
+  }
+  return (
+    reason.startsWith(POT_DEPOSIT_LINK_EXCLUSION_PREFIX) ||
+    reason.startsWith(POT_WITHDRAWAL_LINK_EXCLUSION_PREFIX)
+  );
 }
 
 /** @deprecated Use applyPotTransferLinkExclusion */
@@ -47,6 +70,8 @@ export function applyPotTransferLinkExclusion(
   goals: SavingsGoal[],
   ownIbans: string[] = []
 ): Transaction {
+  const direction = savingsTransferDirection(tx);
+
   for (const goal of goals) {
     if (!isPotGoal(goal)) {
       continue;
@@ -67,6 +92,35 @@ export function applyPotTransferLinkExclusion(
       budgetItemId: undefined,
       matchedRuleId: undefined,
       ...exclusion,
+    };
+  }
+
+  if (direction && isIngSpaarpotTransfer(tx)) {
+    const ref = parseIngSavingsDestination(tx.description)?.ref;
+    const exclusion = potTransferLinkExclusionForLabel(
+      ref ? `spaarpotje ${ref}` : "spaarpotje",
+      direction
+    );
+
+    return {
+      ...tx,
+      type: "Sparen",
+      categoryGroup: "Spaargeld",
+      budgetItemId: undefined,
+      matchedRuleId: undefined,
+      ...exclusion,
+    };
+  }
+
+  if (
+    tx.linkExcluded &&
+    isAutomaticPotLinkExclusion(tx.linkExclusionReason) &&
+    !isIngSpaarpotTransfer(tx)
+  ) {
+    return {
+      ...tx,
+      linkExcluded: false,
+      linkExclusionReason: undefined,
     };
   }
 
@@ -270,4 +324,104 @@ export function computePotPeriodBalance(
     depositTransactions,
     withdrawalTransactions,
   };
+}
+
+export type PotTransferRole = "deposit" | "withdrawal";
+
+export type PotTransferListedTx = {
+  tx: Transaction;
+  role: PotTransferRole;
+};
+
+export function potGoalsLinkedToItem(
+  itemId: string,
+  savingsGoals: SavingsGoal[]
+): SavingsGoal[] {
+  return savingsGoals.filter(
+    (goal) => isPotGoal(goal) && goalBudgetItemIds(goal).includes(itemId)
+  );
+}
+
+function exclusionReasonNamesGoal(
+  reason: string | undefined,
+  goal: Pick<SavingsGoal, "name">
+): boolean {
+  if (!reason || !isAutomaticPotLinkExclusion(reason)) {
+    return false;
+  }
+  return reason.includes(`(${goal.name})`);
+}
+
+function potGoalClaimsTransfer(
+  tx: Transaction,
+  goal: SavingsGoal,
+  ownIbans: string[]
+): boolean {
+  return (
+    transactionMatchesSavingsGoal(tx, goal, ownIbans) ||
+    exclusionReasonNamesGoal(tx.linkExclusionReason, goal)
+  );
+}
+
+/**
+ * Naar/Van-overboekingen van het potje bij deze begrotingspost.
+ * Die staan niet op budgetItemId (linkExcluded), maar horen wel in het mutatieoverzicht.
+ */
+export function potTransfersForBudgetItem(
+  itemId: string,
+  transactions: Transaction[],
+  savingsGoals: SavingsGoal[],
+  ownIbans: string[] = [],
+  envelopeBudget?: number
+): PotTransferListedTx[] {
+  const relatedGoals = potGoalsLinkedToItem(itemId, savingsGoals);
+  if (relatedGoals.length === 0) {
+    return [];
+  }
+
+  const allPotGoals = savingsGoals.filter(isPotGoal);
+  const listed: PotTransferListedTx[] = [];
+  const seen = new Set<string>();
+
+  for (const tx of transactions) {
+    const direction = savingsTransferDirection(tx);
+    if (direction !== "naar" && direction !== "van") {
+      continue;
+    }
+
+    const claimedByRelated = relatedGoals.some((goal) =>
+      potGoalClaimsTransfer(tx, goal, ownIbans)
+    );
+    const claimedByOther = allPotGoals.some(
+      (goal) =>
+        !relatedGoals.includes(goal) && potGoalClaimsTransfer(tx, goal, ownIbans)
+    );
+    const amountMatchesEnvelope =
+      envelopeBudget != null &&
+      envelopeBudget > 0 &&
+      Math.abs(Math.abs(tx.amount) - envelopeBudget) < 0.01;
+    // Ongematchte gelijmde ING-potstorting: toon bij dit potje als het uniek is,
+    // of als het bedrag overeenkomt met de envelop (typisch de maandstorting).
+    const unmatchedGlued =
+      relatedGoals.length === 1 &&
+      isIngSpaarpotTransfer(tx) &&
+      !claimedByOther &&
+      !claimedByRelated &&
+      (allPotGoals.length === 1 || amountMatchesEnvelope);
+
+    if (!claimedByRelated && !unmatchedGlued) {
+      continue;
+    }
+
+    if (seen.has(tx.id)) {
+      continue;
+    }
+    seen.add(tx.id);
+    listed.push({
+      tx,
+      role: direction === "naar" ? "deposit" : "withdrawal",
+    });
+  }
+
+  return listed;
 }

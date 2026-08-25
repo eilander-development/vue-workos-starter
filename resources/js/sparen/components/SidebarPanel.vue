@@ -315,16 +315,12 @@ async function handleLogout() {
     </div>
 
     <div class="mt-4 border-t border-slate-800 bg-slate-900/50">
-      <div
-        v-if="showCollapseToggle"
-        class="p-2 hidden md:flex border-b border-slate-800/60"
-        :class="collapsed ? 'justify-center' : 'justify-between items-center'"
-      >
-        <span v-if="!collapsed" class="text-[11px] text-slate-400 pl-2">Menu inklappen</span>
         <button
+          v-if="showCollapseToggle"
           id="sidebar-toggle-collapse-btn"
           type="button"
-          class="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center justify-center"
+          class="w-full p-2 hidden md:flex border-b border-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+          :class="collapsed ? 'justify-center' : 'justify-between items-center'"
           :title="
             collapsed
               ? 'Menu uitklappen (voor meer details)'
@@ -332,10 +328,12 @@ async function handleLogout() {
           "
           @click="emit('toggleCollapse')"
         >
-          <PanelLeftOpen v-if="collapsed" class="w-5 h-5 text-indigo-400" />
-          <PanelLeftClose v-else class="w-4 h-4" />
+          <span v-if="!collapsed" class="text-[11px] pl-2">Menu inklappen</span>
+          <span class="p-1.5 rounded-lg border border-slate-700/80 flex items-center justify-center">
+            <PanelLeftOpen v-if="collapsed" class="w-5 h-5 text-indigo-400" />
+            <PanelLeftClose v-else class="w-4 h-4" />
+          </span>
         </button>
-      </div>
 
       <div class="p-3" :class="collapsed ? 'flex justify-center' : 'p-4'">
         <div ref="userMenuRef" class="relative w-full">

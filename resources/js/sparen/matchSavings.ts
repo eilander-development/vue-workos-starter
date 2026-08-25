@@ -10,6 +10,60 @@ export function isOwnIban(iban: string, ownIbans: string[]): boolean {
   return compact.length >= 10 && ownIbans.some((own) => compactIban(own) === compact);
 }
 
+const SAVINGS_REF_PATTERN = /[A-Za-z]\d{5,}/;
+
+/**
+ * ING-oranje: gewone spaarrekening heeft een spatie voor het nummer,
+ * spaarpotjes plakken het nummer vast aan "spaarrekening".
+ *
+ * Naar Oranje spaarrekening L13628386 → rekening (koppelbaar)
+ * Naar Oranje spaarrekeningC13134173  → potje (niet koppelen)
+ */
+export function parseIngSavingsDestination(
+  text: string
+): { ref: string; isSpaarpot: boolean } | null {
+  const glued = /spaarrekening([A-Za-z]\d{5,})/i.exec(text);
+  if (glued) {
+    return { ref: glued[1].toUpperCase(), isSpaarpot: true };
+  }
+
+  const spaced = /spaarrekening\s+([A-Za-z]\d{5,})/i.exec(text);
+  if (spaced) {
+    return { ref: spaced[1].toUpperCase(), isSpaarpot: false };
+  }
+
+  return null;
+}
+
+export function extractSavingsTransferRef(text: string): string | null {
+  const parsed = parseIngSavingsDestination(text);
+  if (parsed) {
+    return parsed.ref;
+  }
+
+  const match = text.match(SAVINGS_REF_PATTERN);
+  return match ? match[0].toUpperCase() : null;
+}
+
+export function isIngSpaarpotTransfer(tx: Pick<Transaction, "description">): boolean {
+  const direction = savingsTransferDirection(tx);
+  if (direction !== "naar" && direction !== "van") {
+    return false;
+  }
+
+  return parseIngSavingsDestination(tx.description)?.isSpaarpot === true;
+}
+
+function isGenericSavingsLabel(name: string): boolean {
+  const normalized = name.trim().toLowerCase().replace(/\s+/g, " ");
+  return (
+    normalized === "spaarrekening" ||
+    normalized === "oranje spaarrekening" ||
+    normalized === "naar oranje spaarrekening" ||
+    normalized === "van oranje spaarrekening"
+  );
+}
+
 /** ING spaaroverboekingen: "Naar Oranje spaarrekening …" vs "Van Oranje spaarrekening …". */
 export function savingsTransferDirection(
   tx: Pick<Transaction, "description">
@@ -54,12 +108,23 @@ export function transactionMatchesSavingsGoal(
   ownIbans: string[] = []
 ): boolean {
   const haystack = `${tx.description} ${tx.counterparty ?? ""}`;
-  const keyword = goal.name.trim().toLowerCase();
-  const descMatch = keyword.length >= 3 && haystack.toLowerCase().includes(keyword);
+  const txRef = extractSavingsTransferRef(haystack);
+  const goalRef = extractSavingsTransferRef(`${goal.name} ${goal.accountIban ?? ""}`);
+
+  if (txRef && goalRef) {
+    return txRef === goalRef;
+  }
 
   const iban = compactIban(goal.accountIban);
   const ibanUsable = iban.length >= 10 && !isOwnIban(iban, ownIbans);
   const ibanMatch = ibanUsable && compactIban(haystack).includes(iban);
+
+  if (txRef && !goalRef && isGenericSavingsLabel(goal.name)) {
+    return ibanMatch;
+  }
+
+  const keyword = goal.name.trim().toLowerCase();
+  const descMatch = keyword.length >= 3 && haystack.toLowerCase().includes(keyword);
 
   return descMatch || ibanMatch;
 }
