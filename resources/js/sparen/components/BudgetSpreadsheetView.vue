@@ -569,7 +569,7 @@ function cardId(groupKey: string) {
           <button
             type="button"
             class="px-2.5 py-1 rounded-lg font-medium transition-all"
-            :class="filterType === 'inkomsten' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+            :class="filterType === 'inkomsten' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
             @click="filterType = 'inkomsten'"
           >
             Inkomsten
@@ -577,7 +577,7 @@ function cardId(groupKey: string) {
           <button
             type="button"
             class="px-2.5 py-1 rounded-lg font-medium transition-all"
-            :class="filterType === 'uitgaven' ? 'bg-rose-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+            :class="filterType === 'uitgaven' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
             @click="filterType = 'uitgaven'"
           >
             Uitgaven
@@ -585,7 +585,7 @@ function cardId(groupKey: string) {
           <button
             type="button"
             class="px-2.5 py-1 rounded-lg font-medium transition-all"
-            :class="filterType === 'sparen' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+            :class="filterType === 'sparen' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
             @click="filterType = 'sparen'"
           >
             Sparen

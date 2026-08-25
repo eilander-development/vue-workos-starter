@@ -469,34 +469,35 @@ function createRuleFromTx(tx: Transaction) {
             <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
           </select>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700 text-xs shrink-0">
           <button
             v-for="tab in filterTabs"
             :key="tab.id"
             type="button"
-            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
+            class="px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 whitespace-nowrap"
             :class="
               filterType === tab.id
                 ? tab.id === 'UNLINKED' && tab.isWarning
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
-                  : 'bg-indigo-600 text-white font-semibold shadow-sm'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm shadow-amber-500/20'
+                  : 'bg-indigo-600 text-white font-semibold'
                 : tab.id === 'UNLINKED' && tab.isWarning
-                  ? 'bg-amber-950/50 text-amber-300 border border-amber-800/60 hover:bg-amber-900/60 font-semibold'
-                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+                  ? 'bg-amber-500/20 text-amber-300 font-semibold hover:bg-amber-500/30'
+                  : 'text-slate-400 hover:text-white'
             "
             @click="filterType = tab.id"
           >
             <AlertCircle v-if="tab.id === 'UNLINKED' && tab.isWarning" class="w-3.5 h-3.5" />
             <span>{{ tab.label }}</span>
           </button>
-          <span class="w-px h-5 bg-slate-700 mx-0.5" aria-hidden="true" />
+        </div>
+        <div class="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700 text-xs shrink-0">
           <button
             type="button"
-            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
+            class="px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 whitespace-nowrap"
             :class="
               amountDirection === 'out'
-                ? 'bg-rose-600 text-white font-semibold shadow-sm'
-                : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+                ? 'bg-indigo-600 text-white font-semibold'
+                : 'text-slate-400 hover:text-white'
             "
             @click="toggleAmountDirection('out')"
           >
@@ -505,11 +506,11 @@ function createRuleFromTx(tx: Transaction) {
           </button>
           <button
             type="button"
-            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
+            class="px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 whitespace-nowrap"
             :class="
               amountDirection === 'in'
-                ? 'bg-emerald-600 text-white font-semibold shadow-sm'
-                : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+                ? 'bg-indigo-600 text-white font-semibold'
+                : 'text-slate-400 hover:text-white'
             "
             @click="toggleAmountDirection('in')"
           >

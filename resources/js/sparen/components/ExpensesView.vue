@@ -320,28 +320,28 @@ function closePotDetail() {
             class="w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
           />
         </div>
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700 text-xs shrink-0">
           <button
             type="button"
-            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors whitespace-nowrap"
+            class="px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all"
             :class="
               selectedGroup === 'ALL'
                 ? 'bg-indigo-600 text-white font-semibold'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
+                : 'text-slate-400 hover:text-white'
             "
             @click="selectedGroup = 'ALL'"
           >
-            Alle Rubrieken ({{ expenseItems.length }})
+            Alle ({{ expenseItems.length }})
           </button>
           <button
             v-for="grp in expenseGroups"
             :key="grp"
             type="button"
-            class="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors whitespace-nowrap"
+            class="px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all"
             :class="
               selectedGroup === grp
                 ? 'bg-indigo-600 text-white font-semibold'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
+                : 'text-slate-400 hover:text-white'
             "
             @click="selectedGroup = grp"
           >
