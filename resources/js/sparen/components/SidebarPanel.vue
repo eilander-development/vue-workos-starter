@@ -143,9 +143,9 @@ async function handleLogout() {
 
 <template>
   <div
-    class="flex flex-col justify-between h-full text-slate-300 select-none overflow-y-auto overflow-x-hidden"
+    class="flex flex-col h-full min-h-0 min-w-0 flex-1 text-slate-300 select-none overflow-hidden"
   >
-    <div>
+    <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
       <div
         class="p-3 sm:p-4 border-b border-slate-800 flex items-center"
         :class="collapsed ? 'justify-center' : 'justify-between'"
@@ -203,12 +203,20 @@ async function handleLogout() {
           <span
             class="text-[10px] px-1.5 py-0.5 rounded border"
             :class="
-              isConnected
+              isConnected && (bankAccount.consentDaysRemaining == null || bankAccount.consentDaysRemaining > 14)
                 ? 'text-emerald-400 bg-emerald-950/60 border-emerald-800/50'
                 : 'text-amber-400 bg-amber-950/60 border-amber-800/50'
             "
           >
-            {{ isConnected ? "Actief" : "Niet gekoppeld" }}
+            {{
+              isConnected
+                ? bankAccount.consentDaysRemaining != null
+                  ? bankAccount.consentDaysRemaining <= 14
+                    ? `Verloopt · ${bankAccount.consentDaysRemaining}d`
+                    : `Actief · ${bankAccount.consentDaysRemaining}d`
+                  : "Actief"
+                : "Niet gekoppeld"
+            }}
           </span>
         </div>
         <div class="flex items-baseline justify-between">
@@ -236,7 +244,7 @@ async function handleLogout() {
       <div v-else class="p-2 mx-2 my-3 flex flex-col items-center gap-2">
         <div
           class="relative group cursor-pointer"
-          :title="`${isConnected ? 'ING Actief' : 'ING niet gekoppeld'}: € ${formattedBalance}`"
+          :title="`${isConnected ? 'ING Actief' : 'ING niet gekoppeld'}${bankAccount.consentDaysRemaining != null ? ` · nog ${bankAccount.consentDaysRemaining} dagen` : ''}: € ${formattedBalance}`"
         >
           <button
             type="button"
@@ -314,19 +322,20 @@ async function handleLogout() {
       </nav>
     </div>
 
-    <div class="mt-4 border-t border-slate-800 bg-slate-900/50">
+    <div class="shrink-0 border-t border-slate-800 bg-slate-900">
         <button
           v-if="showCollapseToggle"
           id="sidebar-toggle-collapse-btn"
           type="button"
-          class="w-full p-2 hidden md:flex border-b border-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+          class="w-full p-2 hidden md:flex border-b border-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors relative z-10"
           :class="collapsed ? 'justify-center' : 'justify-between items-center'"
+          :aria-expanded="!collapsed"
           :title="
             collapsed
               ? 'Menu uitklappen (voor meer details)'
               : 'Menu inklappen naar iconen (voor meer schermruimte)'
           "
-          @click="emit('toggleCollapse')"
+          @click.stop="emit('toggleCollapse')"
         >
           <span v-if="!collapsed" class="text-[11px] pl-2">Menu inklappen</span>
           <span class="p-1.5 rounded-lg border border-slate-700/80 flex items-center justify-center">

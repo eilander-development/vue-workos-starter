@@ -5,6 +5,7 @@ import {
   RefreshCw,
   ShieldCheck,
   CheckCircle2,
+  AlertTriangle,
   Plus,
   Key,
   PiggyBank,
@@ -30,6 +31,47 @@ const props = withDefaults(
 const autoSync = ref(true);
 const syncInterval = ref("30");
 const isConnected = () => props.bankAccount.status === "connected";
+const consentExpiringSoon = () =>
+  isConnected() &&
+  props.bankAccount.consentDaysRemaining != null &&
+  props.bankAccount.consentDaysRemaining <= 14;
+
+function formatConsentDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return "";
+  }
+
+  return new Date(iso).toLocaleDateString("nl-NL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function consentStatusLabel(): string {
+  const account = props.bankAccount;
+  const until = formatConsentDate(account.consentValidUntil);
+
+  if (isConnected()) {
+    if (account.consentDaysRemaining == null) {
+      return until ? `Geldig tot ${until}` : "Geldig";
+    }
+    if (account.consentDaysRemaining === 0) {
+      return until ? `Verloopt vandaag (${until})` : "Verloopt vandaag";
+    }
+    const days =
+      account.consentDaysRemaining === 1
+        ? "nog 1 dag"
+        : `nog ${account.consentDaysRemaining} dagen`;
+    return until ? `Geldig tot ${until} (${days})` : `Geldig (${days})`;
+  }
+
+  if (account.consentValidUntil) {
+    return until ? `Verlopen op ${until}` : "Verlopen — opnieuw koppelen";
+  }
+
+  return "Niet gekoppeld";
+}
 
 function potFor(goal: SavingsGoal) {
   return isPotGoal(goal) && props.currentMonth
@@ -111,8 +153,15 @@ function potFor(goal: SavingsGoal) {
             <p class="text-xs text-slate-400">Mark Eilander</p>
           </div>
         </div>
-        <span class="text-[11px] font-mono text-slate-400">
-          Laatste sync: {{ bankAccount.lastSync || "—" }}
+        <span class="text-[11px] font-mono text-slate-400 text-right">
+          <span class="block">Laatste sync: {{ bankAccount.lastSync || "—" }}</span>
+          <span v-if="bankAccount.consentValidUntil" class="block mt-0.5" :class="isConnected() ? 'text-slate-500' : 'text-amber-400'">
+            {{
+              isConnected()
+                ? `Consent tot ${formatConsentDate(bankAccount.consentValidUntil)}`
+                : `Verlopen op ${formatConsentDate(bankAccount.consentValidUntil)}`
+            }}
+          </span>
         </span>
       </div>
 
@@ -264,8 +313,19 @@ function potFor(goal: SavingsGoal) {
           </div>
           <div class="flex justify-between py-2 border-b border-slate-800">
             <span class="text-slate-400">Consent Status:</span>
-            <span class="text-emerald-400 font-semibold flex items-center gap-1">
-              <CheckCircle2 class="w-3.5 h-3.5" /> Geldig (Nog 88 dagen)
+            <span
+              class="font-semibold flex items-center gap-1 text-right max-w-[70%]"
+              :class="
+                isConnected()
+                  ? consentExpiringSoon()
+                    ? 'text-amber-400'
+                    : 'text-emerald-400'
+                  : 'text-amber-400'
+              "
+            >
+              <CheckCircle2 v-if="isConnected() && !consentExpiringSoon()" class="w-3.5 h-3.5 shrink-0" />
+              <AlertTriangle v-else class="w-3.5 h-3.5 shrink-0" />
+              {{ consentStatusLabel() }}
             </span>
           </div>
           <div class="flex justify-between py-2 border-b border-slate-800">

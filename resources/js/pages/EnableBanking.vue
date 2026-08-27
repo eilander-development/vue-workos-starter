@@ -257,7 +257,42 @@ const disconnectBank = async () => {
 
 const props = defineProps<{
     hasActiveConnection: boolean;
+    consent?: {
+        validUntil: string | null;
+        daysRemaining: number | null;
+        expired: boolean;
+        aspspName?: string | null;
+    } | null;
 }>();
+
+const consentLabel = computed(() => {
+    const consent = props.consent;
+    if (!consent?.validUntil) {
+        return props.hasActiveConnection ? 'Koppeling actief' : null;
+    }
+
+    const until = new Date(consent.validUntil).toLocaleDateString('nl-NL', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
+
+    if (consent.expired) {
+        return `Verlopen op ${until}`;
+    }
+
+    if (consent.daysRemaining == null) {
+        return `Geldig tot ${until}`;
+    }
+
+    if (consent.daysRemaining === 0) {
+        return `Verloopt vandaag (${until})`;
+    }
+
+    const days = consent.daysRemaining === 1 ? 'nog 1 dag' : `nog ${consent.daysRemaining} dagen`;
+
+    return `Geldig tot ${until} · ${days}`;
+});
 
 // Automatisch transacties laden wanneer de geselecteerde rekening verandert
 watch(selectedAccountId, (newId) => {
@@ -331,6 +366,9 @@ onMounted(() => {
                                     <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                                 </span>
                                 Actieve bankkoppeling
+                                <span v-if="consentLabel" class="font-normal text-green-600">
+                                    · {{ consentLabel }}
+                                </span>
                             </div>
                             
                             <button 

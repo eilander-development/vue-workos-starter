@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import type { ActiveTab, BankAccount } from "../types";
 import SidebarPanel from "./SidebarPanel.vue";
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     activeTab: ActiveTab;
     setActiveTab: (tab: ActiveTab) => void;
     bankAccount: BankAccount;
     isSyncing: boolean;
     isMobileOpen?: boolean;
-    isCollapsed?: boolean;
   }>(),
   {
     isMobileOpen: false,
@@ -20,34 +19,35 @@ const props = withDefaults(
 const emit = defineEmits<{
   sync: [];
   closeMobile: [];
-  toggleCollapse: [];
 }>();
 
-const internalCollapsed = ref(
-  typeof localStorage !== "undefined" &&
-    localStorage.getItem("financien_sidebar_collapsed") === "true"
-);
+const STORAGE_KEY = "financien_sidebar_collapsed";
 
-const isCollapsed = computed(() =>
-  props.isCollapsed !== undefined ? props.isCollapsed : internalCollapsed.value
-);
+const isCollapsed = ref(readCollapsed());
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 function handleToggle() {
-  if (props.isCollapsed !== undefined) {
-    emit("toggleCollapse");
-    return;
+  isCollapsed.value = !isCollapsed.value;
+  try {
+    localStorage.setItem(STORAGE_KEY, String(isCollapsed.value));
+  } catch {
+    // private mode / blocked storage
   }
-  const nextVal = !internalCollapsed.value;
-  internalCollapsed.value = nextVal;
-  localStorage.setItem("financien_sidebar_collapsed", String(nextVal));
 }
 </script>
 
 <template>
   <aside
     id="app-sidebar-desktop"
-    class="hidden md:flex bg-slate-900 border-r border-slate-800 flex-col shrink-0 h-screen sticky top-0 z-30 transition-[width] duration-200 ease-in-out"
-    :class="isCollapsed ? 'w-16' : 'w-64'"
+    class="hidden md:flex bg-slate-900 border-r border-slate-800 flex-col h-screen sticky top-0 z-30 overflow-hidden transition-[width] duration-200 ease-in-out"
+    :class="isCollapsed ? 'w-16 min-w-16 max-w-16' : 'w-64 min-w-64 max-w-64'"
   >
     <SidebarPanel
       :collapsed="isCollapsed"
@@ -68,7 +68,7 @@ function handleToggle() {
       @click="emit('closeMobile')"
     />
     <div
-      class="relative w-4/5 max-w-xs bg-slate-900 border-r border-slate-800 h-full shadow-2xl z-10 animate-fade-in flex flex-col"
+      class="relative w-4/5 max-w-xs bg-slate-900 border-r border-slate-800 h-full shadow-2xl z-10 animate-fade-in flex flex-col min-w-0 overflow-hidden"
     >
       <SidebarPanel
         :collapsed="false"
@@ -79,7 +79,6 @@ function handleToggle() {
         :show-close-mobile="true"
         @sync="emit('sync')"
         @close-mobile="emit('closeMobile')"
-        @toggle-collapse="handleToggle"
       />
     </div>
   </div>

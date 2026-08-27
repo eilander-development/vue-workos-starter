@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\EnableBanking;
+use App\Services\EnableBankingSessionStore;
 use App\Services\EnabledBankingTransactionImporter;
 use Illuminate\Console\Command;
 
@@ -12,20 +13,24 @@ class EnabledBankingImportTransactionsCommand extends Command
 
     protected $description = 'Importeer EnableBanking transacties en pas opgeslagen regels toe (standaard laatste 365 dagen).';
 
-    public function handle(EnableBanking $enableBanking, EnabledBankingTransactionImporter $importer): int
-    {
+    public function handle(
+        EnableBanking $enableBanking,
+        EnableBankingSessionStore $sessions,
+        EnabledBankingTransactionImporter $importer,
+    ): int {
         $days = max(1, (int) $this->option('days'));
-        $sessionId = session('eb_session_id');
+        $sessionId = $sessions->sessionId();
 
         if (! $sessionId) {
-            $this->error('Geen actieve EnableBanking sessie gevonden in de huidige Laravel sessie.');
-            $this->line('Tip: open eerst /enabled-banking in dezelfde omgeving en koppel de bank.');
+            $this->error('Geen actieve EnableBanking sessie gevonden.');
+            $this->line('Tip: open eerst /bankkoppeling en koppel de bank. De koppeling blijft daarna bewaard tot de consent verloopt.');
 
             return self::FAILURE;
         }
 
         $sessionData = $enableBanking->getSessionData($sessionId);
-        $accounts = $sessionData['accounts_data'] ?? ($sessionData['accounts'] ?? []);
+        $sessions->remember($sessionId, $sessionData);
+        $accounts = $sessions->current()?->accounts ?? [];
 
         if (empty($accounts)) {
             $this->warn('Geen gekoppelde rekeningen gevonden.');
@@ -63,4 +68,3 @@ class EnabledBankingImportTransactionsCommand extends Command
         return self::SUCCESS;
     }
 }
-

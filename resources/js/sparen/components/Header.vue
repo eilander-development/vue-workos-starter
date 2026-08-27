@@ -161,7 +161,16 @@ const nextMonth = computed(() =>
           ING
         </span>
         <span class="text-[10px] text-slate-500 hidden lg:inline">
-          • {{ bankAccount.lastSync || "niet gekoppeld" }}
+          •
+          {{
+            bankAccount.status === "connected"
+              ? bankAccount.consentDaysRemaining != null
+                ? bankAccount.consentDaysRemaining === 0
+                  ? "verloopt vandaag"
+                  : `nog ${bankAccount.consentDaysRemaining}d`
+                : bankAccount.lastSync || "gekoppeld"
+              : "niet gekoppeld"
+          }}
         </span>
       </div>
 

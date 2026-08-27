@@ -21,6 +21,16 @@ Homestead.yaml
 npm-debug.log
 yarn-error.log
 /auth.json
+/database/ledger.sqlite
+/database/ledger.sqlite-*
+/database/testing-ledger.sqlite
+/database/testing-catalog.sqlite
+/database/database.sqlite
+/database/database.sqlite-*
+/database/*.sqlite-journal
+/database/*.sqlite-wal
+/database/*.sqlite-shm
+!/database/catalog.sqlite
 /.fleet
 /.idea
 /.nova

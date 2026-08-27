@@ -6,6 +6,7 @@ use App\Services\Categories;
 use App\Services\Dashboard;
 use App\Services\EnableBanking;
 use App\Services\EnableBankingDataService;
+use App\Services\EnableBankingSessionStore;
 use App\Services\ReportingPeriod;
 use App\Support\PaginationData;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class DashboardController extends Controller
         protected ReportingPeriod $reportingPeriod,
         protected EnableBanking $enableBanking,
         protected EnableBankingDataService $enableBankingDataService,
+        protected EnableBankingSessionStore $enableBankingSessions,
     ) {}
 
     /**
@@ -118,10 +120,12 @@ class DashboardController extends Controller
     private function resolveEnableBankingBalance(Request $request): ?float
     {
         try {
-            $list = $request->session()->get('eb_cached_accounts');
-            if (! $list && $request->session()->has('eb_session_id')) {
-                $sessionData = $this->enableBanking->getSessionData((string) $request->session()->get('eb_session_id'));
-                $list = $sessionData['accounts_data'] ?? ($sessionData['accounts'] ?? []);
+            $list = $this->enableBankingSessions->current()?->accounts;
+            $sessionId = $this->enableBankingSessions->sessionId();
+            if ((! is_array($list) || $list === []) && $sessionId) {
+                $sessionData = $this->enableBanking->getSessionData($sessionId);
+                $this->enableBankingSessions->remember($sessionId, $sessionData);
+                $list = $this->enableBankingSessions->current()?->accounts;
             }
 
             if (! is_array($list) || $list === []) {

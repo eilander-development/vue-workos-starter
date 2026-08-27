@@ -6,10 +6,10 @@ use App\Models\BankAccount;
 use App\Models\Budget;
 use App\Models\BudgetMonthValue;
 use App\Models\Category;
+use App\Models\EnableBankingSession;
 use App\Models\ImportRule;
 use App\Models\SavingsGoal;
 use App\Models\Transaction;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -32,6 +32,7 @@ class SparenStateService
 
     public function __construct(
         protected ReportingPeriod $reportingPeriod,
+        protected EnableBankingSessionStore $sessions,
     ) {}
 
     public function build(int $year = 2026): array
@@ -115,6 +116,9 @@ class SparenStateService
         }
 
         $defaultMonth = $this->reportingPeriod->defaultSparenMonth();
+        $currentSession = $this->sessions->current();
+        $latestSession = $this->sessions->latest();
+        $connected = $currentSession !== null;
 
         return [
             'reporting' => [
@@ -144,7 +148,7 @@ class SparenStateService
                 'isActive' => (bool) $rule->is_active,
                 'matchedCount' => Transaction::query()->where('rule_id', $rule->id)->count(),
             ])->values()->all(),
-            'bankAccounts' => $accounts->map(fn (BankAccount $account) => $this->mapAccount($account))->values()->all(),
+            'bankAccounts' => $accounts->map(fn (BankAccount $account) => $this->mapAccount($account, $connected, $latestSession))->values()->all(),
             'savingsGoals' => $goals->map(function (SavingsGoal $goal) {
                 $budgetKeys = $goal->budgetKeys();
 
@@ -165,7 +169,8 @@ class SparenStateService
                 ];
             })->values()->all(),
             'savingsHistory' => $this->savingsHistory($year, $txPayload, $goals),
-            'enableBankingConnected' => session()->has('eb_session_id') && filled(session('eb_session_id')),
+            'enableBankingConnected' => $connected,
+            'enableBankingConsent' => $latestSession?->toConsentPayload(),
         ];
     }
 
@@ -482,8 +487,10 @@ class SparenStateService
         ];
     }
 
-    private function mapAccount(BankAccount $account): array
+    private function mapAccount(BankAccount $account, bool $connected, ?EnableBankingSession $session): array
     {
+        $consent = $session?->toConsentPayload();
+
         return [
             'id' => $account->key,
             'name' => $account->name,
@@ -495,8 +502,11 @@ class SparenStateService
             'currency' => $account->currency ?: 'EUR',
             'lastSync' => $account->last_synced_at?->timezone('Europe/Amsterdam')->format('H:i') ?? '',
             'lastSyncedAt' => $account->last_synced_at?->timezone('Europe/Amsterdam')->toIso8601String(),
-            'status' => $account->status ?: 'disconnected',
+            'status' => $connected ? 'connected' : 'disconnected',
             'syncCountToday' => (int) $account->sync_count_today,
+            'consentValidUntil' => $consent['validUntil'] ?? null,
+            'consentDaysRemaining' => $consent['daysRemaining'] ?? null,
+            'consentExpired' => (bool) ($consent['expired'] ?? true),
         ];
     }
 

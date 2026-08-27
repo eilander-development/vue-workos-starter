@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\EnableBanking\ImportEnabledBankingTransactionsRequest;
 use App\Services\EnableBanking;
 use App\Services\EnableBankingDataService;
+use App\Services\EnableBankingSessionStore;
 use App\Services\EnabledBankingTransactionImporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,13 +17,18 @@ class EnableBankingController extends Controller
     public function __construct(
         protected EnableBanking $client,
         protected EnableBankingDataService $dataService,
+        protected EnableBankingSessionStore $sessions,
         protected EnabledBankingTransactionImporter $enabledBankingTransactionImporter,
     ) {}
 
     public function index()
     {
+        $session = $this->sessions->current();
+        $latest = $this->sessions->latest();
+
         return Inertia::render('EnableBanking', [
-            'hasActiveConnection' => session()->has('eb_session_id') && ! empty(session('eb_session_id')),
+            'hasActiveConnection' => $session !== null,
+            'consent' => $latest?->toConsentPayload(),
         ]);
     }
 
@@ -65,11 +71,9 @@ class EnableBankingController extends Controller
         try {
             $sessionData = $this->client->authorizeSession($code);
             $sessionId = $sessionData['session_id'] ?? null;
-            $accountsList = $sessionData['accounts'] ?? [];
 
             if ($sessionId) {
-                session(['eb_session_id' => $sessionId]);
-                session(['eb_cached_accounts' => $accountsList]);
+                $this->sessions->remember($sessionId, $sessionData);
 
                 return redirect()->to('/?session_id='.$sessionId);
             }
@@ -83,10 +87,12 @@ class EnableBankingController extends Controller
     public function balance(Request $request)
     {
         try {
-            $list = session('eb_cached_accounts');
-            if (! $list && session()->has('eb_session_id')) {
-                $sessionData = $this->client->getSessionData(session('eb_session_id'));
-                $list = $sessionData['accounts_data'] ?? ($sessionData['accounts'] ?? []);
+            $list = $this->sessions->current()?->accounts;
+            $sessionId = $this->sessions->sessionId();
+            if (! $list && $sessionId) {
+                $sessionData = $this->client->getSessionData($sessionId);
+                $this->sessions->remember($sessionId, $sessionData);
+                $list = $this->sessions->current()?->accounts;
             }
 
             if (! $list) {
@@ -121,7 +127,7 @@ class EnableBankingController extends Controller
     public function disconnect(Request $request)
     {
         try {
-            session()->forget(['eb_session_id', 'eb_cached_accounts', 'eb_oauth_state']);
+            $this->sessions->disconnect();
 
             return response()->json(['status' => 'disconnected']);
         } catch (\Exception $e) {

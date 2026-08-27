@@ -94,6 +94,9 @@ const DISCONNECTED_CHECKING_ACCOUNT: BankAccount = {
   lastSync: "",
   status: "disconnected",
   syncCountToday: 0,
+  consentValidUntil: null,
+  consentDaysRemaining: null,
+  consentExpired: true,
 };
 
 const { activeTab, setActiveTab } = useSparenRoute();

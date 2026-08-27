@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\EnableBanking;
 use App\Services\EnableBankingDataService;
+use App\Services\EnableBankingSessionStore;
 use App\Services\EnabledBankingTransactionImporter;
 use App\Services\SparenStateService;
 use App\Models\BankAccount;
@@ -17,6 +18,7 @@ class SparenController extends Controller
         protected SparenStateService $state,
         protected EnableBanking $enableBanking,
         protected EnableBankingDataService $enableBankingData,
+        protected EnableBankingSessionStore $sessions,
         protected EnabledBankingTransactionImporter $importer,
     ) {}
 
@@ -212,25 +214,26 @@ class SparenController extends Controller
 
     public function syncBank(): JsonResponse
     {
-        $sessionId = session('eb_session_id');
+        $sessionId = $this->sessions->sessionId();
         if (! $sessionId) {
-            $redirectUri = config('services.enablebanking.redirect_uri') ?? url('/enabled-banking/auth_redirect');
-            $auth = $this->enableBanking->initAuth($redirectUri, 'ING', 'NL');
-            if (isset($auth['generated_state'])) {
-                session(['eb_oauth_state' => $auth['generated_state']]);
-            }
-
-            return response()->json([
-                'needsConnect' => true,
-                'url' => $auth['url'] ?? null,
-            ], 409);
+            return $this->reconnectResponse();
         }
 
-        $list = session('eb_cached_accounts');
-        if (! $list) {
+        $list = $this->sessions->current()?->accounts;
+        try {
             $sessionData = $this->enableBanking->getSessionData($sessionId);
-            $list = $sessionData['accounts_data'] ?? ($sessionData['accounts'] ?? []);
-            session(['eb_cached_accounts' => $list]);
+            $this->sessions->remember($sessionId, $sessionData);
+            $list = $this->sessions->current()?->accounts ?: $list;
+        } catch (\Throwable) {
+            if (! is_array($list) || $list === []) {
+                $this->sessions->markExpired($sessionId);
+
+                return $this->reconnectResponse();
+            }
+        }
+
+        if (! is_array($list) || $list === []) {
+            return $this->reconnectResponse();
         }
 
         $mapped = $this->enableBankingData->mapAccountBalances(is_array($list) ? $list : [], $this->enableBanking);
@@ -291,6 +294,20 @@ class SparenController extends Controller
             'imported' => $imported,
             'state' => $this->state->build(),
         ]);
+    }
+
+    private function reconnectResponse(): JsonResponse
+    {
+        $redirectUri = config('services.enablebanking.redirect_uri') ?? url('/enabled-banking/auth_redirect');
+        $auth = $this->enableBanking->initAuth($redirectUri, 'ING', 'NL');
+        if (isset($auth['generated_state'])) {
+            session(['eb_oauth_state' => $auth['generated_state']]);
+        }
+
+        return response()->json([
+            'needsConnect' => true,
+            'url' => $auth['url'] ?? null,
+        ], 409);
     }
 
     /**

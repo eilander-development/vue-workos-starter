@@ -119,7 +119,7 @@ class EnableBanking
             ],
             'json' => [
                 'access' => [
-                    'valid_until' => date('Y-m-d\TH:i:s\Z', strtotime('+90 days'))
+                    'valid_until' => date('Y-m-d\TH:i:s\Z', strtotime('+180 days'))
                 ],
                 'aspsp' => [
                     'name'    => $bankName,

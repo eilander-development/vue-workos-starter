@@ -106,6 +106,16 @@ export interface BankAccount {
   lastSyncedAt?: string;
   status: "connected" | "syncing" | "disconnected" | "error";
   syncCountToday: number;
+  consentValidUntil?: string | null;
+  consentDaysRemaining?: number | null;
+  consentExpired?: boolean;
+}
+
+export interface EnableBankingConsent {
+  validUntil: string | null;
+  daysRemaining: number | null;
+  expired: boolean;
+  aspspName?: string | null;
 }
 
 export interface SavingsRow {
