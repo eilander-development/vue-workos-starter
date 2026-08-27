@@ -65,6 +65,7 @@ class SplitSqliteCommand extends Command
             File::delete($path.'-shm');
             File::delete($path.'-journal');
             File::put($path, '');
+            $this->makeWritable($path);
         }
 
         config([
@@ -85,6 +86,8 @@ class SplitSqliteCommand extends Command
         $this->copyTables('sqlite', $this->ledgerTables);
         $this->checkpoint('catalog');
         $this->checkpoint('sqlite');
+        $this->makeWritable($catalogPath);
+        $this->makeWritable($ledgerPath);
         $this->pointEnvToLedger();
 
         $this->info('Klaar.');
@@ -218,6 +221,18 @@ class SplitSqliteCommand extends Command
         if (is_string($updated) && $updated !== $env) {
             File::put($envPath, $updated);
             $this->line('DB_DATABASE in .env wijst nu naar database/ledger.sqlite');
+        }
+    }
+
+    private function makeWritable(string $path): void
+    {
+        @chmod($path, 0666);
+
+        $user = (int) env('WWWUSER', 1000);
+        $group = (int) env('WWWGROUP', 1000);
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $user > 0) {
+            @chown($path, $user);
+            @chgrp($path, $group);
         }
     }
 

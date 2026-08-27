@@ -3,7 +3,7 @@ services:
   laravel.test:
     build:
       context: '/home/marke/code/projecten/finance'
-      dockerfile: '/home/marke/code/sail/storage/app/sail-manager-project-runtime/finance-225c55572a1c/runtime/Dockerfile'
+      dockerfile: '/sail-manager/project-runtime/finance-225c55572a1c/runtime/Dockerfile'
     image: sail-manager/finance-php84
     extra_hosts:
       - 'host.docker.internal:host-gateway'
@@ -31,7 +31,7 @@ services:
   web:
     build:
       context: '/home/marke/code/projecten/finance'
-      dockerfile: '/home/marke/code/sail/storage/app/sail-manager-project-runtime/finance-225c55572a1c/runtime/Web.Dockerfile'
+      dockerfile: '/sail-manager/project-runtime/finance-225c55572a1c/runtime/Web.Dockerfile'
     image: sail-manager/finance-web-php84
     depends_on:
       - laravel.test

@@ -1,12 +1,4 @@
 services:
-  laravel.test:
-    ports:
-      - '5173:5173'
-    volumes:
-      - type: bind
-        source: '/home/marke/code/sail/infrastructure/certs'
-        target: '/sail-manager/certs'
-        read_only: true
   web:
     networks:
       - default

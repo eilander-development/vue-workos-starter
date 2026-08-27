@@ -66,5 +66,7 @@ class AppServiceProvider extends ServiceProvider
         if (! is_file($path)) {
             touch($path);
         }
+
+        @chmod($path, 0666);
     }
 }
