@@ -13,6 +13,7 @@ import {
 
 export const POT_DEPOSIT_LINK_EXCLUSION_PREFIX = "Pot-storting";
 export const POT_WITHDRAWAL_LINK_EXCLUSION_PREFIX = "Pot-opname";
+export const SAVINGS_WITHDRAWAL_LINK_EXCLUSION_PREFIX = "Spaaropname";
 
 function potTransferLinkExclusionForLabel(
   label: string,
@@ -47,12 +48,17 @@ function potTransferLinkExclusionForGoal(
 }
 
 export function isAutomaticPotLinkExclusion(reason?: string | null): boolean {
+  return isAutomaticSavingsLinkExclusion(reason);
+}
+
+export function isAutomaticSavingsLinkExclusion(reason?: string | null): boolean {
   if (!reason) {
     return false;
   }
   return (
     reason.startsWith(POT_DEPOSIT_LINK_EXCLUSION_PREFIX) ||
-    reason.startsWith(POT_WITHDRAWAL_LINK_EXCLUSION_PREFIX)
+    reason.startsWith(POT_WITHDRAWAL_LINK_EXCLUSION_PREFIX) ||
+    reason.startsWith(SAVINGS_WITHDRAWAL_LINK_EXCLUSION_PREFIX)
   );
 }
 
@@ -64,7 +70,28 @@ export function potDepositLinkExclusionForGoal(goal: SavingsGoal): {
   return potTransferLinkExclusionForGoal(goal, "naar");
 }
 
-/** Automatische koppel-uitsluiting voor Naar/Van-overboekingen naar/van een potje. */
+function savingsWithdrawalLinkExclusionForLabel(label: string): {
+  linkExcluded: true;
+  linkExclusionReason: string;
+} {
+  return {
+    linkExcluded: true,
+    linkExclusionReason: `${SAVINGS_WITHDRAWAL_LINK_EXCLUSION_PREFIX} (${label}) — zichtbaar bij spaarrekening, niet koppelen aan rubriek`,
+  };
+}
+
+function applySavingsExclusion(tx: Transaction, exclusion: { linkExcluded: true; linkExclusionReason: string }): Transaction {
+  return {
+    ...tx,
+    type: "Sparen",
+    categoryGroup: "Spaargeld",
+    budgetItemId: undefined,
+    matchedRuleId: undefined,
+    ...exclusion,
+  };
+}
+
+/** Automatische koppel-uitsluiting: potjes (Naar/Van) en Spaargeld-opnames (Van). */
 export function applyPotTransferLinkExclusion(
   tx: Transaction,
   goals: SavingsGoal[],
@@ -83,40 +110,43 @@ export function applyPotTransferLinkExclusion(
       continue;
     }
 
-    const exclusion = potTransferLinkExclusionForGoal(goal, isDeposit ? "naar" : "van");
-
-    return {
-      ...tx,
-      type: "Sparen",
-      categoryGroup: "Spaargeld",
-      budgetItemId: undefined,
-      matchedRuleId: undefined,
-      ...exclusion,
-    };
+    return applySavingsExclusion(
+      tx,
+      potTransferLinkExclusionForGoal(goal, isDeposit ? "naar" : "van")
+    );
   }
 
   if (direction && isIngSpaarpotTransfer(tx)) {
     const ref = parseIngSavingsDestination(tx.description)?.ref;
-    const exclusion = potTransferLinkExclusionForLabel(
-      ref ? `spaarpotje ${ref}` : "spaarpotje",
-      direction
+    return applySavingsExclusion(
+      tx,
+      potTransferLinkExclusionForLabel(
+        ref ? `spaarrekening ${ref}` : "spaarpotje",
+        direction
+      )
     );
-
-    return {
-      ...tx,
-      type: "Sparen",
-      categoryGroup: "Spaargeld",
-      budgetItemId: undefined,
-      matchedRuleId: undefined,
-      ...exclusion,
-    };
   }
 
-  if (
-    tx.linkExcluded &&
-    isAutomaticPotLinkExclusion(tx.linkExclusionReason) &&
-    !isIngSpaarpotTransfer(tx)
-  ) {
+  for (const goal of goals) {
+    if (isPotGoal(goal)) {
+      continue;
+    }
+    if (!transactionMatchesSavingsGoalWithdrawal(tx, goal, ownIbans)) {
+      continue;
+    }
+
+    return applySavingsExclusion(tx, savingsWithdrawalLinkExclusionForLabel(goal.name));
+  }
+
+  if (direction === "van" && parseIngSavingsDestination(tx.description)) {
+    const ref = parseIngSavingsDestination(tx.description)?.ref;
+    return applySavingsExclusion(
+      tx,
+      savingsWithdrawalLinkExclusionForLabel(ref ? `spaarrekening ${ref}` : "spaarrekening")
+    );
+  }
+
+  if (tx.linkExcluded && isAutomaticSavingsLinkExclusion(tx.linkExclusionReason)) {
     return {
       ...tx,
       linkExcluded: false,

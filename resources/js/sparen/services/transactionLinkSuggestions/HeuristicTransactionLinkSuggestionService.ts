@@ -8,6 +8,7 @@ import {
 import { isPotGoal } from "../../potSettlement";
 import {
   isIngSpaarpotTransfer,
+  isSavingsWithdrawalExcludedFromBudget,
   transactionMatchesSavingsGoalDeposit,
   transactionMatchesSavingsGoalWithdrawal,
 } from "../../matchSavings";
@@ -654,7 +655,11 @@ export class HeuristicTransactionLinkSuggestionService implements TransactionLin
 
   suggest(context: TransactionLinkSuggestionContext): TransactionLinkSuggestionResult {
     const unlinked = context.transactions.filter((tx) => {
-      if (!isUnlinkedTransaction(tx) || isIngSpaarpotTransfer(tx)) {
+      if (
+        !isUnlinkedTransaction(tx) ||
+        isIngSpaarpotTransfer(tx) ||
+        isSavingsWithdrawalExcludedFromBudget(tx)
+      ) {
         return false;
       }
       if (context.reportingMonth) {

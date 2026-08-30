@@ -26,24 +26,23 @@ class TransactionClassifier
                 continue;
             }
 
-            $spaarCategory = Category::query()->where('type', 'saving')->orderBy('id')->first();
-
-            return $this->potLinkExclusion(
-                $spaarCategory,
+            return $this->savingsTransferExclusion(
+                $this->savingsCategory(),
                 $direction === 'naar' ? 'naar' : 'van',
                 $goal->name,
+                pot: true,
             );
         }
 
         if ($direction !== null && IngSavingsTransfer::isSpaarpotDescription($description)) {
-            $spaarCategory = Category::query()->where('type', 'saving')->orderBy('id')->first();
             $parsed = IngSavingsTransfer::parseDestination($description);
             $ref = is_array($parsed) ? ($parsed['ref'] ?? '') : '';
 
-            return $this->potLinkExclusion(
-                $spaarCategory,
+            return $this->savingsTransferExclusion(
+                $this->savingsCategory(),
                 $direction,
-                $ref !== '' ? 'spaarpotje '.$ref : 'spaarpotje',
+                $ref !== '' ? 'spaarrekening '.$ref : 'spaarpotje',
+                pot: true,
             );
         }
 
@@ -52,8 +51,13 @@ class TransactionClassifier
                 continue;
             }
 
+            $spaarCategory = $this->savingsCategory();
+
+            if ($direction === 'van') {
+                return $this->savingsTransferExclusion($spaarCategory, 'van', $goal->name, pot: false);
+            }
+
             $budget = Budget::query()->where('key', $goal->budgetKeys()[0] ?? $goal->budget_key)->first();
-            $spaarCategory = Category::query()->where('type', 'saving')->orderBy('id')->first();
 
             return [
                 'type' => 'saving',
@@ -65,6 +69,18 @@ class TransactionClassifier
                 'link_excluded' => false,
                 'link_exclusion_reason' => null,
             ];
+        }
+
+        if ($direction === 'van' && IngSavingsTransfer::parseDestination($description) !== null) {
+            $parsed = IngSavingsTransfer::parseDestination($description);
+            $ref = is_array($parsed) ? ($parsed['ref'] ?? '') : '';
+
+            return $this->savingsTransferExclusion(
+                $this->savingsCategory(),
+                'van',
+                $ref !== '' ? 'spaarrekening '.$ref : 'spaarrekening',
+                pot: false,
+            );
         }
 
         $rules = ImportRule::query()->with(['category', 'budget'])->where('is_active', true)->orderBy('id')->get();
@@ -134,8 +150,7 @@ class TransactionClassifier
 
             $exclude = (bool) ($result['link_excluded'] ?? false);
             $reason = $result['link_exclusion_reason'] ?? null;
-            $wasAutoPot = str_starts_with((string) $transaction->link_exclusion_reason, 'Pot-storting')
-                || str_starts_with((string) $transaction->link_exclusion_reason, 'Pot-opname');
+            $wasAutoExclusion = $this->isAutomaticSavingsExclusion((string) $transaction->link_exclusion_reason);
 
             if ($exclude) {
                 $transaction->fill([
@@ -151,7 +166,7 @@ class TransactionClassifier
                 continue;
             }
 
-            if ($wasAutoPot && $transaction->link_excluded) {
+            if ($wasAutoExclusion && $transaction->link_excluded) {
                 $transaction->fill([
                     'link_excluded' => false,
                     'link_exclusion_reason' => null,
@@ -185,6 +200,9 @@ class TransactionClassifier
             if ($categoryType === 'expense' && $amount >= 0) {
                 return false;
             }
+            if ($categoryType === 'saving' && $amount > 0) {
+                return false;
+            }
         }
 
         $inDescription = str_contains(mb_strtolower($description), $keyword);
@@ -198,8 +216,19 @@ class TransactionClassifier
         };
     }
 
-    private function potLinkExclusion(?Category $spaarCategory, string $direction, string $label): array
+    private function savingsCategory(): ?Category
     {
+        return Category::query()->where('type', 'saving')->orderBy('id')->first();
+    }
+
+    private function savingsTransferExclusion(?Category $spaarCategory, string $direction, string $label, bool $pot): array
+    {
+        $reason = $pot
+            ? ($direction === 'naar'
+                ? 'Pot-storting ('.$label.') — apart bijgehouden in potje, niet koppelen aan rubriek'
+                : 'Pot-opname ('.$label.') — verrekening in potje, niet koppelen aan rubriek')
+            : 'Spaaropname ('.$label.') — zichtbaar bij spaarrekening, niet koppelen aan rubriek';
+
         return [
             'type' => 'saving',
             'category_id' => $spaarCategory?->id,
@@ -208,10 +237,15 @@ class TransactionClassifier
             'category_group' => $spaarCategory?->name ?? 'Spaargeld',
             'budget_key' => null,
             'link_excluded' => true,
-            'link_exclusion_reason' => $direction === 'naar'
-                ? 'Pot-storting ('.$label.') — apart bijgehouden in potje, niet koppelen aan rubriek'
-                : 'Pot-opname ('.$label.') — verrekening in potje, niet koppelen aan rubriek',
+            'link_exclusion_reason' => $reason,
         ];
+    }
+
+    private function isAutomaticSavingsExclusion(string $reason): bool
+    {
+        return str_starts_with($reason, 'Pot-storting')
+            || str_starts_with($reason, 'Pot-opname')
+            || str_starts_with($reason, 'Spaaropname');
     }
 
     private function matchesSavingsTransfer(

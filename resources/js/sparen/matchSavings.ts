@@ -91,6 +91,15 @@ export function isSavingsDepositTransaction(
   return tx.amount < 0;
 }
 
+/** Opname van spaarrekening: staat al bij het spaardoel, niet aan een rubriek koppelen. */
+export function isSavingsWithdrawalExcludedFromBudget(
+  tx: Pick<Transaction, "description" | "amount">
+): boolean {
+  return (
+    savingsTransferDirection(tx) === "van" && parseIngSavingsDestination(tx.description) !== null
+  );
+}
+
 /** Opname van spaarrekening/potje (spaar → betaalrekening). */
 export function isSavingsWithdrawalTransaction(
   tx: Pick<Transaction, "description" | "amount">

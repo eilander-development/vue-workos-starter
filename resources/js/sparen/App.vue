@@ -73,7 +73,7 @@ import {
   matchingUnlinkedTransactions,
   transactionMatchesRule,
 } from "./matchRule";
-import { transactionMatchesSavingsGoalDeposit, transactionMatchesSavingsGoalWithdrawal } from "./matchSavings";
+import { transactionMatchesSavingsGoalDeposit } from "./matchSavings";
 import {
   goalBudgetItemIds,
   isPotGoal,
@@ -235,39 +235,29 @@ watch(saveState, (value) => {
   }, 2500);
 });
 
-function matchesSavingsGoalTransfer(
-  tx: Transaction,
-  goal: SavingsGoal,
-  ownIbans: string[]
-): boolean {
-  return (
-    transactionMatchesSavingsGoalDeposit(tx, goal, ownIbans) ||
-    transactionMatchesSavingsGoalWithdrawal(tx, goal, ownIbans)
-  );
-}
-
 function applyRulesToTransactions(txs: Transaction[], rls: Rule[], sGoals: SavingsGoal[]) {
   const ownIbans = bankAccounts.value.map((account) => account.iban).filter(Boolean);
 
   return txs.map((tx) => {
-    const potApplied = applyPotTransferLinkExclusion(tx, sGoals, ownIbans);
-    if (potApplied.linkExcluded) {
-      return potApplied;
+    const savingsApplied = applyPotTransferLinkExclusion(tx, sGoals, ownIbans);
+    if (savingsApplied.linkExcluded) {
+      return savingsApplied;
     }
 
     for (const goal of sGoals) {
       if (isPotGoal(goal)) {
         continue;
       }
-      if (!isUnlinkedTransaction(tx) || !matchesSavingsGoalTransfer(tx, goal, ownIbans)) {
+      if (!isUnlinkedTransaction(tx) || !transactionMatchesSavingsGoalDeposit(tx, goal, ownIbans)) {
         continue;
       }
 
+      const budgetItemId = goalBudgetItemIds(goal)[0];
       return {
         ...tx,
         type: "Sparen" as const,
         categoryGroup: "Spaargeld" as const,
-        budgetItemId: goalBudgetItemIds(goal)[0] || tx.budgetItemId || "spaar-1",
+        budgetItemId: budgetItemId || tx.budgetItemId,
         counterparty: goal.bankName || goal.name,
         linkExcluded: false,
         linkExclusionReason: undefined,

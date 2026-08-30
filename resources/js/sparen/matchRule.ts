@@ -42,11 +42,11 @@ export function transactionMatchesKeyword(
   return inDescription || inCounterparty;
 }
 
-/** Inkomsten = alleen erbij; uitgaven = alleen eraf; sparen = beide (Naar/Van). */
+/** Inkomsten = alleen erbij; uitgaven = alleen eraf; sparen = alleen stortingen (eraf). */
 export function ruleAmountDirection(targetType: BudgetType): RuleAmountDirection {
   if (targetType === "inkomsten") return "in";
   if (targetType === "uitgaven") return "out";
-  return "any";
+  return "out";
 }
 
 export function transactionMatchesRuleDirection(
