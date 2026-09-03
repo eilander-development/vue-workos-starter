@@ -40,6 +40,8 @@ const monthData = computed(() =>
       income: lens.value === "plan" ? kpi.totalIncomeBudget : flow.received,
       expense: lens.value === "plan" ? kpi.totalExpenseBudget : flow.spent,
       savings: lens.value === "plan" ? kpi.totalSavingsBudget : flow.netSavings,
+      toSavings: flow.toSavings,
+      fromSavings: flow.fromSavings,
       net:
         lens.value === "plan"
           ? kpi.netBudget
@@ -53,8 +55,18 @@ const totalYearExpense = computed(() => monthData.value.reduce((s, m) => s + m.e
 const totalYearSavings = computed(() => monthData.value.reduce((s, m) => s + m.savings, 0));
 const totalYearNet = computed(() => monthData.value.reduce((s, m) => s + m.net, 0));
 
+const totalYearToSavings = computed(() => monthData.value.reduce((s, m) => s + m.toSavings, 0));
+const totalYearFromSavings = computed(() => monthData.value.reduce((s, m) => s + m.fromSavings, 0));
+
 function euro(n: number): string {
   return n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function spaarPair(toSavings: number, fromSavings: number): string {
+  if (toSavings === 0 && fromSavings === 0) {
+    return "0 / 0";
+  }
+  return `+€ ${euro(toSavings)} / −€ ${euro(fromSavings)}`;
 }
 </script>
 
@@ -146,7 +158,7 @@ function euro(n: number): string {
               <th class="py-3 px-4 text-right text-emerald-400">Inkomsten</th>
               <th class="py-3 px-4 text-right text-rose-400">Uitgaven</th>
               <th class="py-3 px-4 text-right text-blue-400">
-                {{ lens === "plan" ? "Sparen" : "Netto spaar" }}
+                {{ lens === "plan" ? "Sparen" : "Naar / van spaar" }}
               </th>
               <th class="py-3 px-4 text-right font-bold text-white">Netto</th>
               <th class="py-3 px-4 text-center font-sans">Actie</th>
@@ -164,7 +176,13 @@ function euro(n: number): string {
               </td>
               <td class="py-3 px-4 text-right text-emerald-400 font-semibold">€ {{ euro(m.income) }}</td>
               <td class="py-3 px-4 text-right text-rose-400 font-semibold">€ {{ euro(m.expense) }}</td>
-              <td class="py-3 px-4 text-right text-blue-400">€ {{ euro(m.savings) }}</td>
+              <td class="py-3 px-4 text-right text-blue-400">
+                {{
+                  lens === "plan"
+                    ? `€ ${euro(m.savings)}`
+                    : spaarPair(m.toSavings, m.fromSavings)
+                }}
+              </td>
               <td
                 class="py-3 px-4 text-right font-bold"
                 :class="m.net >= 0 ? 'text-emerald-400' : 'text-rose-400'"
@@ -188,7 +206,13 @@ function euro(n: number): string {
               <td class="py-3.5 px-4 text-right text-slate-400">-</td>
               <td class="py-3.5 px-4 text-right text-emerald-400 text-sm">€ {{ euro(totalYearIncome) }}</td>
               <td class="py-3.5 px-4 text-right text-rose-400 text-sm">€ {{ euro(totalYearExpense) }}</td>
-              <td class="py-3.5 px-4 text-right text-blue-400 text-sm">€ {{ euro(totalYearSavings) }}</td>
+              <td class="py-3.5 px-4 text-right text-blue-400 text-sm">
+                {{
+                  lens === "plan"
+                    ? `€ ${euro(totalYearSavings)}`
+                    : spaarPair(totalYearToSavings, totalYearFromSavings)
+                }}
+              </td>
               <td class="py-3.5 px-4 text-right text-emerald-400 text-sm">€ {{ euro(totalYearNet) }}</td>
               <td class="py-3.5 px-4"></td>
             </tr>
