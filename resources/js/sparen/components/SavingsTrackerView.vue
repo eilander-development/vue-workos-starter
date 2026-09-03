@@ -242,12 +242,15 @@ function barHeight(totaal: number) {
               <div>
                 <div class="flex items-center gap-2">
                   <h4 class="font-bold text-white text-sm line-clamp-1">{{ goal.name }}</h4>
-                  <span
+                  <button
                     v-if="potFor(goal)"
-                    class="text-[9px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.5 rounded font-semibold uppercase"
+                    type="button"
+                    class="text-[9px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.5 rounded font-semibold uppercase hover:bg-amber-900 hover:text-amber-100 transition-colors"
+                    title="Bekijk potje"
+                    @click="openPotDetail(goal)"
                   >
                     Potje
-                  </span>
+                  </button>
                 </div>
                 <span class="text-[11px] text-slate-400 block">{{ goal.bankName }}</span>
               </div>

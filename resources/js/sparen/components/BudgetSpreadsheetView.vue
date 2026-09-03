@@ -31,7 +31,7 @@ import type {
 } from "../types";
 import { isTransactionInReportingMonth, defaultReportingMonth } from "../month";
 import { isLinkExcludedTransaction } from "../matchRule";
-import { computePotSettlement, hasPotEnvelope, potGoalsLinkedToItem, shadowOverspend, type PotSettlement } from "../potSettlement";
+import { computePotSettlement, goalBudgetItemIds, hasPotEnvelope, potCompensationStatus, potGoalsLinkedToItem, potsNeedingCompensation, shadowOverspend, type PotSettlement } from "../potSettlement";
 import {
   sumBudgetedAmount,
   sumBudgetedPaid,
@@ -248,6 +248,14 @@ const totalIncomeOver = computed(() => monthKpi.value.totalIncomeOver);
 const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
 
+const potCompensationNeeds = computed(() =>
+  potsNeedingCompensation(props.currentMonth, props.transactions, props.savingsGoals)
+);
+
+const totalToCompensate = computed(() =>
+  potCompensationNeeds.value.reduce((sum, row) => sum + row.shortfall, 0)
+);
+
 function openItemFromKpi(item: BudgetItem) {
   kpiKey.value = null;
   props.onOpenItemTransactions?.(item);
@@ -261,6 +269,12 @@ function potSettlementFor(item: BudgetItem): PotSettlement | null {
   const goal = linkedPotGoal(item);
   if (!goal) return null;
   return computePotSettlement(goal, props.currentMonth, props.transactions);
+}
+
+function potShortfallForItem(item: BudgetItem): number {
+  const settlement = potSettlementFor(item);
+  if (!settlement) return 0;
+  return potCompensationStatus(settlement).shortfall;
 }
 
 const potDetailItem = ref<BudgetItem | null>(null);
@@ -462,6 +476,12 @@ function cardId(groupKey: string) {
             <span>Nog te betalen</span><span>€ {{ euro(totalExpenseRemaining) }}</span>
           </div>
           <div
+            v-if="totalToCompensate > 0"
+            class="flex justify-between text-amber-300"
+          >
+            <span>Nog te compenseren</span><span>€ {{ euro(totalToCompensate) }}</span>
+          </div>
+          <div
             v-if="totalExpenseOver > 0"
             class="mt-2 pt-1.5 border-t border-slate-800/70 space-y-0.5"
           >
@@ -537,6 +557,12 @@ function cardId(groupKey: string) {
           </div>
           <div class="flex justify-between text-blue-400">
             <span>Nog te sparen</span><span>−€ {{ euro(totalSavingsRemaining) }}</span>
+          </div>
+          <div
+            v-if="totalToCompensate > 0"
+            class="flex justify-between text-amber-300"
+          >
+            <span>Nog te compenseren</span><span>+€ {{ euro(totalToCompensate) }}</span>
           </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
@@ -725,12 +751,15 @@ function cardId(groupKey: string) {
                             >
                               {{ item.name }}
                             </span>
-                            <span
+                            <button
                               v-if="hasPotEnvelope(item)"
-                              class="mt-0.5 inline-flex text-[9px] uppercase tracking-wide font-semibold text-amber-300/90 bg-amber-950/40 border border-amber-800/50 px-1.5 py-px rounded"
+                              type="button"
+                              class="mt-0.5 inline-flex text-[9px] uppercase tracking-wide font-semibold text-amber-300/90 bg-amber-950/40 border border-amber-800/50 px-1.5 py-px rounded hover:bg-amber-900/60 hover:text-amber-100 transition-colors"
+                              title="Bekijk potje"
+                              @click.stop="openPotDetail(item)"
                             >
                               Potje
-                            </span>
+                            </button>
                             <ul
                               v-if="item.monthEntries && item.monthEntries.length > 0"
                               class="mt-1 space-y-0.5 text-[10px] text-slate-500 font-normal"
@@ -895,8 +924,22 @@ function cardId(groupKey: string) {
                           <span v-else class="text-slate-400">€ 0,00</span>
                         </template>
                         <template v-else>
+                          <button
+                            v-if="potShortfallForItem(item) > 0"
+                            type="button"
+                            class="text-amber-300 font-bold hover:text-amber-200"
+                            title="Nog te compenseren vanuit potje"
+                            @click.stop="openPotDetail(item)"
+                          >
+                            €
+                            {{
+                              potShortfallForItem(item).toLocaleString("nl-NL", {
+                                minimumFractionDigits: 2,
+                              })
+                            }}
+                          </button>
                           <span
-                            v-if="hasBudget(item) && item.paidOrReceived < item.actual && item.paidOrReceived > 0"
+                            v-else-if="hasBudget(item) && item.paidOrReceived < item.actual && item.paidOrReceived > 0"
                             class="text-amber-400"
                           >
                             €

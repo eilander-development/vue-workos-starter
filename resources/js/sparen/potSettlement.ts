@@ -225,6 +225,10 @@ export function shadowOverspend(item: Pick<BudgetItem, "actual" | "shadowSpent">
 export function isLikelyPotCompensation(tx: Transaction, goal: SavingsGoal): boolean {
   if (tx.amount <= 0) return false;
 
+  if (transactionMatchesSavingsGoalWithdrawal(tx, goal)) {
+    return true;
+  }
+
   const haystack = `${tx.description} ${tx.counterparty ?? ""}`.toLowerCase();
   const keyword = goal.name.trim().toLowerCase();
   if (keyword.length < 3) return false;
@@ -304,6 +308,42 @@ export function potCompensationStatus(
     shortfall,
     surplus: Math.max(0, settlement.compensated - settlement.spent),
   };
+}
+
+export type PotCompensationNeed = {
+  goal: SavingsGoal;
+  settlement: PotSettlement;
+  shortfall: number;
+};
+
+/** Potjes met openstaande compensatie deze rapportagemaand. */
+export function potsNeedingCompensation(
+  currentMonth: MonthlyBudget,
+  transactions: Transaction[],
+  savingsGoals: SavingsGoal[]
+): PotCompensationNeed[] {
+  return savingsGoals
+    .filter(isPotGoal)
+    .map((goal) => {
+      const settlement = computePotSettlement(goal, currentMonth, transactions);
+      return {
+        goal,
+        settlement,
+        shortfall: potCompensationStatus(settlement).shortfall,
+      };
+    })
+    .filter((row) => row.shortfall > 0);
+}
+
+export function totalPotCompensationShortfall(
+  currentMonth: MonthlyBudget,
+  transactions: Transaction[],
+  savingsGoals: SavingsGoal[]
+): number {
+  return potsNeedingCompensation(currentMonth, transactions, savingsGoals).reduce(
+    (sum, row) => sum + row.shortfall,
+    0
+  );
 }
 
 export type PotPeriodBalance = {

@@ -361,9 +361,18 @@ function closePotDetail() {
           <div class="flex items-start justify-between mb-4">
             <div>
               <h4 class="font-bold text-white text-base">{{ item.name }}</h4>
-              <span class="text-xs text-slate-400">
-                {{ hasPotEnvelope(item) ? `${item.group} · potje` : item.group }}
-              </span>
+              <div class="mt-1 flex items-center gap-1.5">
+                <span class="text-xs text-slate-400">{{ item.group }}</span>
+                <button
+                  v-if="hasPotEnvelope(item)"
+                  type="button"
+                  class="inline-flex text-[9px] uppercase tracking-wide font-semibold text-amber-300/90 bg-amber-950/40 border border-amber-800/50 px-1.5 py-px rounded hover:bg-amber-900/60 hover:text-amber-100 transition-colors"
+                  title="Bekijk potje"
+                  @click="openPotDetail(item)"
+                >
+                  Potje
+                </button>
+              </div>
             </div>
             <div class="flex items-center gap-2">
               <span

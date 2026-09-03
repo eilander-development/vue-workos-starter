@@ -17,7 +17,7 @@ import {
   Layers,
   LayoutDashboard,
 } from "lucide-vue-next";
-import type { MonthlyBudget, Transaction, BankAccount, ActiveTab, BudgetItem } from "../types";
+import type { MonthlyBudget, Transaction, BankAccount, ActiveTab, BudgetItem, SavingsGoal } from "../types";
 import TransactionDate from "./TransactionDate.vue";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
 import { defaultReportingMonth } from "../month";
@@ -31,6 +31,7 @@ import {
   isActiveReportingMonth,
   resolvePeriodStartBalance,
 } from "../monthKpi";
+import { potsNeedingCompensation } from "../potSettlement";
 
 type DashboardKpiKey = "balance" | "income" | "expense" | "netto";
 
@@ -39,6 +40,7 @@ const props = defineProps<{
   allMonths: MonthlyBudget[];
   transactions: Transaction[];
   bankAccount: BankAccount;
+  savingsGoals?: SavingsGoal[];
   onNavigateTab: (tab: ActiveTab) => void;
 }>();
 
@@ -85,6 +87,18 @@ const monthKpi = computed(() =>
     savingsItems: savingsItems.value,
     bankBalance: periodStartBalance.value,
   })
+);
+
+const potCompensationNeeds = computed(() =>
+  potsNeedingCompensation(
+    props.currentMonth,
+    props.transactions,
+    props.savingsGoals ?? []
+  )
+);
+
+const totalToCompensate = computed(() =>
+  potCompensationNeeds.value.reduce((sum, row) => sum + row.shortfall, 0)
 );
 
 const totalIncomeBudget = computed(() => monthKpi.value.totalIncomeBudget);
@@ -305,6 +319,15 @@ function catStats(cat: CatDef) {
               −€ {{ totalExpenseRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
             </span>
           </div>
+          <div
+            v-if="totalToCompensate > 0"
+            class="flex items-center justify-between text-amber-300"
+          >
+            <span>Nog te compenseren</span>
+            <span class="font-semibold">
+              +€ {{ totalToCompensate.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
@@ -388,6 +411,15 @@ function catStats(cat: CatDef) {
             </span>
           </div>
           <div
+            v-if="totalToCompensate > 0"
+            class="flex items-center justify-between text-amber-300"
+          >
+            <span class="text-slate-400">Nog te compenseren</span>
+            <span class="font-medium">
+              € {{ totalToCompensate.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div
             v-if="totalExpenseOver > 0"
             class="mt-2 pt-1.5 border-t border-slate-800/70"
           >
@@ -440,6 +472,13 @@ function catStats(cat: CatDef) {
           <div class="flex items-center justify-between text-blue-400">
             <span class="text-slate-400">Nog te sparen</span>
             <span>−€ {{ totalSavingsRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
+          </div>
+          <div
+            v-if="totalToCompensate > 0"
+            class="flex items-center justify-between text-amber-300"
+          >
+            <span class="text-slate-400">Nog te compenseren</span>
+            <span>+€ {{ totalToCompensate.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
           </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>

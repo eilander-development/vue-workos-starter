@@ -21,6 +21,9 @@ import type {
 import { isTransactionInReportingMonth } from "../month";
 import {
   hasPotEnvelope,
+  computePotSettlement,
+  potCompensationStatus,
+  potGoalsLinkedToItem,
   potTransfersForBudgetItem,
   shadowOverspend,
   type PotTransferRole,
@@ -48,6 +51,7 @@ const props = withDefaults(
     onLinkTransaction?: (txId: string, group: BudgetCategoryGroup, itemId: string) => void;
     onOpenEditBudgetItem?: (item: BudgetItem) => void;
     onAddTransactionToItem?: (itemId: string, itemGroup: BudgetCategoryGroup) => void;
+    onOpenPot?: (item: BudgetItem) => void;
   }>(),
   {
     allMonths: () => [],
@@ -145,19 +149,43 @@ const listedCount = computed(() => listedTransactions.value.length);
 const potDepositCount = computed(
   () => listedTransactions.value.filter((row) => row.role === "deposit").length
 );
+const potWithdrawalTotal = computed(() =>
+  listedTransactions.value
+    .filter((row) => row.role === "withdrawal")
+    .reduce((sum, row) => sum + Math.max(0, row.tx.amount), 0)
+);
 const isIncome = computed(() => props.budgetItem?.type === "inkomsten");
 const isSaving = computed(() => props.budgetItem?.type === "sparen");
 const budgetAmount = computed(() => props.budgetItem?.actual ?? 0);
-const isPotItem = computed(() => !!props.budgetItem && hasPotEnvelope(props.budgetItem));
+const isPotItem = computed(() => {
+  if (!props.budgetItem) return false;
+  if (hasPotEnvelope(props.budgetItem)) return true;
+  return potGoalsLinkedToItem(props.budgetItem.id, props.savingsGoals).length > 0;
+});
 const envelopePaid = computed(() => props.budgetItem?.paidOrReceived ?? 0);
+const potSettlement = computed(() => {
+  if (!props.budgetItem) return null;
+  const goal = potGoalsLinkedToItem(props.budgetItem.id, props.savingsGoals)[0];
+  if (!goal) return null;
+  return computePotSettlement(goal, props.currentMonth, props.transactions);
+});
+const potShortfall = computed(() => {
+  if (potSettlement.value) {
+    return potCompensationStatus(potSettlement.value).shortfall;
+  }
+  return Math.max(0, totalPaidInView.value - potWithdrawalTotal.value);
+});
 const remainingAmount = computed(() => {
+  if (isPotItem.value) {
+    return potShortfall.value;
+  }
   if (budgetAmount.value <= 0) {
     return 0;
   }
-  const paid = isPotItem.value ? envelopePaid.value : totalPaidInView.value;
-  return Math.max(0, budgetAmount.value - paid);
+  return Math.max(0, budgetAmount.value - totalPaidInView.value);
 });
 const remainingLabel = computed(() => {
+  if (isPotItem.value) return "Nog te compenseren";
   if (isIncome.value) return "Nog te ontvangen";
   if (isSaving.value) return "Nog te sparen";
   return "Nog te betalen";
@@ -194,6 +222,11 @@ function addTx() {
   props.onClose();
   props.onAddTransactionToItem(props.budgetItem.id, props.budgetItem.group);
 }
+
+function openPot() {
+  if (!props.budgetItem || !props.onOpenPot) return;
+  props.onOpenPot(props.budgetItem);
+}
 </script>
 
 <template>
@@ -224,6 +257,15 @@ function addTx() {
                 {{ budgetItem.group }}
               </span>
             </div>
+            <button
+              v-if="isPotItem && onOpenPot"
+              type="button"
+              class="mt-1 inline-flex text-[9px] uppercase tracking-wide font-semibold text-amber-300 bg-amber-950 border border-amber-800 px-1.5 py-0.5 rounded hover:bg-amber-900 hover:text-amber-100 transition-colors"
+              title="Bekijk potje"
+              @click="openPot"
+            >
+              Potje
+            </button>
             <p class="text-xs text-slate-400 mt-0.5">
               {{
                 isPotItem

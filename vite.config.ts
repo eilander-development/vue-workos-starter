@@ -4,7 +4,45 @@ import vue from '@vitejs/plugin-vue';
 import laravel from 'laravel-vite-plugin';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
-import { defineConfig, loadEnv, type ServerOptions } from 'vite';
+import { defineConfig, loadEnv, type Plugin, type ServerOptions } from 'vite';
+
+function wayfinderPlugin(): Plugin {
+    const generatedRoutes = resolve(process.cwd(), 'resources/js/routes/index.ts');
+    const skipGenerate = process.env.WAYFINDER_SKIP === '1' || process.env.WAYFINDER_SKIP === 'true';
+
+    if (skipGenerate) {
+        return {
+            name: '@laravel/vite-plugin-wayfinder',
+            enforce: 'pre',
+        };
+    }
+
+    const plugin = wayfinder({
+        formVariants: true,
+        command: 'php artisan wayfinder:generate --no-interaction',
+    }) as Plugin;
+
+    const originalBuildStart = plugin.buildStart;
+    if (typeof originalBuildStart !== 'function') {
+        return plugin;
+    }
+
+    plugin.buildStart = async function (this: { error: (message: string) => void; warn: (message: string) => void }) {
+        const fail = this.error.bind(this);
+        this.error = (message: string) => {
+            if (existsSync(generatedRoutes)) {
+                this.warn(String(message));
+                this.warn('Wayfinder-generatie faalde; bestaande resources/js/routes worden gebruikt.');
+                return;
+            }
+            fail(message);
+        };
+
+        return (originalBuildStart as (this: unknown) => unknown).call(this);
+    };
+
+    return plugin;
+}
 
 function resolveDevServerConfig(env: Record<string, string>): {
     port: number;
@@ -55,9 +93,7 @@ export default defineConfig(({ mode }) => {
                 refresh: true,
             }),
             tailwindcss(),
-            wayfinder({
-                formVariants: true,
-            }),
+            wayfinderPlugin(),
             vue({
                 template: {
                     transformAssetUrls: {

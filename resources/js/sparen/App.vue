@@ -44,6 +44,8 @@ import AddSavingsGoalModal from "./components/AddSavingsGoalModal.vue";
 import ItemTransactionsModal from "./components/ItemTransactionsModal.vue";
 import AutoProcessTransactionsModal from "./components/AutoProcessTransactionsModal.vue";
 import ToastStack from "./components/Toast.vue";
+import PotCompensationBanner from "./components/PotCompensationBanner.vue";
+import PotSettlementModal from "./components/PotSettlementModal.vue";
 import type { AutoProcessSaveAssignment } from "./services/transactionLinkSuggestions";
 import { useToasts } from "./composables/useToasts";
 import {
@@ -79,6 +81,10 @@ import {
   isPotGoal,
   applyPotTransferLinkExclusion,
   potLinkedBudgetItemIds,
+  potsNeedingCompensation,
+  potGoalsLinkedToItem,
+  computePotSettlement,
+  type PotCompensationNeed,
 } from "./potSettlement";
 import { transactionMatchesBudgetItem } from "./budgetPayment";
 
@@ -123,6 +129,7 @@ const isAddRuleModalOpen = ref(false);
 const isAddSavingsGoalModalOpen = ref(false);
 const editingSavingsGoal = ref<SavingsGoal | null>(null);
 const itemTransactionsModalItem = ref<BudgetItem | null>(null);
+const potDetailGoal = ref<SavingsGoal | null>(null);
 
 const initialRuleKeyword = ref("");
 const initialRuleGroup = ref<BudgetCategoryGroup>("Dagelijks Leven");
@@ -347,6 +354,31 @@ const currentReportingPeriodLabel = computed(() => {
 
   return formatReportingPeriodLabel(period);
 });
+
+const potCompensationNeeds = computed(() =>
+  potsNeedingCompensation(currentMonth.value, transactions.value, savingsGoals.value)
+);
+
+const potDetailSettlement = computed(() => {
+  if (!potDetailGoal.value || !currentMonth.value) return null;
+  return computePotSettlement(potDetailGoal.value, currentMonth.value, transactions.value);
+});
+
+function openPotDetail(goal: SavingsGoal) {
+  itemTransactionsModalItem.value = null;
+  potDetailGoal.value = goal;
+}
+
+function openPotFromCompensation(need: PotCompensationNeed) {
+  openPotDetail(need.goal);
+}
+
+function openPotFromBudgetItem(item: BudgetItem) {
+  const goal = potGoalsLinkedToItem(item.id, savingsGoals.value)[0];
+  if (goal) {
+    openPotDetail(goal);
+  }
+}
 
 const primaryBankAccount = computed(() => {
   const checking = bankAccounts.value.filter((account) => account.type === "checking");
@@ -1223,12 +1255,18 @@ function closeSavingsGoalModal() {
         class="flex-1 px-3 md:px-4 py-3 md:py-4 pb-24 md:pb-6 w-full space-y-5"
         :data-page="activeTab"
       >
+        <PotCompensationBanner
+          :needs="potCompensationNeeds"
+          :month-name="currentMonth.monthName"
+          @select="openPotFromCompensation"
+        />
         <DashboardView
           v-if="activeTab === 'dashboard'"
           :current-month="currentMonth"
           :all-months="monthlyBudgets"
           :transactions="transactions"
           :bank-account="primaryBankAccount"
+          :savings-goals="savingsGoals"
           :on-navigate-tab="setActiveTab"
         />
 
@@ -1430,6 +1468,16 @@ function closeSavingsGoalModal() {
       :on-link-transaction="(txId, group, itemId) => handleLinkTransaction(txId, group, itemId)"
       :on-open-edit-budget-item="handleOpenEditBudgetItem"
       :on-add-transaction-to-item="() => (isAddTxModalOpen = true)"
+      :on-open-pot="openPotFromBudgetItem"
+    />
+
+    <PotSettlementModal
+      v-if="currentMonth"
+      :is-open="potDetailGoal !== null"
+      :on-close="() => (potDetailGoal = null)"
+      :goal="potDetailGoal"
+      :settlement="potDetailSettlement"
+      :current-month="currentMonth"
     />
 
     <ToastStack :toasts="toasts" @dismiss="dismiss" />
