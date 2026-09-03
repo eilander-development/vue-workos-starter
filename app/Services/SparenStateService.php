@@ -500,7 +500,7 @@ class SparenStateService
             'balance' => (float) $account->balance,
             'availableBalance' => (float) $account->available_balance,
             'currency' => $account->currency ?: 'EUR',
-            'lastSync' => $account->last_synced_at?->timezone('Europe/Amsterdam')->format('H:i') ?? '',
+            'lastSync' => $account->last_synced_at?->timezone('Europe/Amsterdam')->format('d-m-Y H:i') ?? '',
             'lastSyncedAt' => $account->last_synced_at?->timezone('Europe/Amsterdam')->toIso8601String(),
             'status' => $connected ? 'connected' : 'disconnected',
             'syncCountToday' => (int) $account->sync_count_today,

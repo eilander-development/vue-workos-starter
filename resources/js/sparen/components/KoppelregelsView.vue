@@ -2,11 +2,13 @@
 import { computed, ref } from "vue";
 import { Sliders, Plus, Play, CheckCircle2, Trash2, Search, Sparkles, Tag } from "lucide-vue-next";
 import type { Rule, Transaction, BudgetItem } from "../types";
+import { findRulesForTestInput, transactionsMatchingRule, transactionsMatchingTestInput } from "../matchRule";
 
 const props = withDefaults(
   defineProps<{
     rules: Rule[];
-    onAddRule: () => void;
+    onAddRule: (keyword?: string) => void;
+    onEditRule: (rule: Rule) => void;
     onToggleRule: (id: string, active: boolean) => void;
     onDeleteRule: (id: string) => void;
     onApplyRulesToAll: () => void;
@@ -19,13 +21,20 @@ const props = withDefaults(
 );
 
 const searchTerm = ref("");
-const testInput = ref("AH 8732 APELDOORN NLD Google Pay");
-const appliedMessage = ref<string | null>(null);
+const testInput = ref("");
 
 const budgetItemMap = computed(() => {
   const map = new Map<string, BudgetItem>();
   props.budgetItems.forEach((i) => map.set(i.id, i));
   return map;
+});
+
+const liveCounts = computed(() => {
+  const counts = new Map<string, number>();
+  for (const rule of props.rules) {
+    counts.set(rule.id, transactionsMatchingRule(props.transactions, rule, { ignoreDirection: true }).length);
+  }
+  return counts;
 });
 
 const filteredRules = computed(() =>
@@ -42,16 +51,15 @@ const filteredRules = computed(() =>
   )
 );
 
-const matchedRule = computed(() =>
-  props.rules.find(
-    (r) => r.isActive && testInput.value.toLowerCase().includes(r.keyword.toLowerCase())
-  )
+const testerHits = computed(() =>
+  findRulesForTestInput(testInput.value, props.rules, props.transactions)
 );
-const matchedItem = computed(() =>
-  matchedRule.value?.targetBudgetItemId
-    ? budgetItemMap.value.get(matchedRule.value.targetBudgetItemId)
-    : undefined
+const testerTxCount = computed(() =>
+  transactionsMatchingTestInput(testInput.value, props.transactions).length
 );
+const testerQuery = computed(() => testInput.value.trim());
+
+const appliedMessage = ref<string | null>(null);
 
 function handleRunAll() {
   props.onApplyRulesToAll();
@@ -59,6 +67,10 @@ function handleRunAll() {
   window.setTimeout(() => {
     appliedMessage.value = null;
   }, 4000);
+}
+
+function matchLabel(rule: Rule) {
+  return liveCounts.value.get(rule.id) ?? rule.matchedCount ?? 0;
 }
 </script>
 
@@ -76,7 +88,7 @@ function handleRunAll() {
         </div>
         <p class="text-xs text-slate-400 mt-1">
           Herken bankafschriften automatisch op basis van trefwoorden en ken direct de juiste categorie én
-          begrotingspost toe
+          begrotingspost toe. Klik een regel om te bewerken.
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -93,7 +105,7 @@ function handleRunAll() {
           id="koppelregels-add-rule-btn"
           type="button"
           class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all active:scale-95"
-          @click="onAddRule"
+          @click="onAddRule()"
         >
           <Plus class="w-3.5 h-3.5" />
           <span>Nieuwe Regel</span>
@@ -115,34 +127,49 @@ function handleRunAll() {
         <h3 class="text-sm font-bold text-white">Live Regel-Tester</h3>
       </div>
       <p class="text-xs text-slate-400 mb-3">
-        Typ een bankafschrift-omschrijving in om direct te testen welke regel en post geactiveerd wordt:
+        Typ een stuk omschrijving (zoals op het afschrift) of een trefwoord. De tester zoekt in regels én in
+        echte mutaties.
       </p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <input
           v-model="testInput"
           type="text"
-          placeholder="Typ een omschrijving (bijv. Albert Heijn, Shell, Netflix)..."
+          placeholder="Bijv. Belastingdienst, AH To Go, PLUS Holthuijsen..."
           class="bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
         />
-        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs">
-          <div v-if="matchedRule" class="flex items-center gap-2 text-emerald-400">
-            <CheckCircle2 class="w-4 h-4 shrink-0" />
-            <div>
-              <span class="font-bold">{{ matchedRule.name }}</span>
-              <div class="text-slate-400 text-[10px] flex items-center gap-1.5 mt-0.5">
-                <span>
-                  Rubriek: <strong class="text-slate-300">{{ matchedRule.targetGroup }}</strong>
-                </span>
-                <template v-if="matchedItem">
-                  <span>•</span>
-                  <span>
-                    Post: <strong class="text-indigo-300">{{ matchedItem.name }}</strong>
-                  </span>
-                </template>
-              </div>
-            </div>
+        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs min-h-[3.25rem]">
+          <div v-if="testerQuery.length < 2" class="text-slate-500 italic">
+            Typ minstens 2 tekens.
           </div>
-          <span v-else class="text-slate-400 italic">Geen match gevonden voor deze tekst</span>
+          <div v-else-if="testerHits.length > 0" class="space-y-2">
+            <button
+              v-for="hit in testerHits.slice(0, 3)"
+              :key="hit.rule.id"
+              type="button"
+              class="w-full text-left flex items-start gap-2 text-emerald-400 hover:text-emerald-300"
+              @click="onEditRule(hit.rule)"
+            >
+              <CheckCircle2 class="w-4 h-4 shrink-0 mt-0.5" />
+              <div class="min-w-0">
+                <span class="font-bold">{{ hit.rule.name }}</span>
+                <div class="text-slate-400 text-[10px] mt-0.5">
+                  Trefwoord <span class="font-mono text-indigo-300">{{ hit.rule.keyword }}</span>
+                  · {{ hit.rule.targetGroup }}
+                  · {{ hit.sampleCount }} mutaties
+                </div>
+              </div>
+            </button>
+            <p v-if="testerHits.length > 3" class="text-[10px] text-slate-500">
+              + {{ testerHits.length - 3 }} andere regels
+            </p>
+          </div>
+          <div v-else-if="testerTxCount > 0" class="text-amber-300">
+            {{ testerTxCount }} mutaties met “{{ testerQuery }}”, maar geen koppelregel.
+            <button type="button" class="block mt-1 text-emerald-400 font-semibold hover:underline" @click="onAddRule(testerQuery)">
+              Regel aanmaken
+            </button>
+          </div>
+          <span v-else class="text-slate-400 italic">Geen regel of mutatie gevonden voor deze tekst</span>
         </div>
       </div>
     </div>
@@ -179,7 +206,8 @@ function handleRunAll() {
             <tr
               v-for="rule in filteredRules"
               :key="rule.id"
-              class="hover:bg-slate-800/40 transition-colors"
+              class="hover:bg-slate-800/40 transition-colors cursor-pointer"
+              @click="onEditRule(rule)"
             >
               <td class="py-3.5 px-4">
                 <input
@@ -187,6 +215,7 @@ function handleRunAll() {
                   :checked="rule.isActive"
                   class="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
                   :title="rule.isActive ? 'Regel is actief' : 'Regel is gepauzeerd'"
+                  @click.stop
                   @change="
                     onToggleRule(rule.id, ($event.target as HTMLInputElement).checked)
                   "
@@ -234,14 +263,14 @@ function handleRunAll() {
                 </span>
               </td>
               <td class="py-3.5 px-4 text-center font-mono text-slate-300 font-semibold">
-                {{ rule.matchedCount }}x
+                {{ matchLabel(rule) }}x
               </td>
               <td class="py-3.5 px-4 text-right">
                 <button
                   type="button"
                   class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
                   title="Verwijder regel"
-                  @click="onDeleteRule(rule.id)"
+                  @click.stop="onDeleteRule(rule.id)"
                 >
                   <Trash2 class="w-3.5 h-3.5" />
                 </button>

@@ -75,7 +75,7 @@ import {
   matchingUnlinkedTransactions,
   transactionMatchesRule,
 } from "./matchRule";
-import { transactionMatchesSavingsGoalDeposit } from "./matchSavings";
+import { isSavingsCashflowTransfer, transactionMatchesSavingsGoalDeposit } from "./matchSavings";
 import {
   goalBudgetItemIds,
   isPotGoal,
@@ -126,10 +126,12 @@ const editingBudgetItem = ref<BudgetItem | null>(null);
 const isCategoryModalOpen = ref(false);
 const editingCategory = ref<CategoryDefinition | null>(null);
 const isAddRuleModalOpen = ref(false);
+const editingRule = ref<Rule | null>(null);
 const isAddSavingsGoalModalOpen = ref(false);
 const editingSavingsGoal = ref<SavingsGoal | null>(null);
 const itemTransactionsModalItem = ref<BudgetItem | null>(null);
 const potDetailGoal = ref<SavingsGoal | null>(null);
+const transactionsOpenFilter = ref<"ALL" | "UNLINKED">("ALL");
 
 const initialRuleKeyword = ref("");
 const initialRuleGroup = ref<BudgetCategoryGroup>("Dagelijks Leven");
@@ -299,7 +301,15 @@ const monthlyBudgets = computed(() => {
     const txsInMonth = transactions.value.filter((t) => isTransactionInReportingMonth(t, mb));
 
     const updatedItems = mb.items.map((item) => {
-      const matchingTxs = txsInMonth.filter((t) => transactionMatchesBudgetItem(t, item));
+      const matchingTxs = txsInMonth.filter((t) => {
+        if (!transactionMatchesBudgetItem(t, item)) {
+          return false;
+        }
+        if (item.type === "uitgaven" && isSavingsCashflowTransfer(t)) {
+          return false;
+        }
+        return true;
+      });
 
       const totalFromTxs = matchingTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
       const paymentCount = matchingTxs.length;
@@ -659,47 +669,53 @@ function handleCreateRuleFromTransaction(
   targetType: "inkomsten" | "uitgaven" | "sparen",
   budgetItemId?: string
 ) {
+  editingRule.value = null;
   initialRuleKeyword.value = keyword;
   initialRuleGroup.value = targetGroup;
   initialRuleBudgetItemId.value = budgetItemId || "";
   isAddRuleModalOpen.value = true;
 }
 
-function handleAddRule(ruleData: Omit<Rule, "id" | "matchedCount">) {
-  const newRule: Rule = {
+function handleSaveRule(ruleData: Omit<Rule, "matchedCount">) {
+  const existing = rules.value.find((rule) => rule.id === ruleData.id);
+  const savedRule: Rule = {
     ...ruleData,
-    id: `rule-${Date.now()}`,
-    matchedCount: 0,
+    matchedCount: existing?.matchedCount ?? 0,
   };
   const extraLinked = matchingUnlinkedTransactions(
     transactions.value,
-    newRule.keyword,
-    newRule.matchField,
+    savedRule.keyword,
+    savedRule.matchField,
     undefined,
-    newRule.targetType
+    savedRule.targetType
   ).length;
-  const updatedRules = [...rules.value, newRule];
+  const updatedRules = existing
+    ? rules.value.map((rule) => (rule.id === savedRule.id ? savedRule : rule))
+    : [...rules.value, savedRule];
   const nextTxs = applyRulesToTransactions(transactions.value, updatedRules, savingsGoals.value);
 
   void runSave(
     async () => {
-      await saveRule(newRule);
+      await saveRule(savedRule);
       await persistChangedTransactions(transactions.value, nextTxs);
       rules.value = updatedRules;
       transactions.value = nextTxs;
     },
     {
-      title:
-        extraLinked > 0
+      title: existing
+        ? "Koppelregel bijgewerkt"
+        : extraLinked > 0
           ? `Regel aangemaakt · ${extraLinked} ${extraLinked === 1 ? "rij gekoppeld" : "rijen gekoppeld"}`
           : "Koppelregel aangemaakt",
-      detail: `"${newRule.keyword}" → ${newRule.targetGroup}`,
+      detail: `"${savedRule.keyword}" → ${savedRule.targetGroup}`,
     }
   );
 }
 
-function handleToggleRule(ruleId: string) {
-  const updated = rules.value.map((r) => (r.id === ruleId ? { ...r, isActive: !r.isActive } : r));
+function handleToggleRule(ruleId: string, active?: boolean) {
+  const updated = rules.value.map((r) =>
+    r.id === ruleId ? { ...r, isActive: active ?? !r.isActive } : r
+  );
   const toggled = updated.find((r) => r.id === ruleId);
   const nextTxs = applyRulesToTransactions(transactions.value, updated, savingsGoals.value);
 
@@ -1194,11 +1210,33 @@ function handleYearOverviewSelectMonth(mId: string) {
   setActiveTab("maandbegroting");
 }
 
-function openAddRuleModal() {
-  initialRuleKeyword.value = "";
+function openUnlinkedInbox() {
+  transactionsOpenFilter.value = "UNLINKED";
+  setActiveTab("transacties");
+}
+
+watch(activeTab, (tab) => {
+  if (tab !== "transacties") {
+    transactionsOpenFilter.value = "ALL";
+  }
+});
+
+function openAddRuleModal(keyword = "") {
+  editingRule.value = null;
+  initialRuleKeyword.value = typeof keyword === "string" ? keyword : "";
   initialRuleGroup.value = "Dagelijks Leven";
   initialRuleBudgetItemId.value = "";
   isAddRuleModalOpen.value = true;
+}
+
+function openEditRuleModal(rule: Rule) {
+  editingRule.value = rule;
+  isAddRuleModalOpen.value = true;
+}
+
+function closeRuleModal() {
+  isAddRuleModalOpen.value = false;
+  editingRule.value = null;
 }
 
 function closeCategoryModal() {
@@ -1268,6 +1306,7 @@ function closeSavingsGoalModal() {
           :bank-account="primaryBankAccount"
           :savings-goals="savingsGoals"
           :on-navigate-tab="setActiveTab"
+          :on-open-unlinked="openUnlinkedInbox"
         />
 
         <BudgetSpreadsheetView
@@ -1315,10 +1354,12 @@ function closeSavingsGoalModal() {
           :savings-goals="savingsGoals"
           :transactions="transactions"
           :current-month="currentMonth"
+          :all-months="monthlyBudgets"
           :on-open-add-goal="handleOpenAddSavingsGoal"
           :on-edit-goal="handleOpenEditSavingsGoal"
           :on-delete-goal="handleDeleteSavingsGoal"
           :on-update-savings-row="handleUpdateSavingsRow"
+          :on-navigate-tab="setActiveTab"
         />
 
         <TransactionsView
@@ -1334,6 +1375,7 @@ function closeSavingsGoalModal() {
           :budget-items="currentMonth.items"
           :categories="categories"
           :on-open-add-budget-item-modal="handleOpenAddBudgetItemModal"
+          :initial-filter="transactionsOpenFilter"
         />
 
         <EnableBankingView
@@ -1364,6 +1406,7 @@ function closeSavingsGoalModal() {
           v-if="activeTab === 'koppelregels'"
           :rules="rules"
           :on-add-rule="openAddRuleModal"
+          :on-edit-rule="openEditRuleModal"
           :on-toggle-rule="handleToggleRule"
           :on-delete-rule="handleDeleteRule"
           :on-apply-rules-to-all="handleApplyRulesToAll"
@@ -1374,6 +1417,9 @@ function closeSavingsGoalModal() {
         <YearOverviewView
           v-if="activeTab === 'jaaroverzicht'"
           :all-months="monthlyBudgets"
+          :transactions="transactions"
+          :savings-goals="savingsGoals"
+          :bank-balance="primaryBankAccount.balance"
           :on-select-month="handleYearOverviewSelectMonth"
         />
 
@@ -1435,14 +1481,17 @@ function closeSavingsGoalModal() {
 
     <AddRuleModal
       :is-open="isAddRuleModalOpen"
-      :on-close="() => (isAddRuleModalOpen = false)"
-      :on-add="handleAddRule"
+      :on-close="closeRuleModal"
+      :on-save="handleSaveRule"
+      :editing-rule="editingRule"
       :initial-keyword="initialRuleKeyword"
       :initial-group="initialRuleGroup"
       :initial-budget-item-id="initialRuleBudgetItemId"
       :budget-items="currentMonth.items"
       :categories="categories"
       :transactions="transactions"
+      :current-month="currentMonth"
+      :all-months="monthlyBudgets"
     />
 
     <AddSavingsGoalModal

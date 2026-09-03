@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ontwerp · Dashboard</title>
+  <style>
+    :root {
+      --bg: #020617;
+      --card: #0f172a;
+      --border: #1e293b;
+      --muted: #94a3b8;
+      --text: #f1f5f9;
+      --emerald: #34d399;
+      --rose: #fb7185;
+      --amber: #fbbf24;
+      --blue: #60a5fa;
+      --indigo: #818cf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: #a5b4fc; }
+    .bar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 10px 20px;
+      background: #0b1220;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .bar nav { display: flex; gap: 6px; flex-wrap: wrap; }
+    .bar a {
+      color: var(--muted); text-decoration: none;
+      padding: 6px 10px; border-radius: 8px; border: 1px solid transparent;
+    }
+    .bar a.on { color: #fff; background: #1e293b; border-color: #334155; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 22px 20px 72px; }
+    .page-head {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px 20px; margin-bottom: 22px;
+    }
+    .page-head h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; }
+    .page-head p { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+    .section { margin-bottom: 28px; }
+    .section-h { margin: 0 0 12px; }
+    .section-h h2 { margin: 0; font-size: 1rem; }
+    .section-h p { margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .grid2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+    .grid2.even { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 960px) {
+      .grid4, .grid2 { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px 18px 16px;
+      display: flex; flex-direction: column;
+    }
+    .k {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .v {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 1.5rem; font-weight: 800; margin: 10px 0 12px; letter-spacing: -0.03em;
+    }
+    .rows { border-top: 1px solid #1e293b; padding-top: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; color: var(--muted); }
+    .row b { font-weight: 600; color: #e2e8f0; }
+    .em { color: var(--emerald); }
+    .ro { color: var(--rose); }
+    .am { color: var(--amber); }
+    .bl { color: var(--blue); }
+    .hint { font-size: 11px; color: #64748b; margin: 10px 0 0; line-height: 1.4; }
+    .bridge { margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left; color: var(--muted); font-size: 11px; font-weight: 600;
+      letter-spacing: 0.04em; text-transform: uppercase; padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 9px 10px; border-bottom: 1px solid #1e293b; }
+    td.num { font-family: ui-monospace, Menlo, monospace; text-align: right; white-space: nowrap; }
+    .chart-box { min-height: 280px; }
+    .chart-box svg { width: 100%; height: 220px; display: block; }
+    .legend { display: flex; gap: 16px; font-size: 11px; color: var(--muted); margin-top: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 99px; display: inline-block; margin-right: 6px; }
+    .unpaid { display: flex; flex-direction: column; gap: 8px; }
+    .unpaid-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      background: #1e293b80; border: 1px solid #334155; border-radius: 12px; padding: 10px 12px;
+    }
+    .unpaid-row span { font-size: 12px; }
+    .tag {
+      font-size: 10px; font-weight: 600; color: #cbd5e1;
+      background: #334155; border-radius: 8px; padding: 3px 8px;
+    }
+    .year-bars { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding-top: 8px; }
+    .year-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+    .year-col .bar-fill {
+      width: 55%; max-width: 18px; border-radius: 4px 4px 0 0;
+      background: linear-gradient(to top, #4338ca, #818cf8);
+    }
+    .year-col .lbl { font-size: 10px; color: var(--muted); }
+    .now { outline: 2px solid #818cf8; outline-offset: 1px; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span style="color:#64748b">Ontwerp ter beoordeling · voorbeeldcijfers</span>
+    <nav>
+      <a href="./dashboard-bank.html">Dashboard</a>
+      <a href="./sparen-voorraad.html">Sparen</a>
+      <a class="on" href="./vervolg.html">Vervolg</a>
+    </nav>
+  </div>
+
+  <div class="wrap">
+    <div class="page-head">
+      <h1>Dashboard · augustus 2026</h1>
+      <p>Rapportage 15 aug – 14 sep · twee blokken: plan (begroting) en werkelijkheid (cashflow)</p>
+    </div>
+
+    <section class="section">
+      <div class="section-h">
+        <h2>Begroting deze periode</h2>
+        <p>Het plan: wat is begroot, wat is op de posten ontvangen of betaald, en wat je overhoudt als alles netjes binnenkomt en je geen extra uitgaven doet. Zelfde cijfers als maandbegroting.</p>
+      </div>
+      <div class="grid4">
+        <div class="card">
+          <div class="k">Huidig saldo (ING)</div>
+          <div class="v">€ 742,52</div>
+          <div class="rows">
+            <div class="row"><span>Verwacht eind</span><b>€ 1.180,00</b></div>
+            <div class="row"><span>Nog te betalen</span><b class="am">− € 706,24</b></div>
+            <div class="row"><span>Nog te compenseren</span><b class="am">+ € 289,17</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="k">Inkomsten (begroot)</div>
+          <div class="v em">€ 4.250,00</div>
+          <div class="rows">
+            <div class="row"><span>Ontvangen op posten</span><b class="em">€ 4.120,00</b></div>
+            <div class="row"><span>Nog te ontvangen</span><b class="am">€ 130,00</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="k">Uitgaven (begroot)</div>
+          <div class="v ro">€ 3.180,00</div>
+          <div class="rows">
+            <div class="row"><span>Betaald (envelop)</span><b class="ro">€ 2.474,00</b></div>
+            <div class="row"><span>Nog te betalen</span><b class="am">€ 706,24</b></div>
+          </div>
+          <p class="hint">Boodschappen telt hier als € 500 envelop, niet als € 339 pin.</p>
+        </div>
+        <div class="card">
+          <div class="k">Netto / verwacht eind</div>
+          <div class="v">€ 1.180,00</div>
+          <div class="rows">
+            <div class="row"><span>Huidig saldo</span><b>€ 742,52</b></div>
+            <div class="row"><span>Nog te ontvangen</span><b class="em">+ € 130,00</b></div>
+            <div class="row"><span>Nog te betalen</span><b class="ro">− € 706,24</b></div>
+            <div class="row"><span>Nog te sparen</span><b class="bl">− € 600,00</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-h">
+        <h2>Cashflow deze periode</h2>
+        <p>De bank: elke euro die de betaalrekening op of af ging. Spaaroverboekingen staan apart, niet bij uitgaven. Ook ongekoppelde mutaties tellen mee.</p>
+      </div>
+      <div class="grid4">
+        <div class="card">
+          <div class="k">Echt ontvangen</div>
+          <div class="v em">€ 4.187,50</div>
+          <div class="rows">
+            <div class="row"><span>Salaris, toeslagen, overig +</span><b class="em">€ 4.187,50</b></div>
+          </div>
+          <p class="hint">Bijschrijvingen, zonder opnames van spaar (die staan rechts).</p>
+        </div>
+        <div class="card">
+          <div class="k">Echt uitgegeven</div>
+          <div class="v ro">€ 2.891,40</div>
+          <div class="rows">
+            <div class="row"><span>Pin, incasso, iDEAL</span><b class="ro">€ 2.891,40</b></div>
+            <div class="row"><span>Waarvan boodschappen pin</span><b>€ 339,17</b></div>
+          </div>
+          <p class="hint">Geen Naar-spaar, geen Van-spaar.</p>
+        </div>
+        <div class="card">
+          <div class="k">Naar spaargeld</div>
+          <div class="v bl">€ 750,00</div>
+          <div class="rows">
+            <div class="row"><span>Spaardoelen</span><b class="bl">€ 250,00</b></div>
+            <div class="row"><span>Potjes</span><b>€ 500,00</b></div>
+          </div>
+          <p class="hint">Stortingen vanaf de betaalrekening. Potjes apart van doelen.</p>
+        </div>
+        <div class="card">
+          <div class="k">Van spaargeld</div>
+          <div class="v am">€ 150,00</div>
+          <div class="rows">
+            <div class="row"><span>Opnames spaardoelen</span><b>€ 0,00</b></div>
+            <div class="row"><span>Compensatie uit potjes</span><b class="am">€ 150,00</b></div>
+          </div>
+          <p class="hint">Terug op de betaalrekening. Boodschappen: € 150 van € 339.</p>
+        </div>
+      </div>
+      <div class="grid2 even bridge">
+        <div class="card">
+          <div class="k">Cashflow-check</div>
+          <div class="v" style="font-size:1.15rem">Ontvangen − uitgeven − netto sparen</div>
+          <div class="rows">
+            <div class="row"><span>Echt ontvangen</span><b class="em">+ € 4.187,50</b></div>
+            <div class="row"><span>Echt uitgegeven</span><b class="ro">− € 2.891,40</b></div>
+            <div class="row"><span>Naar spaar − van spaar</span><b class="bl">− € 600,00</b></div>
+            <div class="row"><span>Netto van de rekening</span><b>+ € 696,10</b></div>
+          </div>
+          <p class="hint">Dit moet (ongeveer) het verschil in betaalsaldo over de periode verklaren. Klikbaar naar de mutaties per emmer.</p>
+        </div>
+        <div class="card">
+          <div class="k">Waarom begroting anders is</div>
+          <table>
+            <thead>
+              <tr><th>Emmer</th><th class="num">Begroting</th><th class="num">Bank</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Boodschappen</td>
+                <td class="num">€ 500,00 envelop</td>
+                <td class="num ro">€ 339,17 pin</td>
+              </tr>
+              <tr>
+                <td>Overige uitgavenposten</td>
+                <td class="num">€ 1.974,00 betaald</td>
+                <td class="num ro">€ 2.552,23</td>
+              </tr>
+              <tr>
+                <td>Ongekoppeld</td>
+                <td class="num">€ 0,00</td>
+                <td class="num am">€ 0,00 in dit voorbeeld</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="hint">Begroting volgt posten en enveloppen. Bank volgt elke euro op de betaalrekening.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-h">
+        <h2>Saldo op rekening</h2>
+        <p>Verloop van de betaalrekening. Links deze rapportagemaand (reconstructie uit mutaties). Rechts maandeinde over het jaar.</p>
+      </div>
+      <div class="grid2">
+        <div class="card chart-box">
+          <div class="k">Deze periode · 15 aug – nu</div>
+          <svg viewBox="0 0 640 220" aria-label="Saldo deze maand">
+            <defs>
+              <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#818cf8" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="#818cf8" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <g stroke="#1e293b" stroke-width="1">
+              <line x1="40" y1="30" x2="620" y2="30" />
+              <line x1="40" y1="90" x2="620" y2="90" />
+              <line x1="40" y1="150" x2="620" y2="150" />
+              <line x1="40" y1="190" x2="620" y2="190" />
+            </g>
+            <text x="8" y="34" fill="#64748b" font-size="11">€ 2k</text>
+            <text x="8" y="94" fill="#64748b" font-size="11">€ 1k</text>
+            <text x="14" y="194" fill="#64748b" font-size="11">€ 0</text>
+            <path d="M40 148 L90 152 L140 90 L190 78 L250 96 L310 118 L380 130 L450 142 L520 155 L580 160 L610 158"
+              fill="none" stroke="#818cf8" stroke-width="2.5" />
+            <path d="M40 148 L90 152 L140 90 L190 78 L250 96 L310 118 L380 130 L450 142 L520 155 L580 160 L610 158 L610 190 L40 190 Z"
+              fill="url(#area)" />
+            <circle cx="610" cy="158" r="5" fill="#c7d2fe" />
+            <text x="520" y="148" fill="#c7d2fe" font-size="11" font-family="ui-monospace, Menlo, monospace">nu € 742</text>
+            <text x="40" y="212" fill="#64748b" font-size="11">15 aug</text>
+            <text x="250" y="212" fill="#64748b" font-size="11">salaris</text>
+            <text x="575" y="212" fill="#64748b" font-size="11">3 sep</text>
+          </svg>
+          <p class="hint">Piek na salaris, daarna vaste lasten en pin. Stippellijn in de app: verwacht eind als het plan uitkomt.</p>
+        </div>
+        <div class="card">
+          <div class="k">Maandeinde 2026</div>
+          <div class="year-bars">
+            <div class="year-col"><div class="bar-fill" style="height:18%"></div><span class="lbl">jan</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:22%"></div><span class="lbl">feb</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:20%"></div><span class="lbl">mrt</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:16%"></div><span class="lbl">apr</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:24%"></div><span class="lbl">mei</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:70%"></div><span class="lbl">jun</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:62%"></div><span class="lbl">jul</span></div>
+            <div class="year-col now"><div class="bar-fill" style="height:28%"></div><span class="lbl">aug</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:8%;opacity:.35"></div><span class="lbl">sep</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:8%;opacity:.35"></div><span class="lbl">okt</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:8%;opacity:.35"></div><span class="lbl">nov</span></div>
+            <div class="year-col"><div class="bar-fill" style="height:8%;opacity:.35"></div><span class="lbl">dec</span></div>
+          </div>
+          <p class="hint">Augustus is lager dan juni/juli omdat er nog open posten zijn — niet omdat het jaarplan faalt. Toekomstige maanden grijs.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid2">
+        <div class="card" style="opacity:.72">
+          <div class="k">Blijft zoals nu</div>
+          <div class="v" style="font-size:1.1rem">Jaargrafiek envelop · categorieën · laatste transacties</div>
+          <p class="hint">Die blokken staan al op het dashboard. Ze horen bij de begroting, niet bij cashflow. In de bouw kunnen ze onder de begrotingsrij blijven of naar maandbegroting.</p>
+        </div>
+        <div class="card">
+          <div class="k">Nog te betalen (augustus)</div>
+          <div class="unpaid" style="margin-top:12px">
+            <div class="unpaid-row"><span>Hypotheek</span><span class="am" style="font-family:ui-monospace,Menlo,monospace;font-weight:700">€ 412,00</span><span class="tag">In afwachting</span></div>
+            <div class="unpaid-row"><span>Zorgverzekering</span><span class="am" style="font-family:ui-monospace,Menlo,monospace;font-weight:700">€ 148,20</span><span class="tag">In afwachting</span></div>
+            <div class="unpaid-row"><span>Internet (KPN)</span><span class="am" style="font-family:ui-monospace,Menlo,monospace;font-weight:700">€ 72,40</span><span class="tag">In afwachting</span></div>
+          </div>
+          <div class="row" style="margin-top:12px;padding-top:10px;border-top:1px solid #1e293b"><span>Totaal openstaand</span><b class="am">€ 706,24</b></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

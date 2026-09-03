@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ontwerp · waarom deze vervolgstappen</title>
+  <style>
+    :root {
+      --bg: #020617;
+      --card: #0f172a;
+      --border: #1e293b;
+      --muted: #94a3b8;
+      --text: #f1f5f9;
+      --emerald: #34d399;
+      --rose: #fb7185;
+      --amber: #fbbf24;
+      --blue: #60a5fa;
+      --indigo: #818cf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .bar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 10px 20px;
+      background: #0b1220;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .bar nav { display: flex; gap: 6px; flex-wrap: wrap; }
+    .bar a {
+      color: var(--muted); text-decoration: none;
+      padding: 6px 10px; border-radius: 8px; border: 1px solid transparent;
+    }
+    .bar a.on { color: #fff; background: #1e293b; border-color: #334155; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 20px 80px; }
+    .page-head {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px 20px; margin-bottom: 18px;
+    }
+    .page-head h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; }
+    .page-head p { margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .toc {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px;
+    }
+    .toc a {
+      font-size: 12px; color: #c7d2fe; text-decoration: none;
+      border: 1px solid #3730a3; background: #172554;
+      border-radius: 999px; padding: 6px 12px;
+    }
+    .block { margin-bottom: 48px; scroll-margin-top: 56px; }
+    .block h2 { margin: 0 0 6px; font-size: 1.05rem; }
+    .why {
+      font-size: 13px; color: #cbd5e1; line-height: 1.55;
+      background: #172554; border: 1px solid #3730a3;
+      border-radius: 12px; padding: 12px 14px; margin: 10px 0 16px;
+    }
+    .why strong { color: #fff; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 860px) { .pair { grid-template-columns: 1fr; } }
+    .pane {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 14px 16px 16px; min-width: 0;
+    }
+    .pane.now { border-color: #334155; }
+    .pane.next { border-color: #b45309; box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.22); }
+    .tag {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      border-radius: 999px; padding: 2px 8px; margin-bottom: 8px; border: 1px solid;
+    }
+    .now .tag { color: #94a3b8; border-color: #475569; }
+    .next .tag { color: #fbbf24; border-color: #b45309; background: #451a03; }
+    .pane h3 { margin: 0 0 10px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      text-align: left; color: var(--muted); font-size: 10px; font-weight: 600;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 6px 8px; border-bottom: 1px solid var(--border);
+    }
+    td { padding: 7px 8px; border-bottom: 1px solid #1e293b; }
+    td.num, th.num { font-family: ui-monospace, Menlo, monospace; text-align: right; white-space: nowrap; }
+    .em { color: var(--emerald); }
+    .ro { color: var(--rose); }
+    .am { color: var(--amber); }
+    .bl { color: var(--blue); }
+    .muted { color: var(--muted); }
+    .strike { text-decoration: line-through; color: #64748b; }
+    .seg {
+      display: inline-flex; gap: 4px; background: #1e293b; border: 1px solid #334155;
+      border-radius: 10px; padding: 3px; margin-bottom: 10px;
+    }
+    .seg span {
+      font-size: 11px; padding: 4px 10px; border-radius: 8px; color: var(--muted);
+    }
+    .seg span.on { background: #4f46e5; color: #fff; }
+    .inbox {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      background: #422006; border: 1px solid #b45309; border-radius: 12px;
+      padding: 10px 12px; font-size: 13px; margin-bottom: 10px;
+    }
+    .inbox b { color: var(--amber); font-family: ui-monospace, Menlo, monospace; }
+    .btn {
+      font-size: 11px; font-weight: 600; color: #fff; background: #4f46e5;
+      border-radius: 8px; padding: 6px 10px; white-space: nowrap;
+    }
+    .tx {
+      display: flex; justify-content: space-between; gap: 10px;
+      font-size: 12px; padding: 8px 0; border-bottom: 1px solid #1e293b;
+    }
+    .chip {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      background: #451a03; color: #fcd34d; border: 1px solid #92400e;
+      border-radius: 6px; padding: 2px 6px;
+    }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+    .kpi { background: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 8px 10px; }
+    .kpi span { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .kpi b { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+    .bars { display: flex; align-items: flex-end; gap: 6px; height: 88px; margin-top: 8px; }
+    .bars i {
+      flex: 1; display: block; border-radius: 3px 3px 0 0;
+      background: linear-gradient(to top, #4338ca, #818cf8);
+    }
+    .bars i.dim { opacity: .28; }
+    .bars i.fake { background: #475569; }
+    .note { font-size: 11px; color: #64748b; margin-top: 8px; line-height: 1.4; }
+    .wrong { background: #4c0519; border: 1px solid #9f1239; border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
+    .ok { background: #052e16; border: 1px solid #166534; border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span style="color:#64748b">Ontwerp · huidige vs voorstel</span>
+    <nav>
+      <a href="./dashboard-bank.html">Dashboard</a>
+      <a href="./sparen-voorraad.html">Sparen</a>
+      <a class="on" href="./vervolg.html">Vervolg</a>
+    </nav>
+  </div>
+
+  <div class="wrap">
+    <div class="page-head">
+      <h1>Waarom deze vervolgstappen beter zijn</h1>
+      <p>
+        Geen nieuwe pagina’s. Zelfde schermen, maar dezelfde vraag overal hetzelfde beantwoord.
+        Links is nu (of bijna-nu). Rechts is het voorstel. Cijfers zijn voorbeelden.
+      </p>
+    </div>
+
+    <div class="toc">
+      <a href="#jaar">1. Jaaroverzicht</a>
+      <a href="#inbox">2. Ongekoppeld</a>
+      <a href="#pot">3. Pot-uitgaven</a>
+      <a href="#saldo">4. Saldosnapshot</a>
+      <a href="#dubbel">5. Dubbele jaargrafiek</a>
+    </div>
+
+    <section class="block" id="jaar">
+      <h2>1. Jaaroverzicht dezelfde split als het dashboard</h2>
+      <div class="why">
+        Augustus op het dashboard kan nu <strong>bank-cashflow</strong> tonen, terwijl jaaroverzicht nog
+        <strong>envelop</strong> telt (Boodschappen € 500 i.p.v. pin € 339). Dan is het jaar “iets anders”
+        dan de maand die je net hebt bekeken. Rechts: dezelfde twee lenzen, met een toggle.
+      </div>
+      <div class="pair">
+        <div class="pane now">
+          <span class="tag">Nu</span>
+          <h3>Jaaroverzicht · alleen envelop</h3>
+          <div class="kpis">
+            <div class="kpi"><span>Inkomsten</span><b class="em">€ 18.420</b></div>
+            <div class="kpi"><span>Uitgaven</span><b class="ro">€ 14.890</b></div>
+            <div class="kpi"><span>Sparen</span><b class="bl">€ 2.400</b></div>
+            <div class="kpi"><span>Netto</span><b>€ 1.130</b></div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Maand</th><th class="num">Op rekening</th><th class="num">Uitgaven</th><th class="num">Sparen</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Juni</td><td class="num">€ 2.750</td><td class="num ro">€ 2.100</td><td class="num bl">€ 250</td></tr>
+              <tr><td>Juli</td><td class="num">€ 2.400</td><td class="num ro">€ 1.980</td><td class="num bl">€ 0</td></tr>
+              <tr>
+                <td>Augustus</td>
+                <td class="num">€ 2.400</td>
+                <td class="num ro">€ 2.474 <span class="muted">envelop</span></td>
+                <td class="num bl">€ 500</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">Augustus-uitgaven = posten “betaald”, inclusief potstorting € 500. Pin was € 339.</p>
+        </div>
+        <div class="pane next">
+          <span class="tag">Voorstel</span>
+          <h3>Jaaroverzicht · plan of bank</h3>
+          <div class="seg"><span>Plan (envelop)</span><span class="on">Bank (cashflow)</span></div>
+          <div class="kpis">
+            <div class="kpi"><span>Echt ontvangen</span><b class="em">€ 18.510</b></div>
+            <div class="kpi"><span>Echt uitgegeven</span><b class="ro">€ 15.220</b></div>
+            <div class="kpi"><span>Netto naar spaar</span><b class="bl">€ 1.850</b></div>
+            <div class="kpi"><span>Netto rekening</span><b class="em">€ 1.440</b></div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Maand</th><th class="num">Saldo eind</th><th class="num">Uitgaven</th><th class="num">Naar / van spaar</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Juni</td><td class="num">€ 2.750</td><td class="num ro">€ 2.180</td><td class="num">+250 / −600</td></tr>
+              <tr><td>Juli</td><td class="num">€ 2.400</td><td class="num ro">€ 2.040</td><td class="num">0 / 0</td></tr>
+              <tr>
+                <td>Augustus</td>
+                <td class="num">€ 742</td>
+                <td class="num ro">€ 2.891 <span class="muted">pin</span></td>
+                <td class="num">+750 / −150</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">Augustus is nu hetzelfde als dashboard-cashflow. Toggle terug = het plan, gelijk aan maandbegroting.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="inbox">
+      <h2>2. Ongekoppeld als werkvoorraad, niet alleen een cijfer</h2>
+      <div class="why">
+        De vergelijkingstabel zegt <strong>Ongekoppeld € 186,40</strong> — en dan stopt het. Die euro’s zitten
+        wél in “echt uitgegeven”, maar nergens in het plan. Rechts: dezelfde regel is een knop naar de
+        transacties van <em>deze periode</em>, al gefilterd.
+      </div>
+      <div class="pair">
+        <div class="pane now">
+          <span class="tag">Nu</span>
+          <h3>Alleen een rij in de tabel</h3>
+          <table>
+            <thead><tr><th>Emmer</th><th class="num">Begroting</th><th class="num">Bank</th></tr></thead>
+            <tbody>
+              <tr><td>Boodschappen</td><td class="num">€ 500 envelop</td><td class="num ro">€ 339 pin</td></tr>
+              <tr><td>Overige posten</td><td class="num">€ 1.974 betaald</td><td class="num ro">€ 2.366</td></tr>
+              <tr><td>Ongekoppeld</td><td class="num">€ 0</td><td class="num am">€ 186,40</td></tr>
+            </tbody>
+          </table>
+          <p class="note">Je ziet dát er iets openstaat. Je weet niet welke mutaties, en Transacties opent de hele geschiedenis.</p>
+        </div>
+        <div class="pane next">
+          <span class="tag">Voorstel</span>
+          <h3>Klik → inbox deze periode</h3>
+          <div class="inbox">
+            <span>3 mutaties niet gekoppeld · augustus</span>
+            <b>€ 186,40</b>
+            <span class="btn">Koppelen</span>
+          </div>
+          <div class="tx">
+            <span>18-08 · PLUS 4321 Apeldoorn<br><span class="muted">geen post</span></span>
+            <span class="ro">− € 54,12</span>
+          </div>
+          <div class="tx">
+            <span>21-08 · Bol.com<br><span class="muted">geen post</span></span>
+            <span class="ro">− € 89,00</span>
+          </div>
+          <div class="tx">
+            <span>02-09 · Parkeren NS<br><span class="muted">geen post</span></span>
+            <span class="ro">− € 43,28</span>
+          </div>
+          <p class="note">Filter staat al op Ongekoppeld + deze rapportagemaand. Eén ronde koppelen maakt cashflow en plan weer vergelijkbaar.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="pot">
+      <h2>3. Pot-uitgaven zuiver: geen spaaroverboeking als pin</h2>
+      <div class="why">
+        Cashflow slaat <strong>Naar / Van Oranje</strong> al over. Het potje Benzine telt een storting naar
+        spaarrekening <strong>L13628386</strong> (spatie = rekening, geen potje) nog als uitgave.
+        Daardoor “nog over te zetten € 100” terwijl je niet hebt getankt.
+      </div>
+      <div class="pair">
+        <div class="pane now">
+          <span class="tag">Nu</span>
+          <h3>Potje Benzine · pin klopt niet</h3>
+          <table>
+            <thead><tr><th>Mutatie</th><th class="num">Telt als</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Shell pin € 62,40</td>
+                <td class="num ro">Uitgegeven</td>
+              </tr>
+              <tr>
+                <td>Naar Oranje spaarrekening <strong>L13628386</strong> € 100</td>
+                <td class="num ro">Uitgegeven</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="wrong">
+            Begroot € 150 · “pin” € 162,40 · compensatie € 0 → <strong>nog over te zetten € 162,40</strong>
+          </div>
+          <p class="note">L + spatie is een gewone spaarrekening. Die € 100 hoort bij sparen, niet bij tanken.</p>
+        </div>
+        <div class="pane next">
+          <span class="tag">Voorstel</span>
+          <h3>Zelfde mutaties, juiste emmer</h3>
+          <table>
+            <thead><tr><th>Mutatie</th><th class="num">Telt als</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Shell pin € 62,40</td>
+                <td class="num ro">Uitgegeven (pin)</td>
+              </tr>
+              <tr>
+                <td>Naar Oranje spaarrekening L13628386 € 100</td>
+                <td class="num bl">Naar spaargeld</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="ok">
+            Begroot € 150 · pin € 62,40 · compensatie € 0 → <strong>nog over te zetten € 62,40</strong>
+          </div>
+          <p class="note">Regel: ING-overboeking Naar/Van telt nooit als pot-pin, ook als die per ongeluk aan Benzine hangt.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="saldo">
+      <h2>4. Maandeinde vastleggen in plaats van alleen reconstrueren</h2>
+      <div class="why">
+        De lijn “deze periode” is <strong>live saldo minus mutaties</strong>. Dat klopt zolang de periode
+        compleet is. De staven “maandeinde” gebruiken nu <code>opRekening</code>, en dat veld is vaag
+        (begin of eind?). Rechts: één snapshot per rapportageperiode, dan is juni–augustus een echte lijn.
+      </div>
+      <div class="pair">
+        <div class="pane now">
+          <span class="tag">Nu</span>
+          <h3>Gereconstrueerd + los veld</h3>
+          <p class="note" style="margin-top:0">Augustus-lijn: 742 nu, teruggeteld. Juni-staaf: opRekening € 2.750 — maar is dat 15 jun of 14 jul?</p>
+          <div class="bars">
+            <i style="height:18%"></i><i style="height:22%"></i><i style="height:20%"></i>
+            <i style="height:16%"></i><i style="height:24%"></i><i style="height:70%"></i>
+            <i style="height:62%"></i><i style="height:28%"></i>
+            <i class="fake" style="height:28%"></i><i class="fake" style="height:28%"></i>
+            <i class="dim" style="height:10%"></i><i class="dim" style="height:10%"></i>
+          </div>
+          <p class="note">Grijze staven = herhaalde / onduidelijke waarde. De sprong juni→augustus is daardoor niet te vertrouwen.</p>
+        </div>
+        <div class="pane next">
+          <span class="tag">Voorstel</span>
+          <h3>Snapshot op de 14e (einde rapportage)</h3>
+          <p class="note" style="margin-top:0">Elke periode sluit met één getal: saldo betaalrekening op de einddatum. Augustus tussentijds = live.</p>
+          <div class="bars">
+            <i style="height:18%"></i><i style="height:22%"></i><i style="height:20%"></i>
+            <i style="height:16%"></i><i style="height:24%"></i><i style="height:70%"></i>
+            <i style="height:62%"></i><i style="height:28%"></i>
+            <i class="dim" style="height:10%"></i><i class="dim" style="height:10%"></i>
+            <i class="dim" style="height:10%"></i><i class="dim" style="height:10%"></i>
+          </div>
+          <table style="margin-top:10px">
+            <thead><tr><th>Periode</th><th class="num">Eindsaldo</th><th>Bron</th></tr></thead>
+            <tbody>
+              <tr><td>15 jun – 14 jul</td><td class="num">€ 2.400</td><td class="muted">snapshot</td></tr>
+              <tr><td>15 jul – 14 aug</td><td class="num">€ 1.180</td><td class="muted">snapshot</td></tr>
+              <tr><td>15 aug – nu</td><td class="num">€ 742</td><td class="am">live</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="dubbel">
+      <h2>5. Geen tweede cashflow-scherm — wel de dubbele jaargrafiek opruimen</h2>
+      <div class="why">
+        Sparen krijgt geen extra cashflow-pagina: de KPI-rij is genoeg. Op het dashboard staan straks
+        <strong>twee jaarblokken</strong>: nieuwe saldo-staven én de oude “Jaarlijkse Cashflow &amp; Begroting”
+        die nog envelop is. Dat was precies de verwarring van het begin.
+      </div>
+      <div class="pair">
+        <div class="pane now">
+          <span class="tag">Nu (na deze build)</span>
+          <h3>Twee grafieken, twee waarheden</h3>
+          <table>
+            <thead><tr><th>Blok</th><th>Telt</th></tr></thead>
+            <tbody>
+              <tr><td>Cashflow deze periode</td><td>Bank · pin / spaar apart</td></tr>
+              <tr><td>Saldo op rekening</td><td>Betaalrekening</td></tr>
+              <tr>
+                <td>Jaarlijkse Cashflow &amp; Begroting</td>
+                <td class="am">Envelop · “werkelijk” = betaald op posten</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">De onderste titel zegt cashflow, de staven zijn het plan. Boodschappen is daar weer € 500.</p>
+        </div>
+        <div class="pane next">
+          <span class="tag">Voorstel</span>
+          <h3>Eén jaarblok, hard gelabeld</h3>
+          <table>
+            <thead><tr><th>Blok</th><th>Blijft / weg</th></tr></thead>
+            <tbody>
+              <tr><td>Begroting deze periode</td><td>Blijft · plan</td></tr>
+              <tr><td>Cashflow deze periode</td><td>Blijft · bank</td></tr>
+              <tr><td>Saldo op rekening</td><td>Blijft · jaar = snapshots</td></tr>
+              <tr>
+                <td><span class="strike">Jaarlijkse Cashflow &amp; Begroting</span></td>
+                <td>Weg, of hernoemen tot <strong>Plan per maand</strong> met toggle naar bank</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">Liever hernoemen + toggle (zelfde als jaaroverzicht) dan een derde grafiek. Geen nieuwe routes.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

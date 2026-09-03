@@ -84,6 +84,23 @@ const formattedBalance = computed(() =>
   props.bankAccount.balance.toLocaleString("nl-NL", { minimumFractionDigits: 2 })
 );
 
+const lastUpdateLabel = computed(() => {
+  const iso = props.bankAccount.lastSyncedAt;
+  if (iso) {
+    const parsed = new Date(iso);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleString("nl-NL", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+  }
+  return props.bankAccount.lastSync || "";
+});
+
 const user = getSparenUser();
 const displayName = user?.name || "Mark Eilander";
 const displayIban = computed(
@@ -226,6 +243,12 @@ async function handleLogout() {
             :class="isConnected ? 'text-emerald-400' : 'text-slate-300'"
           >
             € {{ formattedBalance }}
+          </span>
+        </div>
+        <div class="flex items-baseline justify-between mt-0.5">
+          <span class="text-[11px] text-slate-400">Laatste update:</span>
+          <span class="text-[11px] font-mono text-slate-300">
+            {{ lastUpdateLabel || "—" }}
           </span>
         </div>
         <button

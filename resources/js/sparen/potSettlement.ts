@@ -2,6 +2,7 @@ import type { BudgetItem, MonthlyBudget, SavingsGoal, Transaction } from "./type
 import { isTransactionInReportingMonth } from "./month";
 import {
   isIngSpaarpotTransfer,
+  isSavingsCashflowTransfer,
   isSavingsWithdrawalTransaction,
   parseIngSavingsDestination,
   savingsBalanceDelta,
@@ -269,6 +270,7 @@ export function computePotSettlement(
       !!tx.budgetItemId &&
       linkedIds.has(tx.budgetItemId) &&
       tx.type === "Uitgave" &&
+      !isSavingsCashflowTransfer(tx) &&
       !isLikelyPotCompensation(tx, goal)
   );
   const spent = spentTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);

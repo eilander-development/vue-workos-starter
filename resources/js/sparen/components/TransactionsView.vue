@@ -61,10 +61,13 @@ const props = defineProps<{
   budgetItems: BudgetItem[];
   categories: CategoryDefinition[];
   onOpenAddBudgetItemModal?: (group?: BudgetCategoryGroup) => void;
+  initialFilter?: "ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen";
 }>();
 
 const searchTerm = ref("");
-const filterType = ref<"ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen">("ALL");
+const filterType = ref<"ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen">(
+  props.initialFilter ?? "ALL"
+);
 const amountDirection = ref<"all" | "out" | "in">("all");
 const selectedCategory = ref("ALL");
 const selectedTxIds = ref<string[]>([]);
@@ -79,6 +82,14 @@ const justLinked = ref<{
 } | null>(null);
 
 let justLinkedTimer: number | undefined;
+watch(
+  () => props.initialFilter,
+  (value) => {
+    if (value) {
+      filterType.value = value;
+    }
+  }
+);
 watch(justLinked, (value) => {
   if (justLinkedTimer) window.clearTimeout(justLinkedTimer);
   if (!value) return;

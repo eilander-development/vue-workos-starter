@@ -22,6 +22,7 @@ import type {
   SavingsGoal,
   Transaction,
   MonthlyBudget,
+  ActiveTab,
 } from "../types";
 import {
   transactionMatchesSavingsGoal,
@@ -30,6 +31,8 @@ import {
   savingsBalanceDelta,
 } from "../matchSavings";
 import { computePotSettlement, isPotGoal, potCompensationStatus, type PotSettlement } from "../potSettlement";
+import { computePeriodCashflow, savingsFlowByMonths, cashflowBucketTransactions, compactEuro, type CashflowBucket } from "../cashflow";
+import CashflowTransactionsModal from "./CashflowTransactionsModal.vue";
 import TransactionDate from "./TransactionDate.vue";
 import PotSettlementModal from "./PotSettlementModal.vue";
 
@@ -39,14 +42,18 @@ const props = defineProps<{
   savingsGoals: SavingsGoal[];
   transactions: Transaction[];
   currentMonth?: MonthlyBudget;
+  allMonths?: MonthlyBudget[];
   onOpenAddGoal: () => void;
   onEditGoal: (goal: SavingsGoal) => void;
   onDeleteGoal: (goalId: string) => void;
   onUpdateSavingsRow: (monthId: string, updates: Partial<SavingsRow>) => void;
+  onNavigateTab?: (tab: ActiveTab) => void;
 }>();
 
 const expandedGoalId = ref<string | null>(null);
 const potDetailGoalId = ref<string | null>(null);
+const flowChartView = ref<"pair" | "net">("pair");
+const txModal = ref<{ bucket: CashflowBucket; title: string; subtitle?: string } | null>(null);
 
 const potDetailGoal = computed(() =>
   props.savingsGoals.find((goal) => goal.id === potDetailGoalId.value) ?? null
@@ -142,6 +149,59 @@ const overallProgress = computed(() =>
   savingsProgressPercent(totalCalculatedSavings.value, totalTargetSavings.value)
 );
 
+const periodFlow = computed(() => {
+  if (!props.currentMonth) {
+    return null;
+  }
+  return computePeriodCashflow(props.transactions, props.currentMonth, props.savingsGoals);
+});
+
+const yearlyFlow = computed(() => {
+  if (!props.currentMonth || !props.allMonths?.length) {
+    return [];
+  }
+  return savingsFlowByMonths(
+    props.transactions,
+    props.allMonths,
+    props.savingsGoals,
+    props.currentMonth
+  );
+});
+
+const flowChartMax = computed(() => {
+  const rows = yearlyFlow.value.filter((row) => !row.isFuture);
+  if (flowChartView.value === "net") {
+    return Math.max(1, ...rows.map((row) => Math.abs(row.net)));
+  }
+  return Math.max(1, ...rows.flatMap((row) => [row.deposited, row.withdrawn]));
+});
+
+function euro(n: number): string {
+  return n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function flowBarPct(value: number) {
+  if (value <= 0) return "0%";
+  return `${Math.max(2, Math.round((Math.abs(value) / flowChartMax.value) * 100))}%`;
+}
+
+function openDashboardCashflow() {
+  props.onNavigateTab?.("dashboard");
+  window.setTimeout(() => {
+    document.getElementById("dashboard-cashflow")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 80);
+}
+
+function openFlowBucket(bucket: CashflowBucket, title: string, subtitle?: string) {
+  txModal.value = { bucket, title, subtitle };
+}
+
+const txModalList = computed(() =>
+  txModal.value && periodFlow.value
+    ? cashflowBucketTransactions(periodFlow.value, txModal.value.bucket)
+    : []
+);
+
 function savingsProgressPercent(current: number, target: number): number {
   if (target <= 0) return 0;
   return Math.min(100, Math.max(0, Math.round((current / target) * 100)));
@@ -224,6 +284,85 @@ function barHeight(totaal: number) {
         </p>
       </div>
     </div>
+
+    <section v-if="periodFlow && currentMonth" class="space-y-3">
+      <div>
+        <h3 class="font-bold text-white text-base">Deze periode · {{ currentMonth.monthName }}</h3>
+        <p class="text-xs text-slate-400 mt-0.5">
+          Alleen de stroom van en naar de betaalrekening. Detail per doel staat in de kaarten eronder.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button
+          type="button"
+          class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all"
+          @click="openFlowBucket('toSavings', 'Gestort (Naar)', 'Stortingen vanaf de betaalrekening')"
+        >
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Gestort (Naar)</span>
+          <div class="text-2xl font-black text-blue-400 font-mono tracking-tight mt-2">
+            € {{ euro(periodFlow.toSavings) }}
+          </div>
+          <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
+            <div class="flex justify-between text-slate-400">
+              <span>Doelen</span>
+              <span class="font-semibold text-blue-300">€ {{ euro(periodFlow.toSavingsGoals) }}</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>Potjes</span>
+              <span class="font-semibold text-slate-200">€ {{ euro(periodFlow.toSavingsPots) }}</span>
+            </div>
+          </div>
+          <p class="mt-auto pt-2 text-[10px] text-slate-500">Klik voor mutaties</p>
+        </button>
+        <button
+          type="button"
+          class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all"
+          @click="openFlowBucket('fromSavings', 'Opgenomen (Van)', 'Opnames en potcompensatie')"
+        >
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Opgenomen (Van)</span>
+          <div class="text-2xl font-black text-amber-400 font-mono tracking-tight mt-2">
+            € {{ euro(periodFlow.fromSavings) }}
+          </div>
+          <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
+            <div class="flex justify-between text-slate-400">
+              <span>Doelen</span>
+              <span class="font-semibold text-slate-200">€ {{ euro(periodFlow.fromSavingsGoals) }}</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>Compensatie potjes</span>
+              <span class="font-semibold text-amber-300">€ {{ euro(periodFlow.fromSavingsPots) }}</span>
+            </div>
+          </div>
+          <p class="mt-auto pt-2 text-[10px] text-slate-500">Klik voor mutaties</p>
+        </button>
+        <button
+          type="button"
+          class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all"
+          @click="openFlowBucket('netSavings', 'Netto gespaard', 'Gestort minus opgenomen. Plus = er ging meer naar spaar dan er terugkwam.')"
+        >
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Netto gespaard</span>
+          <div
+            class="text-2xl font-black font-mono tracking-tight mt-2"
+            :class="periodFlow.netSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+          >
+            {{ periodFlow.netSavings > 0 ? "+" : periodFlow.netSavings < 0 ? "−" : "" }}
+            € {{ euro(Math.abs(periodFlow.netSavings)) }}
+          </div>
+          <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
+            <div class="flex justify-between text-slate-400">
+              <span>Gestort − opgenomen</span>
+              <span class="font-semibold text-slate-200">
+                € {{ euro(periodFlow.toSavings) }} − € {{ euro(periodFlow.fromSavings) }}
+              </span>
+            </div>
+          </div>
+          <p class="mt-auto pt-2 text-[10px] text-slate-500">
+            Klik voor mutaties ·
+            <span class="text-indigo-400 hover:underline" @click.stop="openDashboardCashflow">dashboard-cashflow</span>
+          </p>
+        </button>
+      </div>
+    </section>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div
@@ -508,7 +647,7 @@ function barHeight(totaal: number) {
             :title="`${row.month}: € ${row.totaal.toLocaleString('nl-NL')}`"
           >
             <span class="text-[9px] text-emerald-300/80 font-mono truncate max-w-full">
-              {{ row.totaal > 0 ? `€${Math.round(row.totaal / 1000)}k` : "" }}
+              {{ row.totaal > 0 ? compactEuro(row.totaal) : "" }}
             </span>
             <div class="w-full flex-1 flex items-end justify-center">
               <div
@@ -568,6 +707,92 @@ function barHeight(totaal: number) {
           <Plus class="w-3.5 h-3.5" />
           <span>Nieuw Spaardoel Toevoegen</span>
         </button>
+      </div>
+    </div>
+
+    <div v-if="yearlyFlow.length" class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div>
+          <h3 class="font-bold text-white text-base">Ingelegd &amp; opgenomen {{ currentMonth?.year }}</h3>
+          <p class="text-xs text-slate-400">
+            Per maand vanaf de betaalrekening, inclusief potjes. Zelfde totalen als de KPI-rij hierboven.
+          </p>
+        </div>
+        <div class="flex items-center gap-1 bg-slate-800 p-1 rounded-xl border border-slate-700">
+          <button
+            type="button"
+            class="text-xs px-3 py-1 rounded-lg font-medium transition-colors"
+            :class="flowChartView === 'pair' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'"
+            @click="flowChartView = 'pair'"
+          >
+            Ingelegd vs opgenomen
+          </button>
+          <button
+            type="button"
+            class="text-xs px-3 py-1 rounded-lg font-medium transition-colors"
+            :class="flowChartView === 'net' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'"
+            @click="flowChartView = 'net'"
+          >
+            Netto verloop
+          </button>
+        </div>
+      </div>
+
+      <div v-if="flowChartView === 'pair'" class="h-72 w-full flex items-end gap-1.5 sm:gap-2 pt-4">
+        <div
+          v-for="row in yearlyFlow"
+          :key="row.monthId"
+          class="relative group flex-1 flex flex-col items-center gap-1 min-w-0 h-full justify-end"
+          :class="row.isFuture ? 'opacity-30' : ''"
+        >
+          <div
+            class="pointer-events-none absolute bottom-full mb-1 z-10 hidden group-hover:block bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-[10px] whitespace-nowrap shadow-lg"
+          >
+            <p class="font-semibold text-white mb-0.5">{{ row.monthName }}</p>
+            <p class="text-blue-400">Ingelegd {{ compactEuro(row.deposited) }}</p>
+            <p class="text-rose-400">Opgenomen {{ compactEuro(row.withdrawn) }}</p>
+          </div>
+          <div class="w-full flex-1 flex items-end justify-center gap-0.5">
+            <div class="w-[28%] max-w-[12px] bg-blue-500 rounded-t" :style="{ height: flowBarPct(row.deposited) }" />
+            <div class="w-[28%] max-w-[12px] bg-rose-500 rounded-t" :style="{ height: flowBarPct(row.withdrawn) }" />
+          </div>
+          <span class="text-[10px] text-slate-400 font-medium">{{ row.short }}</span>
+        </div>
+      </div>
+      <div v-else class="h-72 w-full flex items-end gap-1.5 sm:gap-2 pt-4">
+        <div
+          v-for="row in yearlyFlow"
+          :key="row.monthId"
+          class="flex-1 flex flex-col items-center gap-1 min-w-0 h-full justify-end"
+          :class="row.isFuture ? 'opacity-30' : ''"
+        >
+          <span
+            v-if="!row.isFuture && row.net !== 0"
+            class="text-[9px] font-mono truncate max-w-full"
+            :class="row.net >= 0 ? 'text-indigo-200' : 'text-rose-300'"
+          >
+            {{ compactEuro(row.net) }}
+          </span>
+          <div class="w-full flex-1 flex items-end justify-center">
+            <div
+              class="w-3/5 max-w-[16px] rounded-t"
+              :class="row.net >= 0 ? 'bg-indigo-500' : 'bg-rose-500'"
+              :style="{ height: flowBarPct(row.net) }"
+            />
+          </div>
+          <span class="text-[10px] text-slate-400 font-medium">{{ row.short }}</span>
+        </div>
+      </div>
+      <div
+        v-if="flowChartView === 'pair'"
+        class="flex items-center justify-center gap-4 mt-3 text-[11px] text-slate-400"
+      >
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-blue-500" /> Ingelegd (Naar)</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Opgenomen (Van)</span>
+      </div>
+      <div v-else class="flex items-center justify-center gap-4 mt-3 text-[11px] text-slate-400">
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-indigo-500" /> Netto ingelegd</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Netto opgenomen</span>
       </div>
     </div>
 
@@ -631,6 +856,13 @@ function barHeight(totaal: number) {
     </div>
   </div>
 
+  <CashflowTransactionsModal
+    :is-open="Boolean(txModal)"
+    :title="txModal?.title ?? ''"
+    :subtitle="txModal?.subtitle"
+    :transactions="txModalList"
+    :on-close="() => (txModal = null)"
+  />
   <PotSettlementModal
     v-if="currentMonth"
     :is-open="potDetailGoalId !== null"

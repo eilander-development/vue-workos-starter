@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ontwerp · Sparen</title>
+  <style>
+    :root {
+      --bg: #020617;
+      --card: #0f172a;
+      --border: #1e293b;
+      --muted: #94a3b8;
+      --text: #f1f5f9;
+      --emerald: #34d399;
+      --rose: #fb7185;
+      --amber: #fbbf24;
+      --blue: #60a5fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .bar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 10px 20px;
+      background: #0b1220;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .bar nav { display: flex; gap: 6px; }
+    .bar a {
+      color: var(--muted); text-decoration: none;
+      padding: 6px 10px; border-radius: 8px; border: 1px solid transparent;
+    }
+    .bar a.on { color: #fff; background: #1e293b; border-color: #334155; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 22px 20px 72px; }
+    .page-head {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px 20px; margin-bottom: 22px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+    }
+    .page-head h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; }
+    .page-head p { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+    .total {
+      background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+      padding: 8px 14px; text-align: right;
+    }
+    .total span { display: block; font-size: 10px; color: var(--muted); }
+    .total b { font-family: ui-monospace, Menlo, monospace; color: var(--emerald); font-size: 1rem; }
+    .section { margin-bottom: 28px; }
+    .section-h { margin: 0 0 12px; }
+    .section-h h2 { margin: 0; font-size: 1rem; }
+    .section-h p { margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .grid-goals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @media (max-width: 900px) {
+      .grid3, .grid-goals, .page-head { grid-template-columns: 1fr; display: grid; }
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px;
+    }
+    .k {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .v {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 1.45rem; font-weight: 800; margin: 10px 0 8px; letter-spacing: -0.03em;
+    }
+    .rows { border-top: 1px solid #1e293b; padding-top: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; color: var(--muted); }
+    .row b { font-weight: 600; color: #e2e8f0; }
+    .em { color: var(--emerald); }
+    .ro { color: var(--rose); }
+    .am { color: var(--amber); }
+    .bl { color: var(--blue); }
+    .hint { font-size: 11px; color: #64748b; margin: 8px 0 0; line-height: 1.4; }
+    .goal-top { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+    .goal-top h3 { margin: 0; font-size: 14px; }
+    .goal-top small { color: var(--muted); font-size: 11px; }
+    .pot {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      color: #fcd34d; border: 1px solid #92400e; background: #451a03;
+      border-radius: 6px; padding: 2px 6px; margin-left: 6px;
+    }
+    .bar-bg { height: 8px; background: #1e293b; border-radius: 99px; overflow: hidden; margin: 10px 0; }
+    .bar-fg { height: 100%; background: #34d399; border-radius: 99px; }
+    .year-bars { display: flex; align-items: flex-end; gap: 8px; height: 180px; }
+    .year-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+    .year-col .fill {
+      width: 70%; max-width: 22px; border-radius: 4px 4px 0 0;
+      background: linear-gradient(to top, #059669, #34d399);
+    }
+    .year-col .lbl,
+    .flow-month .lbl { font-size: 10px; color: var(--muted); }
+    .flow-chart { height: 288px; display: flex; align-items: flex-end; gap: 6px; padding-top: 16px; }
+    .flow-month {
+      flex: 1; min-width: 0; height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px;
+    }
+    .flow-group { width: 100%; flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+    .flow-group .in { width: 28%; max-width: 12px; background: #60a5fa; border-radius: 3px 3px 0 0; }
+    .flow-group .out { width: 28%; max-width: 12px; background: #fb7185; border-radius: 3px 3px 0 0; }
+    .flow-group .net { width: 55%; max-width: 16px; border-radius: 3px 3px 0 0; }
+    .flow-group .net.pos { background: #818cf8; }
+    .flow-group .net.neg { background: #fb7185; }
+    .flow-month.future { opacity: 0.3; }
+    .legend {
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      margin-top: 12px; font-size: 11px; color: var(--muted);
+    }
+    .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+    .toggles { display: flex; gap: 8px; margin-bottom: 4px; }
+    .toggles .seg {
+      display: flex; gap: 4px; background: #1e293b; border: 1px solid #334155;
+      border-radius: 12px; padding: 4px;
+    }
+    .toggles button {
+      border: 0; background: transparent; color: var(--muted);
+      font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 8px;
+    }
+    .toggles button.on-blue { background: #4f46e5; color: #fff; }
+    .chart-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .chart-head h3 { margin: 0; font-size: 1rem; }
+    .chart-head p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+    .note {
+      font-size: 12px; color: #cbd5e1; background: #172554; border: 1px solid #3730a3;
+      border-radius: 12px; padding: 12px 14px; line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span style="color:#64748b">Ontwerp ter beoordeling · voorbeeldcijfers</span>
+    <nav>
+      <a href="./dashboard-bank.html">Dashboard</a>
+      <a class="on" href="./sparen-voorraad.html">Sparen</a>
+      <a href="./vervolg.html">Vervolg</a>
+    </nav>
+  </div>
+
+  <div class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>Spaarrekeningen &amp; spaardoelen</h1>
+        <p>Voorraad: hoeveel er ligt per doel. De maandstroom (er ging €X naartoe) staat op het dashboard.</p>
+      </div>
+      <div class="total">
+        <span>Totaal spaarsaldo</span>
+        <b>€ 4.820,00</b>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="section-h">
+        <h2>Deze periode · augustus</h2>
+        <p>Alleen de stroom van en naar de betaalrekening. Detail per doel staat in de kaarten eronder. Zelfde totalen als de cashflow-rij op het dashboard.</p>
+      </div>
+      <div class="grid3">
+        <div class="card">
+          <div class="k">Gestort (Naar)</div>
+          <div class="v bl">€ 750,00</div>
+          <div class="rows">
+            <div class="row"><span>Doelen</span><b class="bl">€ 250,00</b></div>
+            <div class="row"><span>Potjes</span><b>€ 500,00</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="k">Opgenomen (Van)</div>
+          <div class="v am">€ 150,00</div>
+          <div class="rows">
+            <div class="row"><span>Doelen</span><b>€ 0,00</b></div>
+            <div class="row"><span>Compensatie potjes</span><b class="am">€ 150,00</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="k">Netto deze maand</div>
+          <div class="v">− € 600,00</div>
+          <div class="rows">
+            <div class="row"><span>Van de betaalrekening af</span><b>€ 600,00</b></div>
+          </div>
+          <p class="hint">Geen tweede cashflow-scherm: dit is een samenvatting. Klik opent de dashboard-cashflow.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-h">
+        <h2>Doelen · hoeveel er ligt</h2>
+        <p>Saldo, stortingen en opnames over de hele looptijd. Potjes blijven envelop + compensatie, geen spaardoel-voortgang.</p>
+      </div>
+      <div class="grid-goals">
+        <div class="card">
+          <div class="goal-top">
+            <div>
+              <h3>Buffer</h3>
+              <small>Oranje spaarrekening · L13628386</small>
+            </div>
+          </div>
+          <div class="row"><span>Huidig saldo</span><b class="em" style="font-size:1.1rem">€ 3.240,00</b></div>
+          <div class="bar-bg"><div class="bar-fg" style="width:54%"></div></div>
+          <div class="row"><span>Doel € 6.000</span><b>54%</b></div>
+          <div class="rows" style="margin-top:10px">
+            <div class="row"><span>Beginsaldo</span><b>€ 2.990,00</b></div>
+            <div class="row"><span>+ Stortingen (Naar)</span><b class="em">€ 250,00</b></div>
+            <div class="row"><span>− Opnames (Van)</span><b>€ 0,00</b></div>
+            <div class="row"><span>Deze maand</span><b class="bl">+ € 250,00</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="goal-top">
+            <div>
+              <h3>Vakantie</h3>
+              <small>Oranje spaarrekening · …</small>
+            </div>
+          </div>
+          <div class="row"><span>Huidig saldo</span><b class="em" style="font-size:1.1rem">€ 1.580,00</b></div>
+          <div class="bar-bg"><div class="bar-fg" style="width:79%"></div></div>
+          <div class="row"><span>Doel € 2.000</span><b>79%</b></div>
+          <div class="rows" style="margin-top:10px">
+            <div class="row"><span>Beginsaldo</span><b>€ 1.580,00</b></div>
+            <div class="row"><span>+ Stortingen (Naar)</span><b>€ 0,00</b></div>
+            <div class="row"><span>− Opnames (Van)</span><b>€ 0,00</b></div>
+            <div class="row"><span>Deze maand</span><b>€ 0,00</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="goal-top">
+            <div>
+              <h3>Boodschappen <span class="pot">Potje</span></h3>
+              <small>spaarrekening C13134173</small>
+            </div>
+          </div>
+          <div class="rows" style="border:0;padding:0">
+            <div class="row"><span>Begroot / in pot</span><b>€ 500,00</b></div>
+            <div class="row"><span>Uitgegeven (pin)</span><b class="ro">€ 339,17</b></div>
+            <div class="row"><span>Gecompenseerd</span><b class="em">€ 150,00</b></div>
+            <div class="row"><span>Nog te compenseren</span><b class="am">€ 189,17</b></div>
+          </div>
+          <p class="hint">Geen doel-percentage. Potje is envelop, geen spaarsaldo-voorraad.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-h">
+        <h2>Groei spaarsaldo 2026</h2>
+        <p>Cumulatief van de doelen (geen potjes). Dit is voorraad over tijd, niet het saldo van de betaalrekening — dat staat op het dashboard.</p>
+      </div>
+      <div class="card">
+        <div class="year-bars">
+          <div class="year-col"><div class="fill" style="height:12%"></div><span class="lbl">jan</span></div>
+          <div class="year-col"><div class="fill" style="height:18%"></div><span class="lbl">feb</span></div>
+          <div class="year-col"><div class="fill" style="height:22%"></div><span class="lbl">mrt</span></div>
+          <div class="year-col"><div class="fill" style="height:28%"></div><span class="lbl">apr</span></div>
+          <div class="year-col"><div class="fill" style="height:55%"></div><span class="lbl">mei</span></div>
+          <div class="year-col"><div class="fill" style="height:48%"></div><span class="lbl">jun</span></div>
+          <div class="year-col"><div class="fill" style="height:52%"></div><span class="lbl">jul</span></div>
+          <div class="year-col"><div class="fill" style="height:62%"></div><span class="lbl">aug</span></div>
+          <div class="year-col"><div class="fill" style="height:20%;opacity:.3"></div><span class="lbl">sep</span></div>
+          <div class="year-col"><div class="fill" style="height:20%;opacity:.3"></div><span class="lbl">okt</span></div>
+          <div class="year-col"><div class="fill" style="height:20%;opacity:.3"></div><span class="lbl">nov</span></div>
+          <div class="year-col"><div class="fill" style="height:20%;opacity:.3"></div><span class="lbl">dec</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h3>Ingelegd &amp; opgenomen 2026</h3>
+            <p>Per maand vanaf de betaalrekening, inclusief potjes. Zelfde totalen als de KPI-rij hierboven.</p>
+          </div>
+          <div class="toggles">
+            <div class="seg">
+              <button type="button" class="on-blue" data-flow="pair">Ingelegd vs opgenomen</button>
+              <button type="button" data-flow="net">Netto verloop</button>
+            </div>
+          </div>
+        </div>
+        <div class="flow-chart" id="flow-pair">
+          <div class="flow-month" title="januari: € 0 / € 0"><div class="flow-group"><div class="in" style="height:0"></div><div class="out" style="height:0"></div></div><span class="lbl">jan</span></div>
+          <div class="flow-month" title="februari: € 0 / € 0"><div class="flow-group"><div class="in" style="height:0"></div><div class="out" style="height:0"></div></div><span class="lbl">feb</span></div>
+          <div class="flow-month" title="maart: € 0 / € 0"><div class="flow-group"><div class="in" style="height:0"></div><div class="out" style="height:0"></div></div><span class="lbl">mrt</span></div>
+          <div class="flow-month" title="april: € 0 / € 0"><div class="flow-group"><div class="in" style="height:0"></div><div class="out" style="height:0"></div></div><span class="lbl">apr</span></div>
+          <div class="flow-month" title="mei: +€ 2.750 / € 0"><div class="flow-group"><div class="in" style="height:100%"></div><div class="out" style="height:0"></div></div><span class="lbl">mei</span></div>
+          <div class="flow-month" title="juni: +€ 250 / −€ 600"><div class="flow-group"><div class="in" style="height:9%"></div><div class="out" style="height:22%"></div></div><span class="lbl">jun</span></div>
+          <div class="flow-month" title="juli: € 0 / € 0"><div class="flow-group"><div class="in" style="height:0"></div><div class="out" style="height:0"></div></div><span class="lbl">jul</span></div>
+          <div class="flow-month" title="augustus: +€ 750 / −€ 150"><div class="flow-group"><div class="in" style="height:27%"></div><div class="out" style="height:5%"></div></div><span class="lbl">aug</span></div>
+          <div class="flow-month future" title="september"><div class="flow-group"><div class="in" style="height:8%"></div><div class="out" style="height:0"></div></div><span class="lbl">sep</span></div>
+          <div class="flow-month future" title="oktober"><div class="flow-group"><div class="in" style="height:8%"></div><div class="out" style="height:0"></div></div><span class="lbl">okt</span></div>
+          <div class="flow-month future" title="november"><div class="flow-group"><div class="in" style="height:8%"></div><div class="out" style="height:0"></div></div><span class="lbl">nov</span></div>
+          <div class="flow-month future" title="december"><div class="flow-group"><div class="in" style="height:8%"></div><div class="out" style="height:0"></div></div><span class="lbl">dec</span></div>
+        </div>
+        <div class="flow-chart" id="flow-net" hidden>
+          <div class="flow-month"><div class="flow-group"><div class="net pos" style="height:0"></div></div><span class="lbl">jan</span></div>
+          <div class="flow-month"><div class="flow-group"><div class="net pos" style="height:0"></div></div><span class="lbl">feb</span></div>
+          <div class="flow-month"><div class="flow-group"><div class="net pos" style="height:0"></div></div><span class="lbl">mrt</span></div>
+          <div class="flow-month"><div class="flow-group"><div class="net pos" style="height:0"></div></div><span class="lbl">apr</span></div>
+          <div class="flow-month"><div class="flow-group"><div class="net pos" style="height:100%"></div></div><span class="lbl">mei</span></div>
+          <div class="flow-month"><div class="flow-group"><div class="net neg" style="height:13%"></div></div><span class="lbl">jun</span></div>
+          <div class="flow-month"><div class="flow-group"><div class="net pos" style="height:0"></div></div><span class="lbl">jul</span></div>
+          <div class="flow-month"><div class="flow-group"><div class="net pos" style="height:22%"></div></div><span class="lbl">aug</span></div>
+          <div class="flow-month future"><div class="flow-group"><div class="net pos" style="height:8%"></div></div><span class="lbl">sep</span></div>
+          <div class="flow-month future"><div class="flow-group"><div class="net pos" style="height:8%"></div></div><span class="lbl">okt</span></div>
+          <div class="flow-month future"><div class="flow-group"><div class="net pos" style="height:8%"></div></div><span class="lbl">nov</span></div>
+          <div class="flow-month future"><div class="flow-group"><div class="net pos" style="height:8%"></div></div><span class="lbl">dec</span></div>
+        </div>
+        <div class="legend" id="legend-pair">
+          <span><i style="background:#60a5fa"></i>Ingelegd (Naar)</span>
+          <span><i style="background:#fb7185"></i>Opgenomen (Van)</span>
+        </div>
+        <div class="legend" id="legend-net" hidden>
+          <span><i style="background:#818cf8"></i>Netto ingelegd</span>
+          <span><i style="background:#fb7185"></i>Netto opgenomen</span>
+        </div>
+      </div>
+    </section>
+
+    <p class="note">
+      De jaartabel “op rekening / sparen / extra / opgenomen” kan blijven als naslag, maar is niet de hoofdlijn.
+      Hoofdlijn hier: voorraad per doel. Maandstroom: de drie kaarten bovenin, gelijk aan het dashboard.
+    </p>
+  </div>
+  <script>
+    const pair = document.getElementById("flow-pair");
+    const net = document.getElementById("flow-net");
+    const legendPair = document.getElementById("legend-pair");
+    const legendNet = document.getElementById("legend-net");
+    document.querySelectorAll("[data-flow]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.getAttribute("data-flow");
+        document.querySelectorAll("[data-flow]").forEach((b) => b.classList.remove("on-blue"));
+        btn.classList.add("on-blue");
+        pair.hidden = mode !== "pair";
+        net.hidden = mode !== "net";
+        legendPair.hidden = mode !== "pair";
+        legendNet.hidden = mode !== "net";
+      });
+    });
+  </script>
+</body>
+</html>

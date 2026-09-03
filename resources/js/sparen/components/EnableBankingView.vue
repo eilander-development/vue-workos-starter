@@ -36,6 +36,22 @@ const consentExpiringSoon = () =>
   props.bankAccount.consentDaysRemaining != null &&
   props.bankAccount.consentDaysRemaining <= 14;
 
+function formatLastSync(iso: string | null | undefined, fallback: string): string {
+  if (iso) {
+    const parsed = new Date(iso);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleString("nl-NL", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+  }
+  return fallback || "—";
+}
+
 function formatConsentDate(iso: string | null | undefined): string {
   if (!iso) {
     return "";
@@ -154,7 +170,7 @@ function potFor(goal: SavingsGoal) {
           </div>
         </div>
         <span class="text-[11px] font-mono text-slate-400 text-right">
-          <span class="block">Laatste sync: {{ bankAccount.lastSync || "—" }}</span>
+          <span class="block">Laatste update: {{ formatLastSync(bankAccount.lastSyncedAt, bankAccount.lastSync) }}</span>
           <span v-if="bankAccount.consentValidUntil" class="block mt-0.5" :class="isConnected() ? 'text-slate-500' : 'text-amber-400'">
             {{
               isConnected()

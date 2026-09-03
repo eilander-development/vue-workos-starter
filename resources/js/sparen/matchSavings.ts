@@ -54,6 +54,25 @@ export function isIngSpaarpotTransfer(tx: Pick<Transaction, "description">): boo
   return parseIngSavingsDestination(tx.description)?.isSpaarpot === true;
 }
 
+/** Overboeking tussen betaalrekening en spaar/pot, geen echte inkomst of uitgave. */
+export function isSavingsCashflowTransfer(
+  tx: Pick<Transaction, "type" | "description" | "categoryGroup" | "isPending">
+): boolean {
+  if (tx.isPending) {
+    return false;
+  }
+  if (tx.type === "Sparen") {
+    return true;
+  }
+
+  const direction = savingsTransferDirection(tx);
+  if (!direction) {
+    return false;
+  }
+
+  return parseIngSavingsDestination(tx.description) !== null || tx.categoryGroup === "Spaargeld";
+}
+
 function isGenericSavingsLabel(name: string): boolean {
   const normalized = name.trim().toLowerCase().replace(/\s+/g, " ");
   return (
