@@ -11,6 +11,7 @@ use App\Models\ImportRule;
 use App\Models\SavingsGoal;
 use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class SparenStateService
@@ -33,10 +34,16 @@ class SparenStateService
     public function __construct(
         protected ReportingPeriod $reportingPeriod,
         protected EnableBankingSessionStore $sessions,
+        protected CheckingBalanceSnapshotService $snapshots,
+        protected HistoricalSavingsGoalOverrides $savingsGoalOverrides,
     ) {}
+
+    private ?bool $savingsGoalKeyColumnExists = null;
 
     public function build(int $year = 2026): array
     {
+        $this->savingsGoalOverrides->apply();
+
         $categories = Category::query()->orderBy('id')->get();
         $budgets = Budget::query()->with('category')->orderBy('sort_order')->orderBy('id')->get();
         $monthValues = BudgetMonthValue::query()->where('year', $year)->get()->groupBy('budget_id');
@@ -44,6 +51,8 @@ class SparenStateService
         $rules = ImportRule::query()->with(['category', 'budget'])->orderBy('id')->get();
         $goals = SavingsGoal::query()->orderBy('id')->get();
         $accounts = BankAccount::query()->orderByDesc('last_synced_at')->orderByDesc('id')->get();
+        $checking = BankAccount::latestChecking();
+        $snapshotByMonth = $this->snapshots->syncYear($year, $checking, $transactions);
 
         $txPayload = $transactions->map(fn (Transaction $tx) => $this->mapTransaction($tx))->values();
         $potBudgetKeys = $goals
@@ -101,8 +110,10 @@ class SparenStateService
                 ];
             })->values()->all();
 
-            $checking = BankAccount::latestChecking();
             $isCurrent = $this->reportingPeriod->isCurrentSparenMonth($monthId, $year);
+            $snap = $snapshotByMonth[$monthId] ?? ['balance' => null, 'captured' => false];
+            $endBalance = $snap['balance'];
+            $endBalanceCaptured = (bool) ($snap['captured'] ?? false);
 
             $monthlyBudgets[] = [
                 'monthId' => $monthId,
@@ -110,7 +121,11 @@ class SparenStateService
                 'year' => $year,
                 'periodStart' => $periodStart->toDateString(),
                 'periodEnd' => $periodEnd->toDateString(),
-                'opRekening' => $isCurrent && $checking ? (float) $checking->balance : 0,
+                'opRekening' => $isCurrent && $checking
+                    ? (float) $checking->balance
+                    : (float) ($endBalanceCaptured ? $endBalance : 0),
+                'endBalance' => $endBalance,
+                'endBalanceCaptured' => $endBalanceCaptured,
                 'items' => $items,
             ];
         }
@@ -420,35 +435,43 @@ class SparenStateService
         $category = Category::query()->where('name', $row['categoryGroup'] ?? '')->first() ?? $budget?->category;
         $rule = ImportRule::query()->where('key', $row['matchedRuleId'] ?? '')->first();
 
+        $payload = [
+            'date' => $row['date'] ?? $existing?->date,
+            'description' => $row['description'] ?? $existing?->description,
+            'amount' => $row['amount'] ?? $existing?->amount,
+            'type' => $this->fromSparenTxType($row['type'] ?? null) ?: ($existing?->type ?? 'expense'),
+            'category_id' => $category?->id ?? $existing?->category_id,
+            'budget_id' => array_key_exists('budgetItemId', $row)
+                ? ($budget?->id ?? (empty($row['budgetItemId']) ? null : $existing?->budget_id))
+                : $existing?->budget_id,
+            'rule_id' => array_key_exists('matchedRuleId', $row)
+                ? ($rule?->id ?? (empty($row['matchedRuleId']) ? null : $existing?->rule_id))
+                : ($rule?->id ?? $existing?->rule_id),
+            'account_iban' => $row['accountIban'] ?? $existing?->account_iban,
+            'counterparty_iban' => $this->extractIban($row['counterparty'] ?? '') ?: $existing?->counterparty_iban,
+            'counterparty_name' => array_key_exists('counterparty', $row)
+                ? ($row['counterparty'] ?? null)
+                : $existing?->counterparty_name,
+            'is_pending' => (bool) ($row['isPending'] ?? $existing?->is_pending ?? false),
+            'booked_time' => ! empty($row['time']) ? $row['time'] : $existing?->booked_time,
+            'link_excluded' => array_key_exists('linkExcluded', $row)
+                ? (bool) $row['linkExcluded']
+                : ($existing?->link_excluded ?? false),
+            'link_exclusion_reason' => array_key_exists('linkExclusionReason', $row)
+                ? ($row['linkExclusionReason'] ?? null)
+                : $existing?->link_exclusion_reason,
+            'source_type' => $existing?->source_type ?? $sourceType,
+        ];
+
+        if ($this->hasSavingsGoalKeyColumn()) {
+            $payload['savings_goal_key'] = array_key_exists('assignedSavingsGoalId', $row)
+                ? ($row['assignedSavingsGoalId'] ?: null)
+                : $existing?->savings_goal_key;
+        }
+
         Transaction::query()->updateOrCreate(
             ['key' => $row['id']],
-            [
-                'date' => $row['date'] ?? $existing?->date,
-                'description' => $row['description'] ?? $existing?->description,
-                'amount' => $row['amount'] ?? $existing?->amount,
-                'type' => $this->fromSparenTxType($row['type'] ?? null) ?: ($existing?->type ?? 'expense'),
-                'category_id' => $category?->id ?? $existing?->category_id,
-                'budget_id' => array_key_exists('budgetItemId', $row)
-                    ? ($budget?->id ?? (empty($row['budgetItemId']) ? null : $existing?->budget_id))
-                    : $existing?->budget_id,
-                'rule_id' => array_key_exists('matchedRuleId', $row)
-                    ? ($rule?->id ?? (empty($row['matchedRuleId']) ? null : $existing?->rule_id))
-                    : ($rule?->id ?? $existing?->rule_id),
-                'account_iban' => $row['accountIban'] ?? $existing?->account_iban,
-                'counterparty_iban' => $this->extractIban($row['counterparty'] ?? '') ?: $existing?->counterparty_iban,
-                'counterparty_name' => array_key_exists('counterparty', $row)
-                    ? ($row['counterparty'] ?? null)
-                    : $existing?->counterparty_name,
-                'is_pending' => (bool) ($row['isPending'] ?? $existing?->is_pending ?? false),
-                'booked_time' => ! empty($row['time']) ? $row['time'] : $existing?->booked_time,
-                'link_excluded' => array_key_exists('linkExcluded', $row)
-                    ? (bool) $row['linkExcluded']
-                    : ($existing?->link_excluded ?? false),
-                'link_exclusion_reason' => array_key_exists('linkExclusionReason', $row)
-                    ? ($row['linkExclusionReason'] ?? null)
-                    : $existing?->link_exclusion_reason,
-                'source_type' => $existing?->source_type ?? $sourceType,
-            ]
+            $payload
         );
     }
 
@@ -479,6 +502,9 @@ class SparenStateService
             'matchedRuleId' => $tx->importRule?->key,
             'linkExcluded' => (bool) $tx->link_excluded,
             'linkExclusionReason' => $tx->link_exclusion_reason,
+            'assignedSavingsGoalId' => $this->hasSavingsGoalKeyColumn()
+                ? ($tx->savings_goal_key ?: null)
+                : null,
             'source' => match ($tx->source_type) {
                 'api' => 'EnableBanking',
                 'csv' => 'CSV-import',
@@ -539,6 +565,11 @@ class SparenStateService
         }
 
         return $rows;
+    }
+
+    private function hasSavingsGoalKeyColumn(): bool
+    {
+        return $this->savingsGoalKeyColumnExists ??= Schema::hasColumn('transactions', 'savings_goal_key');
     }
 
     private function monthNumber(string $monthId): int

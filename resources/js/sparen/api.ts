@@ -56,6 +56,7 @@ export function transactionWritePayload(tx: Transaction) {
     matchedRuleId: tx.matchedRuleId ?? null,
     linkExcluded: Boolean(tx.linkExcluded),
     linkExclusionReason: tx.linkExclusionReason ?? null,
+    assignedSavingsGoalId: tx.assignedSavingsGoalId ?? null,
     source: tx.source,
   };
 }

@@ -132,6 +132,7 @@ const editingSavingsGoal = ref<SavingsGoal | null>(null);
 const itemTransactionsModalItem = ref<BudgetItem | null>(null);
 const potDetailGoal = ref<SavingsGoal | null>(null);
 const transactionsOpenFilter = ref<"ALL" | "UNLINKED">("ALL");
+const transactionsPeriodOnly = ref(false);
 
 const initialRuleKeyword = ref("");
 const initialRuleGroup = ref<BudgetCategoryGroup>("Dagelijks Leven");
@@ -1197,6 +1198,32 @@ function handleUnlinkTransaction(txId: string) {
   );
 }
 
+function handleAssignSavingsGoal(txId: string, goalId: string | null) {
+  const tx = transactions.value.find((item) => item.id === txId);
+  if (!tx) {
+    return;
+  }
+  const goal = goalId ? savingsGoals.value.find((item) => item.id === goalId) : null;
+  const nextBase: Transaction = {
+    ...tx,
+    assignedSavingsGoalId: goalId || undefined,
+    type: "Sparen",
+    categoryGroup: "Spaargeld",
+  };
+  const [applied] = applyRulesToTransactions([nextBase], rules.value, savingsGoals.value);
+  void runSave(
+    async () => {
+      await saveTransaction(applied);
+      transactions.value = transactions.value.map((item) => (item.id === txId ? applied : item));
+    },
+    {
+      title: goal ? `Toegewezen aan ${goal.name}` : "Spaardoel-toewijzing gewist",
+      detail: tx.description,
+      variant: "success",
+    }
+  );
+}
+
 function handleSelectMonth(monthId: string) {
   selectedMonthId.value = monthId;
   const month = monthlyBudgets.value.find((entry) => entry.monthId === monthId);
@@ -1212,12 +1239,14 @@ function handleYearOverviewSelectMonth(mId: string) {
 
 function openUnlinkedInbox() {
   transactionsOpenFilter.value = "UNLINKED";
+  transactionsPeriodOnly.value = true;
   setActiveTab("transacties");
 }
 
 watch(activeTab, (tab) => {
   if (tab !== "transacties") {
     transactionsOpenFilter.value = "ALL";
+    transactionsPeriodOnly.value = false;
   }
 });
 
@@ -1365,10 +1394,13 @@ function closeSavingsGoalModal() {
         <TransactionsView
           v-if="activeTab === 'transacties'"
           :transactions="transactions"
+          :current-month="currentMonth"
+          :savings-goals="savingsGoals"
           :on-add-transaction="() => (isAddTxModalOpen = true)"
           :on-open-auto-process="() => (isAutoProcessModalOpen = true)"
           :on-delete-transaction="handleDeleteTransaction"
           :on-link-transaction="handleLinkTransaction"
+          :on-assign-savings-goal="handleAssignSavingsGoal"
           :on-create-rule-from-transaction="handleCreateRuleFromTransaction"
           :on-bulk-update-category="handleBulkUpdateCategory"
           :rules="rules"
@@ -1376,6 +1408,7 @@ function closeSavingsGoalModal() {
           :categories="categories"
           :on-open-add-budget-item-modal="handleOpenAddBudgetItemModal"
           :initial-filter="transactionsOpenFilter"
+          :initial-period-only="transactionsPeriodOnly"
         />
 
         <EnableBankingView

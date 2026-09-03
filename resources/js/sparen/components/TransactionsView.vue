@@ -18,6 +18,8 @@ import {
   Link2,
   CheckCircle2,
   ChevronRight,
+  Calendar,
+  PiggyBank,
 } from "lucide-vue-next";
 import type {
   Transaction,
@@ -26,10 +28,14 @@ import type {
   BudgetItem,
   CategoryDefinition,
   BudgetType,
+  MonthlyBudget,
+  SavingsGoal,
 } from "../types";
 import LinkTransactionModal from "./LinkTransactionModal.vue";
 import TransactionDate from "./TransactionDate.vue";
 import { isLinkExcludedTransaction, isUnlinkedTransaction, matchingUnlinkedTransactions } from "../matchRule";
+import { formatReportingPeriodShort, isTransactionInReportingMonth, reportingPeriodForMonth } from "../month";
+import { isSavingsCashflowTransfer, transactionMatchesSavingsGoal } from "../matchSavings";
 
 const props = defineProps<{
   transactions: Transaction[];
@@ -62,12 +68,17 @@ const props = defineProps<{
   categories: CategoryDefinition[];
   onOpenAddBudgetItemModal?: (group?: BudgetCategoryGroup) => void;
   initialFilter?: "ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen";
+  currentMonth?: MonthlyBudget;
+  savingsGoals?: SavingsGoal[];
+  initialPeriodOnly?: boolean;
+  onAssignSavingsGoal?: (txId: string, goalId: string | null) => void;
 }>();
 
 const searchTerm = ref("");
 const filterType = ref<"ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen">(
   props.initialFilter ?? "ALL"
 );
+const periodOnly = ref(Boolean(props.initialPeriodOnly));
 const amountDirection = ref<"all" | "out" | "in">("all");
 const selectedCategory = ref("ALL");
 const selectedTxIds = ref<string[]>([]);
@@ -90,6 +101,12 @@ watch(
     }
   }
 );
+watch(
+  () => props.initialPeriodOnly,
+  (value) => {
+    periodOnly.value = Boolean(value);
+  }
+);
 watch(justLinked, (value) => {
   if (justLinkedTimer) window.clearTimeout(justLinkedTimer);
   if (!value) return;
@@ -107,21 +124,31 @@ const budgetItemMap = computed(() => {
   return map;
 });
 
+const scopedTransactions = computed(() => {
+  if (!periodOnly.value || !props.currentMonth) {
+    return props.transactions;
+  }
+  return props.transactions.filter((tx) => isTransactionInReportingMonth(tx, props.currentMonth!));
+});
+
+const periodLabel = computed(() =>
+  props.currentMonth ? formatReportingPeriodShort(reportingPeriodForMonth(props.currentMonth)) : ""
+);
+
 const unlinkedCount = computed(
-  () => props.transactions.filter((t) => isUnlinkedTransaction(t)).length
+  () => scopedTransactions.value.filter((t) => isUnlinkedTransaction(t)).length
 );
 const excludedCount = computed(
-  () => props.transactions.filter((t) => isLinkExcludedTransaction(t)).length
+  () => scopedTransactions.value.filter((t) => isLinkExcludedTransaction(t)).length
 );
 const linkedCount = computed(
-  () => props.transactions.filter((t) => !isUnlinkedTransaction(t) && !isLinkExcludedTransaction(t)).length
+  () =>
+    scopedTransactions.value.filter(
+      (t) => !isUnlinkedTransaction(t) && !isLinkExcludedTransaction(t)
+    ).length
 );
-const outgoingCount = computed(
-  () => props.transactions.filter((t) => t.amount < 0).length
-);
-const incomingCount = computed(
-  () => props.transactions.filter((t) => t.amount > 0).length
-);
+const outgoingCount = computed(() => scopedTransactions.value.filter((t) => t.amount < 0).length);
+const incomingCount = computed(() => scopedTransactions.value.filter((t) => t.amount > 0).length);
 
 function toggleAmountDirection(next: "out" | "in") {
   amountDirection.value = amountDirection.value === next ? "all" : next;
@@ -211,7 +238,7 @@ function transactionMatchesSearchToken(
 }
 
 const filtered = computed(() =>
-  props.transactions.filter((tx) => {
+  scopedTransactions.value.filter((tx) => {
     const isUnlinked = isUnlinkedTransaction(tx);
     const isExcluded = isLinkExcludedTransaction(tx);
     const query = searchTerm.value.trim();
@@ -261,7 +288,7 @@ const bulkItemsInSelectedGroup = computed(() =>
 );
 
 const filterTabs = computed(() => [
-  { id: "ALL" as const, label: `Alle (${props.transactions.length})`, isWarning: false },
+  { id: "ALL" as const, label: `Alle (${scopedTransactions.value.length})`, isWarning: false },
   {
     id: "UNLINKED" as const,
     label: `Niet direct gekoppeld (${unlinkedCount.value})`,
@@ -274,17 +301,17 @@ const filterTabs = computed(() => [
   },
   {
     id: "Uitgave" as const,
-    label: `Uitgaven (${props.transactions.filter((t) => t.type === "Uitgave").length})`,
+    label: `Uitgaven (${scopedTransactions.value.filter((t) => t.type === "Uitgave").length})`,
     isWarning: false,
   },
   {
     id: "Inkomsten" as const,
-    label: `Inkomsten (${props.transactions.filter((t) => t.type === "Inkomsten").length})`,
+    label: `Inkomsten (${scopedTransactions.value.filter((t) => t.type === "Inkomsten").length})`,
     isWarning: false,
   },
   {
     id: "Sparen" as const,
-    label: `Sparen (${props.transactions.filter((t) => t.type === "Sparen").length})`,
+    label: `Sparen (${scopedTransactions.value.filter((t) => t.type === "Sparen").length})`,
     isWarning: false,
   },
 ]);
@@ -357,6 +384,28 @@ function createRuleFromTx(tx: Transaction) {
     tx.type === "Inkomsten" ? "inkomsten" : tx.type === "Sparen" ? "sparen" : "uitgaven";
   props.onCreateRuleFromTransaction(kw, grp, type);
 }
+
+function autoMatchedSavingsGoal(tx: Transaction): SavingsGoal | undefined {
+  if (tx.assignedSavingsGoalId) {
+    return undefined;
+  }
+  return (props.savingsGoals ?? []).find((goal) => transactionMatchesSavingsGoal(tx, goal));
+}
+
+function assignedSavingsGoal(tx: Transaction): SavingsGoal | undefined {
+  if (!tx.assignedSavingsGoalId) {
+    return undefined;
+  }
+  return (props.savingsGoals ?? []).find((goal) => goal.id === tx.assignedSavingsGoalId);
+}
+
+function showSavingsGoalPicker(tx: Transaction): boolean {
+  return Boolean(tx.assignedSavingsGoalId) || isSavingsCashflowTransfer(tx);
+}
+
+function handleSavingsGoalChange(tx: Transaction, value: string) {
+  props.onAssignSavingsGoal?.(tx.id, value || null);
+}
 </script>
 
 <template>
@@ -368,12 +417,15 @@ function createRuleFromTx(tx: Transaction) {
         <div class="flex items-center gap-2">
           <ArrowLeftRight class="w-5 h-5 text-indigo-400" />
           <h2 class="text-xl font-bold text-white tracking-tight">
-            Banktransacties & Mutaties ({{ transactions.length }})
+            Banktransacties & Mutaties ({{ scopedTransactions.length }})
           </h2>
         </div>
         <p class="text-xs text-slate-400 mt-1">
-          Realtime feed afkomstig van ING Bankrekening • Koppel transacties direct aan begrotingsposten en
-          automatiseer met koppelregels
+          {{
+            periodOnly && periodLabel
+              ? `Inbox voor ${periodLabel}`
+              : "Realtime feed afkomstig van ING Bankrekening • Koppel transacties direct aan begrotingsposten en automatiseer met koppelregels"
+          }}
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -441,7 +493,7 @@ function createRuleFromTx(tx: Transaction) {
           <p class="font-bold text-white text-sm">
             {{ unlinkedCount }}
             {{ unlinkedCount === 1 ? "transactie is" : "transacties zijn" }} nog niet direct gekoppeld
-            aan een begrotingspost
+            aan een begrotingspost{{ periodOnly && periodLabel ? ` in ${periodLabel}` : "" }}
           </p>
           <p class="text-amber-200/80 text-xs mt-0.5">
             Koppel deze mutaties aan een specifieke post zodat je werkelijke maanduitgaven 1-op-1 kloppen met
@@ -457,6 +509,31 @@ function createRuleFromTx(tx: Transaction) {
         <span>Toon {{ unlinkedCount }} ongekoppelde</span>
         <ChevronRight class="w-3.5 h-3.5" />
       </button>
+    </div>
+
+    <div
+      v-if="currentMonth"
+      class="flex flex-wrap items-center gap-2"
+    >
+      <div class="flex items-center bg-slate-900 rounded-xl p-1 border border-slate-800 text-xs">
+        <button
+          type="button"
+          class="px-2.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
+          :class="periodOnly ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+          @click="periodOnly = true"
+        >
+          <Calendar class="w-3.5 h-3.5" />
+          <span>Deze periode{{ periodLabel ? ` · ${periodLabel}` : "" }}</span>
+        </button>
+        <button
+          type="button"
+          class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap"
+          :class="!periodOnly ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+          @click="periodOnly = false"
+        >
+          Alle maanden
+        </button>
+      </div>
     </div>
 
     <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
@@ -651,6 +728,34 @@ function createRuleFromTx(tx: Transaction) {
                     <span class="font-mono text-[10px] text-slate-500">{{ tx.accountIban }}</span>
                   </template>
                 </div>
+                <div
+                  v-if="showSavingsGoalPicker(tx) && onAssignSavingsGoal"
+                  class="mt-1.5 flex items-center gap-1.5 max-w-xs"
+                >
+                  <PiggyBank class="w-3 h-3 text-indigo-400 shrink-0" />
+                  <select
+                    class="w-full bg-slate-800 border border-slate-700 text-[11px] text-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500"
+                    :value="tx.assignedSavingsGoalId ?? ''"
+                    @change="handleSavingsGoalChange(tx, ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="">
+                      Automatisch{{
+                        autoMatchedSavingsGoal(tx)
+                          ? ` · ${autoMatchedSavingsGoal(tx)?.name}`
+                          : ""
+                      }}
+                    </option>
+                    <option v-for="goal in (savingsGoals ?? [])" :key="goal.id" :value="goal.id">
+                      {{ goal.name }}{{ goal.kind === "pot" ? " (potje)" : "" }}
+                    </option>
+                  </select>
+                </div>
+                <p
+                  v-else-if="assignedSavingsGoal(tx)"
+                  class="text-[11px] text-indigo-300 mt-1"
+                >
+                  Spaardoel: {{ assignedSavingsGoal(tx)?.name }}
+                </p>
               </td>
               <td class="py-3 px-3">
                 <div v-if="tx.linkExcluded" class="space-y-1">

@@ -90,6 +90,7 @@ class SparenController extends Controller
             'items.*.matchedRuleId' => ['nullable', 'string'],
             'items.*.linkExcluded' => ['nullable', 'boolean'],
             'items.*.linkExclusionReason' => ['nullable', 'string'],
+            'items.*.assignedSavingsGoalId' => ['nullable', 'string'],
             'items.*.source' => ['nullable', 'string'],
         ]);
 
@@ -114,6 +115,7 @@ class SparenController extends Controller
             'matchedRuleId' => ['nullable', 'string'],
             'linkExcluded' => ['nullable', 'boolean'],
             'linkExclusionReason' => ['nullable', 'string'],
+            'assignedSavingsGoalId' => ['nullable', 'string'],
             'source' => ['nullable', 'string'],
         ]);
 

@@ -15,11 +15,18 @@ class TransactionClassifier
     /**
      * @return array{type: string, category_id: ?int, budget_id: ?int, rule_id: ?int, category_group: ?string, budget_key: ?string}
      */
-    public function classify(string $description, ?string $counterpartyIban, ?string $counterpartyName = null, ?float $amount = null): array
+    public function classify(string $description, ?string $counterpartyIban, ?string $counterpartyName = null, ?float $amount = null, ?string $assignedGoalKey = null): array
     {
         $haystack = mb_strtolower(trim($description.' '.($counterpartyName ?? '').' '.($counterpartyIban ?? '')));
         $ibanHaystack = strtoupper(preg_replace('/\s+/', '', $description.' '.($counterpartyIban ?? '').' '.($counterpartyName ?? '')) ?? '');
         $direction = $this->potTransferDirection($description);
+
+        if (filled($assignedGoalKey)) {
+            $assigned = SavingsGoal::query()->where('key', $assignedGoalKey)->first();
+            if ($assigned) {
+                return $this->classifyAssignedSavingsGoal($assigned, $direction, $amount);
+            }
+        }
 
         foreach (SavingsGoal::query()->where('kind', 'pot')->get() as $goal) {
             if (! $this->matchesSavingsTransfer($description, $goal, $haystack, $ibanHaystack)) {
@@ -118,6 +125,7 @@ class TransactionClassifier
                 $transaction->counterparty_iban,
                 $transaction->counterparty_name,
                 (float) $transaction->amount,
+                $transaction->savings_goal_key,
             );
 
             $transaction->fill([
@@ -146,6 +154,7 @@ class TransactionClassifier
                 $transaction->counterparty_iban,
                 $transaction->counterparty_name,
                 (float) $transaction->amount,
+                $transaction->savings_goal_key,
             );
 
             $exclude = (bool) ($result['link_excluded'] ?? false);
@@ -177,6 +186,42 @@ class TransactionClassifier
         }
 
         return $updated;
+    }
+
+    private function classifyAssignedSavingsGoal(
+        SavingsGoal $goal,
+        ?string $direction,
+        ?float $amount,
+    ): array {
+        $resolvedDirection = $direction
+            ?? (($amount ?? 0) < 0 ? 'naar' : 'van');
+        $spaarCategory = $this->savingsCategory();
+
+        if ($goal->kind === 'pot') {
+            return $this->savingsTransferExclusion(
+                $spaarCategory,
+                $resolvedDirection === 'naar' ? 'naar' : 'van',
+                $goal->name,
+                pot: true,
+            );
+        }
+
+        if ($resolvedDirection === 'van') {
+            return $this->savingsTransferExclusion($spaarCategory, 'van', $goal->name, pot: false);
+        }
+
+        $budget = Budget::query()->where('key', $goal->budgetKeys()[0] ?? $goal->budget_key)->first();
+
+        return [
+            'type' => 'saving',
+            'category_id' => $budget?->category_id ?? $spaarCategory?->id,
+            'budget_id' => $budget?->id,
+            'rule_id' => null,
+            'category_group' => $budget?->category?->name ?? $spaarCategory?->name ?? 'Spaargeld',
+            'budget_key' => $budget?->key,
+            'link_excluded' => false,
+            'link_exclusion_reason' => null,
+        ];
     }
 
     private function ruleMatches(

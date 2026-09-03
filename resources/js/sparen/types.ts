@@ -53,6 +53,9 @@ export interface MonthlyBudget {
   periodStart?: string; // YYYY-MM-DD
   periodEnd?: string; // YYYY-MM-DD
   opRekening: number; // Saldo op rekening aan begin/eind van de maand
+  /** Vastgelegd eindsaldo na sluiting van de periode (14e). */
+  endBalance?: number | null;
+  endBalanceCaptured?: boolean;
   items: BudgetItem[];
 }
 
@@ -79,6 +82,8 @@ export interface Transaction {
   /** Automatisch of handmatig: nooit koppelen aan begrotingspost */
   linkExcluded?: boolean;
   linkExclusionReason?: string;
+  /** Handmatige toewijzing aan spaardoel/potje; wint van omschrijving. */
+  assignedSavingsGoalId?: string | null;
 }
 
 export interface Rule {

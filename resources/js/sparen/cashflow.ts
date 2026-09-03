@@ -149,7 +149,7 @@ export function cashflowBucketTransactions(
 }
 
 export function savingsCashflowTarget(
-  tx: Pick<Transaction, "description" | "counterparty">,
+  tx: Pick<Transaction, "description" | "counterparty" | "assignedSavingsGoalId">,
   goals: SavingsGoal[]
 ): "pot" | "goal" {
   for (const goal of goals) {
@@ -414,6 +414,16 @@ export function monthEndBalances(
         monthId: month.monthId,
         short: month.monthName.slice(0, 3).toLowerCase(),
         balance: 0,
+        isCurrent,
+        isFuture,
+      };
+    }
+
+    if (month.endBalanceCaptured && month.endBalance != null) {
+      return {
+        monthId: month.monthId,
+        short: month.monthName.slice(0, 3).toLowerCase(),
+        balance: month.endBalance,
         isCurrent,
         isFuture,
       };

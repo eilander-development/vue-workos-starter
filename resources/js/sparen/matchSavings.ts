@@ -131,10 +131,14 @@ export function isSavingsWithdrawalTransaction(
 }
 
 export function transactionMatchesSavingsGoal(
-  tx: Pick<Transaction, "description" | "counterparty">,
-  goal: Pick<SavingsGoal, "name" | "accountIban">,
+  tx: Pick<Transaction, "description" | "counterparty" | "assignedSavingsGoalId">,
+  goal: Pick<SavingsGoal, "id" | "name" | "accountIban">,
   ownIbans: string[] = []
 ): boolean {
+  if (tx.assignedSavingsGoalId) {
+    return tx.assignedSavingsGoalId === goal.id;
+  }
+
   const haystack = `${tx.description} ${tx.counterparty ?? ""}`;
   const txRef = extractSavingsTransferRef(haystack);
   const goalRef = extractSavingsTransferRef(`${goal.name} ${goal.accountIban ?? ""}`);
@@ -159,8 +163,8 @@ export function transactionMatchesSavingsGoal(
 
 /** Alleen stortingen (Naar) horen bij een spaarrekening/potje. */
 export function transactionMatchesSavingsGoalDeposit(
-  tx: Pick<Transaction, "description" | "counterparty" | "amount">,
-  goal: Pick<SavingsGoal, "name" | "accountIban">,
+  tx: Pick<Transaction, "description" | "counterparty" | "amount" | "assignedSavingsGoalId">,
+  goal: Pick<SavingsGoal, "id" | "name" | "accountIban">,
   ownIbans: string[] = []
 ): boolean {
   return (
@@ -170,8 +174,8 @@ export function transactionMatchesSavingsGoalDeposit(
 
 /** Opnames (Van) van een spaarrekening/potje terug naar betaalrekening. */
 export function transactionMatchesSavingsGoalWithdrawal(
-  tx: Pick<Transaction, "description" | "counterparty" | "amount">,
-  goal: Pick<SavingsGoal, "name" | "accountIban">,
+  tx: Pick<Transaction, "description" | "counterparty" | "amount" | "assignedSavingsGoalId">,
+  goal: Pick<SavingsGoal, "id" | "name" | "accountIban">,
   ownIbans: string[] = []
 ): boolean {
   return (
@@ -188,7 +192,7 @@ export function savingsBalanceDelta(
 
 export function matchingSavingsTransactions(
   transactions: Transaction[],
-  goal: Pick<SavingsGoal, "name" | "accountIban">,
+  goal: Pick<SavingsGoal, "id" | "name" | "accountIban">,
   ownIbans: string[] = []
 ): Transaction[] {
   return transactions.filter((tx) =>
@@ -198,7 +202,7 @@ export function matchingSavingsTransactions(
 
 export function matchingUnlinkedSavingsTransactions(
   transactions: Transaction[],
-  goal: Pick<SavingsGoal, "name" | "accountIban">,
+  goal: Pick<SavingsGoal, "id" | "name" | "accountIban">,
   ownIbans: string[] = [],
   exceptId?: string
 ): Transaction[] {
