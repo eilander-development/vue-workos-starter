@@ -132,6 +132,20 @@
     .note { font-size: 11px; color: #64748b; margin-top: 8px; line-height: 1.4; }
     .wrong { background: #4c0519; border: 1px solid #9f1239; border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
     .ok { background: #052e16; border: 1px solid #166534; border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
+    .where {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      font-size: 13px; margin: 0 0 14px;
+      background: #0b1220; border: 1px dashed #4f46e5;
+      border-radius: 12px; padding: 10px 12px;
+    }
+    .where span { color: #a5b4fc; font-weight: 600; }
+    .where a {
+      color: #fff; text-decoration: none;
+      background: #312e81; border: 1px solid #4f46e5;
+      border-radius: 8px; padding: 4px 10px; font-size: 12px;
+    }
+    .where a:hover { background: #4338ca; }
+    .where em { color: var(--muted); font-style: normal; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -146,28 +160,42 @@
 
   <div class="wrap">
     <div class="page-head">
-      <h1>Waarom deze vervolgstappen beter zijn</h1>
+      <h1>Dit is een ontwerp met voorbeeldcijfers — niet de live app</h1>
       <p>
-        Geen nieuwe pagina’s. Zelfde schermen, maar dezelfde vraag overal hetzelfde beantwoord.
-        Links is nu (of bijna-nu). Rechts is het voorstel. Cijfers zijn voorbeelden.
+        De mock hieronder is van vanmorgen. Vier van de vijf punten staan in de Vue-app.
+        Als je ze op finance.test niet ziet: oude bundle. Rebuild:
+        <code style="color:#c7d2fe">docker compose exec -T laravel.test npm run build</code>
+        daarna hard refresh.
+      </p>
+      <p class="where" style="margin:12px 0 0">
+        <span>Live</span>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/jaaroverzicht">Jaaroverzicht</a>
+        <a href="/sparen">Sparen</a>
+        <a href="/transacties">Transacties</a>
       </p>
     </div>
 
     <div class="toc">
-      <a href="#jaar">1. Jaaroverzicht</a>
-      <a href="#inbox">2. Ongekoppeld</a>
-      <a href="#pot">3. Pot-uitgaven</a>
-      <a href="#saldo">4. Saldosnapshot</a>
-      <a href="#dubbel">5. Dubbele jaargrafiek</a>
+      <a href="#jaar">1. Jaaroverzicht · in de app</a>
+      <a href="#inbox">2. Ongekoppeld · in de app</a>
+      <a href="#pot">3. Pot-uitgaven · in de app</a>
+      <a href="#saldo">4. Saldosnapshot · deels</a>
+      <a href="#dubbel">5. Jaargrafiek · in de app</a>
     </div>
 
     <section class="block" id="jaar">
       <h2>1. Jaaroverzicht dezelfde split als het dashboard</h2>
       <div class="why">
-        Augustus op het dashboard kan nu <strong>bank-cashflow</strong> tonen, terwijl jaaroverzicht nog
+        Augustus op het dashboard kan nu <strong>bank-cashflow</strong> tonen,         terwijl jaaroverzicht nog
         <strong>envelop</strong> telt (Boodschappen € 500 i.p.v. pin € 339). Dan is het jaar “iets anders”
         dan de maand die je net hebt bekeken. Rechts: dezelfde twee lenzen, met een toggle.
       </div>
+      <p class="where">
+        <span>Zie in de app</span>
+        <a href="/jaaroverzicht">Jaaroverzicht</a>
+        <em>Plan / Bank staat in de titelregel van die pagina, niet in de app-header.</em>
+      </p>
       <div class="pair">
         <div class="pane now">
           <span class="tag">Nu</span>
@@ -232,6 +260,13 @@
         wél in “echt uitgegeven”, maar nergens in het plan. Rechts: dezelfde regel is een knop naar de
         transacties van <em>deze periode</em>, al gefilterd.
       </div>
+      <p class="where">
+        <span>Zie in de app</span>
+        <a href="/dashboard">Dashboard</a>
+        <em>blok “Cashflow deze periode” → amber balk Ongekoppeld</em>
+        <a href="/transacties">Transacties</a>
+        <em>filter UNLINKED</em>
+      </p>
       <div class="pair">
         <div class="pane now">
           <span class="tag">Nu</span>
@@ -277,7 +312,18 @@
         Cashflow slaat <strong>Naar / Van Oranje</strong> al over. Het potje Benzine telt een storting naar
         spaarrekening <strong>L13628386</strong> (spatie = rekening, geen potje) nog als uitgave.
         Daardoor “nog over te zetten € 100” terwijl je niet hebt getankt.
+        De tankbeurt (Shell) blijft pin. Alleen de storting naar L… telt niet meer als benzine-betaling —
+        daarom kan “nog te betalen” omhoog gaan terwijl je wél hebt getankt.
       </div>
+      <p class="where">
+        <span>Zie in de app</span>
+        <a href="/maandbegroting">Maandbegroting</a>
+        <em>rij Benzine · klik de naam voor mutaties · badge Potje</em>
+        <a href="/uitgaven">Uitgaven</a>
+        <em>zelfde post: envelop vs pin</em>
+        <a href="/sparen">Sparen</a>
+        <em>potje Benzine: pin vs compensatie, zonder Naar L…</em>
+      </p>
       <div class="pair">
         <div class="pane now">
           <span class="tag">Nu</span>
@@ -331,6 +377,11 @@
         compleet is. De staven “maandeinde” gebruiken nu <code>opRekening</code>, en dat veld is vaag
         (begin of eind?). Rechts: één snapshot per rapportageperiode, dan is juni–augustus een echte lijn.
       </div>
+      <p class="where">
+        <span>Zie in de app</span>
+        <a href="/dashboard">Dashboard</a>
+        <em>blok “Saldo op rekening” · staven per maand</em>
+      </p>
       <div class="pair">
         <div class="pane now">
           <span class="tag">Nu</span>
@@ -375,6 +426,11 @@
         <strong>twee jaarblokken</strong>: nieuwe saldo-staven én de oude “Jaarlijkse Cashflow &amp; Begroting”
         die nog envelop is. Dat was precies de verwarring van het begin.
       </div>
+      <p class="where">
+        <span>Zie in de app</span>
+        <a href="/dashboard">Dashboard</a>
+        <em>jaargrafiek onderaan · knoppen Plan / Bank bij die grafiek</em>
+      </p>
       <div class="pair">
         <div class="pane now">
           <span class="tag">Nu (na deze build)</span>

@@ -36,7 +36,7 @@ const monthData = computed(() =>
     return {
       monthId: m.monthId,
       name: m.monthName,
-      saldo: end?.balance ?? m.opRekening,
+      saldo: end?.isUnknown ? null : (end?.balance ?? m.opRekening),
       income: lens.value === "plan" ? kpi.totalIncomeBudget : flow.received,
       expense: lens.value === "plan" ? kpi.totalExpenseBudget : flow.spent,
       savings: lens.value === "plan" ? kpi.totalSavingsBudget : flow.netSavings,
@@ -159,7 +159,9 @@ function euro(n: number): string {
               class="hover:bg-slate-800/40 transition-colors"
             >
               <td class="py-3 px-4 font-sans font-bold text-white">{{ m.name }}</td>
-              <td class="py-3 px-4 text-right text-slate-300">€ {{ euro(m.saldo) }}</td>
+              <td class="py-3 px-4 text-right text-slate-300">
+                {{ m.saldo == null ? "—" : `€ ${euro(m.saldo)}` }}
+              </td>
               <td class="py-3 px-4 text-right text-emerald-400 font-semibold">€ {{ euro(m.income) }}</td>
               <td class="py-3 px-4 text-right text-rose-400 font-semibold">€ {{ euro(m.expense) }}</td>
               <td class="py-3 px-4 text-right text-blue-400">€ {{ euro(m.savings) }}</td>

@@ -155,13 +155,25 @@ const periodLabel = computed(() =>
   formatReportingPeriodShort(reportingPeriodForMonth(props.currentMonth))
 );
 
+const liveReportingMonth = computed(
+  () =>
+    props.allMonths.find(
+      (month) =>
+        month.monthId === reportingAnchor.value.monthId && month.year === reportingAnchor.value.year
+    ) ?? props.currentMonth
+);
+
+const balancePeriodLabel = computed(() =>
+  formatReportingPeriodShort(reportingPeriodForMonth(liveReportingMonth.value))
+);
+
 const balancePoints = computed(() =>
   checkingBalanceSeries({
     transactions: props.transactions,
-    month: props.currentMonth,
+    month: liveReportingMonth.value,
     liveBalance: liveAccountBalance.value,
-    isCurrentMonth: isCurrentReportingMonth.value,
-    fallbackStartBalance: props.currentMonth.opRekening ?? 0,
+    isCurrentMonth: true,
+    fallbackStartBalance: liveAccountBalance.value,
   })
 );
 
@@ -214,7 +226,12 @@ const yearBalances = computed(() =>
 );
 
 const yearBalanceMax = computed(() =>
-  Math.max(1, ...yearBalances.value.filter((row) => !row.isFuture).map((row) => Math.abs(row.balance)))
+  Math.max(
+    1,
+    ...yearBalances.value
+      .filter((row) => !row.isFuture && !row.isUnknown)
+      .map((row) => Math.abs(row.balance))
+  )
 );
 
 const unpaidExpenses = computed(() =>
@@ -850,14 +867,14 @@ function catStats(cat: CatDef) {
       <div>
         <h3 class="font-bold text-white text-base">Saldo op rekening</h3>
         <p class="text-xs text-slate-400 mt-0.5">
-          Verloop van de betaalrekening. Links deze rapportagemaand (reconstructie uit mutaties). Rechts
+          Verloop van de betaalrekening. Links de lopende rapportageperiode (live saldo). Rechts
           maandeinde over het jaar.
         </p>
       </div>
       <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div class="lg:col-span-3 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Deze periode · {{ periodLabel }}
+            Deze periode · {{ balancePeriodLabel }}
           </span>
           <svg
             v-if="balanceChart"
@@ -913,7 +930,7 @@ function catStats(cat: CatDef) {
           </svg>
           <p v-else class="text-xs text-slate-500 mt-6">Nog geen mutaties om een saldo-lijn te tekenen.</p>
           <p class="mt-2 text-[10px] text-slate-500">
-            Reconstructie vanaf het live saldo en de mutaties in deze periode.
+            Reconstructie vanaf het live ING-saldo en de mutaties tot vandaag.
           </p>
         </div>
         <div class="lg:col-span-2 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm">
@@ -925,10 +942,10 @@ function catStats(cat: CatDef) {
               v-for="row in yearBalances"
               :key="row.monthId"
               class="flex-1 flex flex-col items-center gap-1 min-w-0 h-full justify-end"
-              :class="row.isFuture ? 'opacity-30' : ''"
+              :class="row.isFuture || row.isUnknown ? 'opacity-30' : ''"
             >
               <span
-                v-if="!row.isFuture && Math.abs(row.balance) > 0"
+                v-if="!row.isFuture && !row.isUnknown && Math.abs(row.balance) > 0"
                 class="text-[9px] text-indigo-200/90 font-mono truncate max-w-full"
               >
                 {{ compactEuro(row.balance) }}
@@ -937,14 +954,15 @@ function catStats(cat: CatDef) {
                 <div
                   class="w-3/5 max-w-[16px] rounded-t bg-gradient-to-t from-indigo-700 to-indigo-400"
                   :class="row.isCurrent ? 'ring-2 ring-indigo-300 ring-offset-1 ring-offset-slate-900' : ''"
-                  :style="{ height: yearBalancePct(row.balance) }"
+                  :style="{ height: row.isUnknown ? '4%' : yearBalancePct(row.balance) }"
                 />
               </div>
               <span class="text-[10px] text-slate-400 font-medium">{{ row.short }}</span>
             </div>
           </div>
           <p class="mt-2 text-[10px] text-slate-500">
-            Huidige maand = live saldo. Gesloten maanden = gereconstrueerd uit mutaties na die periode.
+            Huidige maand = live saldo. Gesloten maanden = teruggeteld vanaf nu. Geen staaf = geen
+            bankhistorie (nog geen snapshot op de 14e).
           </p>
         </div>
       </div>

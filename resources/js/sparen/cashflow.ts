@@ -82,6 +82,7 @@ export type MonthBalanceRow = {
   balance: number;
   isCurrent: boolean;
   isFuture: boolean;
+  isUnknown?: boolean;
 };
 
 export function compactEuro(n: number): string {
@@ -419,13 +420,14 @@ export function monthEndBalances(
     }
 
     const period = reportingPeriodForMonth(month);
-    if (firstTxDate !== "9999-12-31" && period.end < firstTxDate && (month.opRekening ?? 0) !== 0) {
+    if (firstTxDate !== "9999-12-31" && period.end < firstTxDate) {
       return {
         monthId: month.monthId,
         short: month.monthName.slice(0, 3).toLowerCase(),
-        balance: month.opRekening,
+        balance: 0,
         isCurrent,
         isFuture,
+        isUnknown: true,
       };
     }
 
