@@ -113,7 +113,7 @@ function handleSubmit() {
           </div>
 
           <div>
-            <label class="block text-slate-300 font-semibold mb-1">Datum</label>
+            <label class="block text-slate-300 font-semibold mb-1">Boekdatum</label>
             <input
               v-model="date"
               type="date"
