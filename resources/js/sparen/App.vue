@@ -1683,7 +1683,7 @@ function closeSavingsGoalModal() {
 
     <TransactionDetailModal
       :transaction="detailTransaction"
-      :budget-items="currentMonth.items"
+      :budget-items="currentMonth?.items ?? []"
       :rules="rules"
       :savings-goals="savingsGoals"
       :on-close="closeTransactionDetail"
