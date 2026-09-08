@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   AlertCircle,
   FolderPlus,
+  Split,
 } from "lucide-vue-next";
 import type {
   Transaction,
@@ -14,9 +15,11 @@ import type {
   BudgetCategoryGroup,
   CategoryDefinition,
   BudgetType,
+  TransactionAllocation,
 } from "../types";
 import TransactionDate from "./TransactionDate.vue";
 import { extractSmartKeyword, matchingUnlinkedTransactions } from "../matchRule";
+import { normalizeAllocations } from "../allocations";
 
 const props = defineProps<{
   isOpen: boolean;
@@ -34,7 +37,8 @@ const props = defineProps<{
       keyword: string;
       matchField: "description" | "counterparty" | "both";
       targetType: BudgetType;
-    }
+    },
+    allocations?: TransactionAllocation[]
   ) => void;
   onOpenAddBudgetItemModal?: (group?: BudgetCategoryGroup) => void;
 }>();
@@ -45,6 +49,10 @@ const shouldCreateRule = ref(true);
 const ruleName = ref("");
 const ruleKeyword = ref("");
 const ruleMatchField = ref<"description" | "counterparty" | "both">("description");
+const splitEnabled = ref(false);
+const secondItemId = ref("");
+const firstAmount = ref(0);
+const secondAmount = ref(0);
 
 watch(
   () => [props.transaction, props.budgetItems] as const,
@@ -75,6 +83,25 @@ watch(
     ruleName.value = `Automatisch: ${smartKw}`;
     ruleMatchField.value = "description";
     shouldCreateRule.value = true;
+
+    const existingSplit = normalizeAllocations(transaction.allocations);
+    const absAmount = roundMoney(Math.abs(transaction.amount));
+    if (existingSplit) {
+      splitEnabled.value = true;
+      selectedBudgetItemId.value = existingSplit[0].budgetItemId;
+      const firstItem = props.budgetItems.find((item) => item.id === existingSplit[0].budgetItemId);
+      if (firstItem) {
+        selectedGroup.value = firstItem.group;
+      }
+      secondItemId.value = existingSplit[1].budgetItemId;
+      firstAmount.value = existingSplit[0].amount;
+      secondAmount.value = existingSplit[1].amount;
+    } else {
+      splitEnabled.value = false;
+      secondItemId.value = suggestSecondItemId(selectedBudgetItemId.value);
+      firstAmount.value = suggestedFirstAmount(selectedBudgetItemId.value, absAmount);
+      secondAmount.value = roundMoney(absAmount - firstAmount.value);
+    }
   },
   { immediate: true }
 );
@@ -127,11 +154,77 @@ const extraMatchDirectionLabel = computed(() => {
   return "erbij en eraf";
 });
 
+const absTxAmount = computed(() => roundMoney(Math.abs(props.transaction?.amount ?? 0)));
+const secondItemOptions = computed(() =>
+  props.budgetItems.filter((item) => item.id !== selectedBudgetItemId.value)
+);
+const secondItemObj = computed(() =>
+  props.budgetItems.find((item) => item.id === secondItemId.value)
+);
+const splitRemainderOk = computed(() => {
+  if (!splitEnabled.value) {
+    return true;
+  }
+  return (
+    Boolean(secondItemId.value) &&
+    secondItemId.value !== selectedBudgetItemId.value &&
+    firstAmount.value > 0 &&
+    secondAmount.value > 0 &&
+    Math.abs(firstAmount.value + secondAmount.value - absTxAmount.value) < 0.015
+  );
+});
+const canSubmit = computed(
+  () => Boolean(selectedBudgetItemId.value) && splitRemainderOk.value
+);
+
+function suggestSecondItemId(firstId: string): string {
+  if (firstId === "verz-2") {
+    return props.budgetItems.some((item) => item.id === "verv-2") ? "verv-2" : "";
+  }
+  if (firstId === "verv-2") {
+    return props.budgetItems.some((item) => item.id === "verz-2") ? "verz-2" : "";
+  }
+  return "";
+}
+
+function suggestedFirstAmount(firstId: string, absAmount: number): number {
+  const item = props.budgetItems.find((entry) => entry.id === firstId);
+  const planned = roundMoney(Math.abs(item?.actual ?? 0));
+  if (planned > 0 && planned < absAmount) {
+    return planned;
+  }
+  return roundMoney(absAmount / 2);
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function enableSplit() {
+  splitEnabled.value = true;
+  if (!secondItemId.value) {
+    secondItemId.value = suggestSecondItemId(selectedBudgetItemId.value);
+  }
+  firstAmount.value = suggestedFirstAmount(selectedBudgetItemId.value, absTxAmount.value);
+  secondAmount.value = roundMoney(absTxAmount.value - firstAmount.value);
+}
+
+function syncSecondAmount() {
+  secondAmount.value = roundMoney(absTxAmount.value - firstAmount.value);
+}
+
 function handleSubmit() {
   const transaction = props.transaction;
-  if (!transaction || !selectedBudgetItemId.value) return;
+  if (!transaction || !selectedBudgetItemId.value || !canSubmit.value) return;
 
   const targetType = ruleTargetType.value;
+  const allocations =
+    splitEnabled.value && secondItemId.value
+      ? normalizeAllocations([
+          { budgetItemId: selectedBudgetItemId.value, amount: firstAmount.value },
+          { budgetItemId: secondItemId.value, amount: secondAmount.value },
+        ])
+      : undefined;
 
   const ruleData =
     shouldCreateRule.value && ruleKeyword.value.trim()
@@ -143,7 +236,7 @@ function handleSubmit() {
         }
       : undefined;
 
-  props.onLink(transaction.id, selectedGroup.value, selectedBudgetItemId.value, ruleData);
+  props.onLink(transaction.id, selectedGroup.value, selectedBudgetItemId.value, ruleData, allocations);
   props.onClose();
 }
 
@@ -299,6 +392,77 @@ function openAddBudgetItem() {
           </div>
         </div>
 
+        <div class="space-y-2">
+          <label class="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              :checked="splitEnabled"
+              type="checkbox"
+              class="mt-0.5 w-4 h-4 accent-indigo-600 rounded cursor-pointer shrink-0"
+              @change="($event.target as HTMLInputElement).checked ? enableSplit() : (splitEnabled = false)"
+            />
+            <div>
+              <span class="font-bold text-white text-xs block flex items-center gap-1.5">
+                <Split class="w-3.5 h-3.5 text-indigo-400" />
+                Verdeel over twee posten
+              </span>
+              <span class="text-[11px] text-slate-400 block mt-0.5">
+                Eén incasso, twee enveloppen — bijvoorbeeld InShared auto én woning.
+              </span>
+            </div>
+          </label>
+
+          <div
+            v-if="splitEnabled"
+            class="p-3 bg-slate-800/80 border border-slate-700/80 rounded-xl space-y-3"
+          >
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-slate-300 font-semibold mb-1">Eerste post</label>
+                <div class="text-white text-xs font-medium truncate">
+                  {{ selectedItemObj?.name || "Kies hierboven een post" }}
+                </div>
+                <input
+                  :value="firstAmount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  class="mt-1.5 w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-white font-mono focus:outline-none focus:border-indigo-500"
+                  @input="
+                    firstAmount = Number(($event.target as HTMLInputElement).value);
+                    syncSecondAmount();
+                  "
+                />
+              </div>
+              <div>
+                <label class="block text-slate-300 font-semibold mb-1">Tweede post</label>
+                <select
+                  v-model="secondItemId"
+                  class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="">-- Kies extra post --</option>
+                  <option v-for="item in secondItemOptions" :key="item.id" :value="item.id">
+                    {{ item.group }} · {{ item.name }}
+                  </option>
+                </select>
+                <input
+                  v-model.number="secondAmount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  class="mt-1.5 w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-white font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+            <p class="text-[11px]" :class="splitRemainderOk ? 'text-slate-400' : 'text-amber-300'">
+              Som:
+              € {{ (firstAmount + secondAmount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              van
+              € {{ absTxAmount.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              <span v-if="secondItemObj"> · {{ secondItemObj.name }}</span>
+            </p>
+          </div>
+        </div>
+
         <div class="pt-2 border-t border-slate-800 space-y-3">
           <div class="bg-slate-800/90 border border-slate-700/80 rounded-xl p-3.5 space-y-3">
             <label class="flex items-start gap-3 cursor-pointer select-none">
@@ -393,7 +557,9 @@ function openAddBudgetItem() {
           <span class="text-[11px] text-slate-500">
             {{
               selectedBudgetItemId
-                ? `Wordt geboekt op ${selectedItemObj?.name}`
+                ? splitEnabled
+                  ? "Wordt verdeeld over twee posten"
+                  : `Wordt geboekt op ${selectedItemObj?.name}`
                 : "Kies eerst een begrotingspost"
             }}
           </span>
@@ -408,7 +574,7 @@ function openAddBudgetItem() {
             </button>
             <button
               type="submit"
-              :disabled="!selectedBudgetItemId"
+              :disabled="!canSubmit"
               class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 active:scale-95"
             >
               <CheckCircle2 class="w-4 h-4" />

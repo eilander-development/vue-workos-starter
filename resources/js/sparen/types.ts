@@ -65,25 +65,37 @@ export interface ReportingSettings {
   defaultYear: number;
 }
 
+export interface TransactionAllocation {
+  budgetItemId: string;
+  amount: number;
+}
+
 export interface Transaction {
   id: string;
-  date: string; // YYYY-MM-DD
+  /** Bankboekdatum (YYYY-MM-DD), niet factuurdatum uit de omschrijving. */
+  date: string;
   time?: string;
   description: string;
   amount: number; // negative for expense, positive for income
   type: "Inkomsten" | "Uitgave" | "Sparen";
   categoryGroup: BudgetCategoryGroup | "Ongecategoriseerd";
   budgetItemId?: string;
+  /** Verdeelt één bankmutatie over meerdere begrotingsposten. */
+  allocations?: TransactionAllocation[];
   accountIban: string;
   counterparty?: string;
+  counterpartyIban?: string | null;
   isPending?: boolean;
   matchedRuleId?: string;
   source: "EnableBanking" | "Handmatig" | "CSV-import";
   /** Automatisch of handmatig: nooit koppelen aan begrotingspost */
   linkExcluded?: boolean;
   linkExclusionReason?: string;
-  /** Handmatige toewijzing aan spaardoel/potje; wint van omschrijving. */
+  /** Spaardoel/potje. Een ING-rekeningnummer in de omschrijving wint van deze toewijzing. */
   assignedSavingsGoalId?: string | null;
+  importedAt?: string | null;
+  /** Ruwe EnableBanking-payload; alleen aanwezig na sync met bank_payload-kolom. */
+  bankPayload?: Record<string, unknown> | null;
 }
 
 export interface Rule {
@@ -93,6 +105,8 @@ export interface Rule {
   matchField: "description" | "counterparty" | "both";
   targetGroup: BudgetCategoryGroup;
   targetBudgetItemId?: string;
+  /** Templatebedragen; worden naar het mutatiebedrag herschaald. */
+  allocations?: TransactionAllocation[];
   targetType: BudgetType;
   isActive: boolean;
   matchedCount: number;
@@ -176,6 +190,7 @@ export type ActiveTab =
   | "enablebanking"
   | "categorieen"
   | "koppelregels"
+  | "splits"
   | "jaaroverzicht"
   | "settings";
 

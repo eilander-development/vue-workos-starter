@@ -15,6 +15,7 @@ export const SPAREN_PAGES: {
   { tab: "enablebanking", path: "/bankkoppeling", title: "Bankkoppeling" },
   { tab: "categorieen", path: "/categorieen", title: "Categorieën & Rubrieken" },
   { tab: "koppelregels", path: "/koppelregels", title: "Koppelregels" },
+  { tab: "splits", path: "/splits", title: "Splits" },
   { tab: "jaaroverzicht", path: "/jaaroverzicht", title: "Jaaroverzicht" },
   { tab: "settings", path: "/instellingen", title: "Instellingen" },
 ];

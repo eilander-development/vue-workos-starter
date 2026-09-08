@@ -10,6 +10,7 @@ import {
   Landmark,
   Tags,
   Sliders,
+  Split,
   Calendar,
   CheckCircle2,
   PanelLeftClose,
@@ -75,6 +76,7 @@ const menuItems: {
   { id: "enablebanking", label: "Bankkoppeling", icon: Landmark, badge: "PSD2" },
   { id: "categorieen", label: "Categorieën & Rubrieken", icon: Tags },
   { id: "koppelregels", label: "Koppelregels", icon: Sliders },
+  { id: "splits", label: "Splits", icon: Split },
   { id: "jaaroverzicht", label: "Jaaroverzicht", icon: Calendar },
   { id: "settings", label: "Instellingen", icon: Settings },
 ];

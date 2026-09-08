@@ -84,6 +84,10 @@ class IngSavingsTransfer
             return $ibanMatch;
         }
 
+        if ($txRef) {
+            return false;
+        }
+
         $keyword = mb_strtolower(trim($goalName));
         $descMatch = mb_strlen($keyword) >= 3 && str_contains(mb_strtolower($haystack), $keyword);
 

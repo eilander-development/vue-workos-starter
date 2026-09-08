@@ -25,7 +25,7 @@ class EnabledBankingTransactionImporter
 
         foreach ($transactions as $row) {
             $stats['total']++;
-            $date = $row['posted_at'] ?? $row['date'] ?? now()->format('Y-m-d');
+            $date = BankTransactionTime::bookingDate($row);
             $description = $this->normalizeDescription(trim((string) ($row['description'] ?? $row['merchant'] ?? 'Banktransactie')));
             $iban = $row['counterpart_iban']
                 ?? $row['counterparty_iban']
@@ -34,7 +34,8 @@ class EnabledBankingTransactionImporter
             $counterparty = $row['merchant'] ?? $row['counterparty'] ?? null;
             $amount = (float) ($row['amount'] ?? 0);
             $hash = $this->sourceHash($row, $date, $amount, $description, $iban);
-            $time = $row['time'] ?? BankTransactionTime::extract($row);
+            $time = $row['time'] ?? BankTransactionTime::extractBookingTime($row);
+            $bankPayload = $this->bankPayload($row);
             if ($time) {
                 $stats['with_time']++;
             }
@@ -42,10 +43,18 @@ class EnabledBankingTransactionImporter
             $existing = Transaction::query()->where('source_hash', $hash)->first();
             if ($existing) {
                 $stats['duplicates']++;
+                $dirty = false;
                 if ($time && blank($existing->booked_time)) {
                     $existing->booked_time = $time;
-                    $existing->save();
+                    $dirty = true;
                     $stats['time_backfilled']++;
+                }
+                if ($bankPayload && Schema::hasColumn('transactions', 'bank_payload') && blank($existing->bank_payload)) {
+                    $existing->bank_payload = $bankPayload;
+                    $dirty = true;
+                }
+                if ($dirty) {
+                    $existing->save();
                 }
                 continue;
             }
@@ -86,6 +95,12 @@ class EnabledBankingTransactionImporter
             if (Schema::hasColumn('transactions', 'link_exclusion_reason')) {
                 $payload['link_exclusion_reason'] = $classified['link_exclusion_reason'] ?? null;
             }
+            if (Schema::hasColumn('transactions', 'savings_goal_key')) {
+                $payload['savings_goal_key'] = $classified['savings_goal_key'] ?? null;
+            }
+            if ($bankPayload && Schema::hasColumn('transactions', 'bank_payload')) {
+                $payload['bank_payload'] = $bankPayload;
+            }
 
             Transaction::query()->create($payload);
 
@@ -103,6 +118,16 @@ class EnabledBankingTransactionImporter
     private function normalizeDescription(string $description): string
     {
         return preg_replace('/^Naam:\s*/iu', '', $description) ?? $description;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function bankPayload(array $row): ?array
+    {
+        $raw = $row['raw'] ?? null;
+
+        return is_array($raw) && $raw !== [] ? $raw : null;
     }
 
     private function sourceHash(array $row, mixed $date, float $amount, string $description, mixed $iban): string

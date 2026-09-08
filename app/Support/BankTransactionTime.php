@@ -32,6 +32,17 @@ class BankTransactionTime
         'transaction_date',
     ];
 
+    private const BOOKING_DATETIME_FIELDS = [
+        'booking_datetime',
+        'booking_date_time',
+        'bookingDateTime',
+    ];
+
+    private const BOOKING_DATE_FIELDS = [
+        'booking_date',
+        'bookingDate',
+    ];
+
     /**
      * Vrije-tekstvelden waarin ING de tijd in de omschrijving zet
      * (bijvoorbeeld "Datum/Tijd: 20-08-2026 14:32" of "23.08.26/14.21").
@@ -66,6 +77,59 @@ class BankTransactionTime
         foreach ($lines as $line) {
             if ($time = self::fromDateTimeText($line)) {
                 return $time;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Boekdatum van de bank: booking_date, anders de kalenderdag van booking_datetime.
+     * Geen factuurdatum uit de omschrijving en geen valutadatum.
+     */
+    public static function bookingDate(array $row, ?string $fallback = null): string
+    {
+        $raw = is_array($row['raw'] ?? null) ? $row['raw'] : $row;
+
+        foreach (self::BOOKING_DATE_FIELDS as $field) {
+            foreach ([$row[$field] ?? null, $raw[$field] ?? null] as $value) {
+                if ($date = self::dateFromValue($value, convertTimezone: false)) {
+                    return $date;
+                }
+            }
+        }
+
+        foreach (self::BOOKING_DATETIME_FIELDS as $field) {
+            foreach ([$row[$field] ?? null, $raw[$field] ?? null] as $value) {
+                if ($date = self::dateFromValue($value, convertTimezone: true)) {
+                    return $date;
+                }
+            }
+        }
+
+        foreach (['posted_at', 'date'] as $field) {
+            foreach ([$row[$field] ?? null, $fallback] as $value) {
+                if ($date = self::dateFromValue($value, convertTimezone: false)) {
+                    return $date;
+                }
+            }
+        }
+
+        return date('Y-m-d');
+    }
+
+    /**
+     * Tijd van de boeking, niet van pin/factuur in de omschrijving.
+     */
+    public static function extractBookingTime(array $row): ?string
+    {
+        $raw = is_array($row['raw'] ?? null) ? $row['raw'] : $row;
+
+        foreach (self::BOOKING_DATETIME_FIELDS as $field) {
+            foreach ([$row[$field] ?? null, $raw[$field] ?? null] as $value) {
+                if ($time = self::fromValue($value)) {
+                    return $time;
+                }
             }
         }
 
@@ -168,6 +232,36 @@ class BankTransactionTime
 
         if (preg_match(self::DUTCH_PATTERN, $text, $matches)) {
             return self::clock($matches[1], $matches[2]);
+        }
+
+        return null;
+    }
+
+    private static function dateFromValue(mixed $value, bool $convertTimezone): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})$/', $value, $matches)) {
+            return $matches[1];
+        }
+
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})[T ]/', $value, $matches)) {
+            if ($convertTimezone && preg_match('/(Z|[+-]\d{2}:?\d{2})$/', $value) === 1) {
+                try {
+                    return Carbon::parse($value)->timezone(self::TIMEZONE)->toDateString();
+                } catch (\Throwable) {
+                    return $matches[1];
+                }
+            }
+
+            return $matches[1];
         }
 
         return null;

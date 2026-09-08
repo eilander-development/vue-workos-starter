@@ -46,3 +46,19 @@ it('laat een generieke naam spaarrekening niet alle ING-mutaties matchen', funct
         'NAARORANJESPAARREKENINGL13628386',
     ))->toBeFalse();
 });
+
+it('koppelt een genummerde storting niet via de tegenpartij- of postnaam', function () {
+    expect(IngSavingsTransfer::matchesGoal(
+        'Naar Oranje spaarrekening A14304836 Zorgkosten',
+        'Zorgkosten (eigen risico)',
+        null,
+        'NAARORANJESPAARREKENINGA14304836ZORGKOSTEN',
+    ))->toBeFalse();
+
+    expect(IngSavingsTransfer::matchesGoal(
+        'Naar Oranje spaarrekening A14304836 Zorgkosten',
+        'spaarrekening a14304836',
+        null,
+        'NAARORANJESPAARREKENINGA14304836ZORGKOSTEN',
+    ))->toBeTrue();
+});

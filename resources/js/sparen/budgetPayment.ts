@@ -1,3 +1,4 @@
+import { transactionAllocatesToItem } from "./allocations";
 import { isLinkExcludedTransaction } from "./matchRule";
 import type { BudgetItem, Transaction } from "./types";
 
@@ -9,25 +10,29 @@ export function expectedTransactionTypeForBudgetItem(
   return "Uitgave";
 }
 
-/** Alleen mutaties met passend type tellen mee op een begrotingspost (geen pot-stortingen op uitgaven). */
+/** Gekoppelde mutatie telt mee op de post, ook als het een spaaroverboeking is. */
 export function transactionCountsTowardBudgetItem(
-  tx: Pick<Transaction, "budgetItemId" | "type">,
+  tx: Pick<Transaction, "budgetItemId" | "type" | "allocations">,
   item: Pick<BudgetItem, "id" | "type">
 ): boolean {
-  if (!tx.budgetItemId || tx.budgetItemId !== item.id) {
+  if (!transactionAllocatesToItem(tx, item.id)) {
     return false;
   }
 
-  return tx.type === expectedTransactionTypeForBudgetItem(item);
+  if (tx.type === expectedTransactionTypeForBudgetItem(item)) {
+    return true;
+  }
+
+  return item.type === "uitgaven" && tx.type === "Sparen";
 }
 
 /** Gekoppeld via post-id, of (voor ongekoppelde rijen) rubriek + omschrijving + passend type. */
 export function transactionMatchesBudgetItem(
   tx: Pick<
     Transaction,
-    "budgetItemId" | "type" | "categoryGroup" | "description" | "linkExcluded"
+    "budgetItemId" | "type" | "categoryGroup" | "description" | "linkExcluded" | "allocations"
   >,
-  item: Pick<BudgetItem, "id" | "type" | "group">
+  item: Pick<BudgetItem, "id" | "type" | "group" | "name">
 ): boolean {
   if (isLinkExcludedTransaction(tx)) {
     return false;

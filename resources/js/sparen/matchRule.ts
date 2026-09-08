@@ -33,7 +33,7 @@ export function transactionMatchesKeyword(
   const inCounterparty = tx.counterparty?.toLowerCase().includes(needle) ?? false;
 
   if (matchField === "description") {
-    return inDescription;
+    return inDescription || inCounterparty;
   }
   if (matchField === "counterparty") {
     return inCounterparty;

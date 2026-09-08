@@ -31,6 +31,7 @@ const isMoreActive = computed(() =>
     "enablebanking",
     "categorieen",
     "koppelregels",
+    "splits",
     "jaaroverzicht",
   ].includes(props.activeTab)
 );

@@ -50,6 +50,7 @@ export function transactionWritePayload(tx: Transaction) {
     type: tx.type,
     categoryGroup: tx.categoryGroup,
     budgetItemId: tx.budgetItemId ?? null,
+    allocations: tx.allocations && tx.allocations.length >= 2 ? tx.allocations : null,
     accountIban: tx.accountIban,
     counterparty: tx.counterparty ?? null,
     isPending: Boolean(tx.isPending),
@@ -68,6 +69,7 @@ export function ruleWritePayload(rule: Rule) {
     matchField: rule.matchField,
     targetGroup: rule.targetGroup,
     targetBudgetItemId: rule.targetBudgetItemId ?? null,
+    allocations: rule.allocations && rule.allocations.length >= 2 ? rule.allocations : null,
     targetType: rule.targetType,
     isActive: rule.isActive,
   };

@@ -10,6 +10,7 @@ use App\Models\EnableBankingSession;
 use App\Models\ImportRule;
 use App\Models\SavingsGoal;
 use App\Models\Transaction;
+use App\Support\TransactionAllocations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -39,6 +40,12 @@ class SparenStateService
     ) {}
 
     private ?bool $savingsGoalKeyColumnExists = null;
+
+    private ?bool $transactionAllocationsColumnExists = null;
+
+    private ?bool $importRuleAllocationsColumnExists = null;
+
+    private ?bool $bankPayloadColumnExists = null;
 
     public function build(int $year = 2026): array
     {
@@ -87,7 +94,13 @@ class SparenStateService
                     return $this->transactionCountsTowardBudget($budget, $tx)
                         && $this->reportingPeriod->transactionInSparenMonth((string) $tx['date'], $monthId, $year);
                 });
-                $txPaid = round((float) $matching->sum(fn (array $tx) => abs((float) $tx['amount'])), 2);
+                $txPaid = round((float) $matching->sum(
+                    fn (array $tx) => TransactionAllocations::amountToward(
+                        $tx['allocations'] ?? [],
+                        (string) $budget->key,
+                        (float) $tx['amount']
+                    )
+                ), 2);
                 $sparenType = $this->toSparenType($budget->category?->type);
                 $isPotEnvelope = $sparenType === 'uitgaven' && in_array($budget->key, $potBudgetKeys, true);
                 $paid = $isPotEnvelope
@@ -159,6 +172,7 @@ class SparenStateService
                 'matchField' => $rule->match_field ?: 'description',
                 'targetGroup' => $rule->category?->name,
                 'targetBudgetItemId' => $rule->budget?->key,
+                'allocations' => $this->mapRuleAllocations($rule),
                 'targetType' => $this->toSparenType($rule->category?->type),
                 'isActive' => (bool) $rule->is_active,
                 'matchedCount' => Transaction::query()->where('rule_id', $rule->id)->count(),
@@ -223,17 +237,23 @@ class SparenStateService
             ?? Budget::query()->first();
         $category = Category::query()->where('name', $row['targetGroup'] ?? '')->first() ?? $budget?->category;
 
+        $payload = [
+            'name' => $row['name'],
+            'type' => ($row['matchField'] ?? 'description') === 'counterparty' ? 'iban' : 'description',
+            'match_value' => $row['keyword'],
+            'match_field' => $row['matchField'] ?? 'description',
+            'is_active' => (bool) ($row['isActive'] ?? true),
+            'category_id' => $category?->id ?? Category::query()->value('id'),
+            'budget_id' => $budget?->id,
+        ];
+
+        if ($this->hasImportRuleAllocationsColumn() && array_key_exists('allocations', $row)) {
+            $payload['allocations'] = TransactionAllocations::normalize($row['allocations']) ?: null;
+        }
+
         ImportRule::query()->updateOrCreate(
             ['key' => $row['id']],
-            [
-                'name' => $row['name'],
-                'type' => ($row['matchField'] ?? 'description') === 'counterparty' ? 'iban' : 'description',
-                'match_value' => $row['keyword'],
-                'match_field' => $row['matchField'] ?? 'description',
-                'is_active' => (bool) ($row['isActive'] ?? true),
-                'category_id' => $category?->id ?? Category::query()->value('id'),
-                'budget_id' => $budget?->id,
-            ]
+            $payload
         );
     }
 
@@ -469,6 +489,10 @@ class SparenStateService
                 : $existing?->savings_goal_key;
         }
 
+        if ($this->hasTransactionAllocationsColumn() && array_key_exists('allocations', $row)) {
+            $payload['allocations'] = TransactionAllocations::normalize($row['allocations']) ?: null;
+        }
+
         Transaction::query()->updateOrCreate(
             ['key' => $row['id']],
             $payload
@@ -496,14 +520,20 @@ class SparenStateService
             'type' => $type,
             'categoryGroup' => $tx->category?->name ?? 'Ongecategoriseerd',
             'budgetItemId' => $tx->budget?->key,
+            'allocations' => $this->mapTransactionAllocations($tx),
             'accountIban' => $tx->account_iban ?? '',
             'counterparty' => $tx->counterparty_name ?: $tx->counterparty_iban,
+            'counterpartyIban' => $tx->counterparty_iban,
             'isPending' => (bool) $tx->is_pending,
             'matchedRuleId' => $tx->importRule?->key,
             'linkExcluded' => (bool) $tx->link_excluded,
             'linkExclusionReason' => $tx->link_exclusion_reason,
             'assignedSavingsGoalId' => $this->hasSavingsGoalKeyColumn()
                 ? ($tx->savings_goal_key ?: null)
+                : null,
+            'importedAt' => $tx->created_at?->timezone('Europe/Amsterdam')->format('Y-m-d H:i'),
+            'bankPayload' => $this->hasBankPayloadColumn()
+                ? ($tx->bank_payload ?: null)
                 : null,
             'source' => match ($tx->source_type) {
                 'api' => 'EnableBanking',
@@ -572,6 +602,61 @@ class SparenStateService
         return $this->savingsGoalKeyColumnExists ??= Schema::hasColumn('transactions', 'savings_goal_key');
     }
 
+    private function hasTransactionAllocationsColumn(): bool
+    {
+        return $this->transactionAllocationsColumnExists ??= Schema::hasColumn('transactions', 'allocations');
+    }
+
+    private function hasImportRuleAllocationsColumn(): bool
+    {
+        return $this->importRuleAllocationsColumnExists ??= Schema::connection('catalog')->hasColumn('import_rules', 'allocations');
+    }
+
+    private function hasBankPayloadColumn(): bool
+    {
+        return $this->bankPayloadColumnExists ??= Schema::hasColumn('transactions', 'bank_payload');
+    }
+
+    /**
+     * @return list<array{budgetItemId: string, amount: float}>|null
+     */
+    private function mapRuleAllocations(ImportRule $rule): ?array
+    {
+        if (! $this->hasImportRuleAllocationsColumn()) {
+            return null;
+        }
+
+        $rows = TransactionAllocations::normalize($rule->allocations);
+        return $rows === [] ? null : $rows;
+    }
+
+    /**
+     * @return list<array{budgetItemId: string, amount: float}>|null
+     */
+    private function mapTransactionAllocations(Transaction $tx): ?array
+    {
+        $stored = $this->hasTransactionAllocationsColumn()
+            ? TransactionAllocations::scaleToAmount($tx->allocations, (float) $tx->amount)
+            : [];
+
+        if ($stored !== []) {
+            return $stored;
+        }
+
+        if (! $tx->importRule) {
+            return null;
+        }
+
+        $ruleRows = $this->mapRuleAllocations($tx->importRule);
+        if (! $ruleRows) {
+            return null;
+        }
+
+        $scaled = TransactionAllocations::scaleToAmount($ruleRows, (float) $tx->amount);
+
+        return $scaled === [] ? null : $scaled;
+    }
+
     private function monthNumber(string $monthId): int
     {
         return array_search($monthId, array_keys(self::MONTHS), true) + 1;
@@ -619,7 +704,10 @@ class SparenStateService
             return false;
         }
 
-        if (($tx['budgetItemId'] ?? null) !== $budget->key) {
+        $linked = ($tx['budgetItemId'] ?? null) === $budget->key
+            || TransactionAllocations::includes($tx['allocations'] ?? [], (string) $budget->key);
+
+        if (! $linked) {
             return false;
         }
 
@@ -629,7 +717,10 @@ class SparenStateService
             default => 'Uitgave',
         };
 
-        return ($tx['type'] ?? '') === $expectedType;
+        $txType = $tx['type'] ?? '';
+
+        return $txType === $expectedType
+            || ($expectedType === 'Uitgave' && $txType === 'Sparen');
     }
 
     private function extractIban(?string $value): ?string

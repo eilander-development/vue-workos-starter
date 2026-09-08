@@ -39,6 +39,7 @@ Route::middleware($authMiddleware)->group(function () {
     Route::get('/bankkoppeling', [SparenController::class, 'app'])->name('sparen.bankkoppeling');
     Route::get('/categorieen', [SparenController::class, 'app'])->name('sparen.categorieen');
     Route::get('/koppelregels', [SparenController::class, 'app'])->name('sparen.koppelregels');
+    Route::get('/splits', [SparenController::class, 'app'])->name('sparen.splits');
     Route::get('/jaaroverzicht', [SparenController::class, 'app'])->name('sparen.jaaroverzicht');
     Route::get('/instellingen', [SparenController::class, 'app'])->name('sparen.instellingen');
     Route::get('/instellingen/{section}', [SparenController::class, 'app'])

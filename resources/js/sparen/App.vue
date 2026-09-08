@@ -13,6 +13,7 @@ import type {
   CategoryDefinition,
   BudgetType,
   SaveState,
+  TransactionAllocation,
 } from "./types";
 import {
   INITIAL_MONTHLY_BUDGETS,
@@ -33,6 +34,7 @@ import TransactionsView from "./components/TransactionsView.vue";
 import EnableBankingView from "./components/EnableBankingView.vue";
 import CategoriesView from "./components/CategoriesView.vue";
 import KoppelregelsView from "./components/KoppelregelsView.vue";
+import SplitsView from "./components/SplitsView.vue";
 import YearOverviewView from "./components/YearOverviewView.vue";
 import SettingsView from "./components/SettingsView.vue";
 import AddTransactionModal from "./components/AddTransactionModal.vue";
@@ -77,6 +79,12 @@ import {
 } from "./matchRule";
 import { isSavingsCashflowTransfer, transactionMatchesSavingsGoalDeposit } from "./matchSavings";
 import {
+  allocationsFingerprint,
+  amountTowardBudgetItem,
+  normalizeAllocations,
+  scaleAllocationsToAmount,
+} from "./allocations";
+import {
   goalBudgetItemIds,
   isPotGoal,
   applyPotTransferLinkExclusion,
@@ -86,7 +94,7 @@ import {
   computePotSettlement,
   type PotCompensationNeed,
 } from "./potSettlement";
-import { transactionMatchesBudgetItem } from "./budgetPayment";
+import { transactionCountsTowardBudgetItem } from "./budgetPayment";
 
 const DISCONNECTED_CHECKING_ACCOUNT: BankAccount = {
   id: "checking-unlinked",
@@ -206,7 +214,9 @@ async function persistChangedTransactions(previous: Transaction[], next: Transac
       before.linkExclusionReason !== tx.linkExclusionReason ||
       before.description !== tx.description ||
       before.amount !== tx.amount ||
-      before.date !== tx.date
+      before.date !== tx.date ||
+      before.assignedSavingsGoalId !== tx.assignedSavingsGoalId ||
+      allocationsFingerprint(before.allocations) !== allocationsFingerprint(tx.allocations)
     );
   });
 
@@ -254,27 +264,22 @@ function applyRulesToTransactions(txs: Transaction[], rls: Rule[], sGoals: Savin
       return savingsApplied;
     }
 
-    for (const goal of sGoals) {
-      if (isPotGoal(goal)) {
-        continue;
-      }
-      if (!isUnlinkedTransaction(tx) || !transactionMatchesSavingsGoalDeposit(tx, goal, ownIbans)) {
-        continue;
-      }
+    const savingsGoal =
+      sGoals.find(
+        (goal) => !isPotGoal(goal) && transactionMatchesSavingsGoalDeposit(tx, goal, ownIbans)
+      ) ?? null;
 
-      const budgetItemId = goalBudgetItemIds(goal)[0];
-      return {
-        ...tx,
-        type: "Sparen" as const,
-        categoryGroup: "Spaargeld" as const,
-        budgetItemId: budgetItemId || tx.budgetItemId,
-        counterparty: goal.bankName || goal.name,
-        linkExcluded: false,
-        linkExclusionReason: undefined,
-      };
-    }
-
-    const match = rls.find((r) => r.isActive && transactionMatchesRule(tx, r));
+    const match = rls.find((rule) => {
+      if (!rule.isActive || !transactionMatchesRule(tx, rule)) {
+        return false;
+      }
+      // Specifieke spaarrekening (A14304836) niet laten stelen door "Oranje spaarrekening" → Buffer.
+      if (savingsGoal && rule.targetType === "sparen") {
+        return false;
+      }
+      return true;
+    });
+    const splitFromRule = match ? allocationsForRule(match, tx) : undefined;
 
     if (match && isUnlinkedTransaction(tx)) {
       return {
@@ -288,11 +293,47 @@ function applyRulesToTransactions(txs: Transaction[], rls: Rule[], sGoals: Savin
               : ("Uitgave" as const),
         budgetItemId: match.targetBudgetItemId || tx.budgetItemId,
         matchedRuleId: match.id,
+        allocations: splitFromRule,
+        assignedSavingsGoalId: savingsGoal?.id ?? tx.assignedSavingsGoalId,
       };
     }
 
-    return tx;
+    let next = tx;
+
+    if (match && tx.matchedRuleId === match.id) {
+      const nextFingerprint = allocationsFingerprint(splitFromRule);
+      const currentFingerprint = allocationsFingerprint(tx.allocations);
+      if (nextFingerprint !== currentFingerprint) {
+        next = { ...next, allocations: splitFromRule };
+      }
+    }
+
+    if (savingsGoal && isUnlinkedTransaction(next)) {
+      const budgetItemId = goalBudgetItemIds(savingsGoal)[0];
+      return {
+        ...next,
+        type: "Sparen" as const,
+        categoryGroup: "Spaargeld" as const,
+        budgetItemId: budgetItemId || next.budgetItemId,
+        assignedSavingsGoalId: savingsGoal.id,
+        linkExcluded: false,
+        linkExclusionReason: undefined,
+      };
+    }
+
+    if (savingsGoal && next.assignedSavingsGoalId !== savingsGoal.id) {
+      return {
+        ...next,
+        assignedSavingsGoalId: savingsGoal.id,
+      };
+    }
+
+    return next;
   });
+}
+
+function allocationsForRule(rule: Rule, tx: Pick<Transaction, "amount">): TransactionAllocation[] | undefined {
+  return normalizeAllocations(scaleAllocationsToAmount(rule.allocations ?? [], Math.abs(tx.amount)));
 }
 
 const monthlyBudgets = computed(() => {
@@ -302,19 +343,19 @@ const monthlyBudgets = computed(() => {
     const txsInMonth = transactions.value.filter((t) => isTransactionInReportingMonth(t, mb));
 
     const updatedItems = mb.items.map((item) => {
+      const isPotEnvelope = potLinkedIds.has(item.id) && item.type === "uitgaven";
       const matchingTxs = txsInMonth.filter((t) => {
-        if (!transactionMatchesBudgetItem(t, item)) {
+        if (isPotEnvelope && isSavingsCashflowTransfer(t)) {
           return false;
         }
-        if (item.type === "uitgaven" && isSavingsCashflowTransfer(t)) {
-          return false;
-        }
-        return true;
+        return transactionCountsTowardBudgetItem(t, item);
       });
 
-      const totalFromTxs = matchingTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      const totalFromTxs = matchingTxs.reduce(
+        (sum, t) => sum + (amountTowardBudgetItem(t, item.id) || Math.abs(t.amount)),
+        0
+      );
       const paymentCount = matchingTxs.length;
-      const isPotEnvelope = potLinkedIds.has(item.id) && item.type === "uitgaven";
 
       if (isPotEnvelope) {
         const envelopePaid = item.actual ?? 0;
@@ -572,7 +613,8 @@ function handleLinkTransaction(
     keyword: string;
     matchField: "description" | "counterparty" | "both";
     targetType: BudgetType;
-  }
+  },
+  allocations?: TransactionAllocation[]
 ) {
   const catMatch = categories.value.find((c) => c.name === categoryGroup);
   const targetType: "Inkomsten" | "Uitgave" | "Sparen" =
@@ -582,20 +624,52 @@ function handleLinkTransaction(
         ? "Sparen"
         : "Uitgave";
 
+  const sourceTx = transactions.value.find((tx) => tx.id === txId);
+  const split = normalizeAllocations(allocations);
+
   let createdRule: Rule | null = null;
+  let updatedRule: Rule | null = null;
+
   if (createRule && createRule.keyword.trim()) {
-    createdRule = {
-      id: `rule-${Date.now()}`,
-      name: createRule.name.trim() || `Regel: ${createRule.keyword.trim()}`,
-      keyword: createRule.keyword.trim(),
-      matchField: createRule.matchField,
-      targetGroup: categoryGroup,
-      targetBudgetItemId: budgetItemId,
-      targetType: createRule.targetType,
-      isActive: true,
-      matchedCount: 1,
-    };
+    const existingRule =
+      (sourceTx?.matchedRuleId
+        ? rules.value.find((rule) => rule.id === sourceTx.matchedRuleId)
+        : undefined) ?? undefined;
+
+    if (existingRule) {
+      updatedRule = {
+        ...existingRule,
+        name: createRule.name.trim() || existingRule.name,
+        keyword: createRule.keyword.trim(),
+        matchField: createRule.matchField,
+        targetGroup: categoryGroup,
+        targetBudgetItemId: budgetItemId,
+        targetType: createRule.targetType,
+        allocations: split,
+        isActive: true,
+      };
+    } else {
+      createdRule = {
+        id: `rule-${Date.now()}`,
+        name: createRule.name.trim() || `Regel: ${createRule.keyword.trim()}`,
+        keyword: createRule.keyword.trim(),
+        matchField: createRule.matchField,
+        targetGroup: categoryGroup,
+        targetBudgetItemId: budgetItemId,
+        targetType: createRule.targetType,
+        allocations: split,
+        isActive: true,
+        matchedCount: 1,
+      };
+    }
+  } else if (split && sourceTx?.matchedRuleId) {
+    const existingRule = rules.value.find((rule) => rule.id === sourceTx.matchedRuleId);
+    if (existingRule) {
+      updatedRule = { ...existingRule, allocations: split, targetBudgetItemId: budgetItemId };
+    }
   }
+
+  const ruleForMatching = createdRule ?? updatedRule;
 
   const next = transactions.value.map((tx) => {
     if (tx.id === txId) {
@@ -604,7 +678,8 @@ function handleLinkTransaction(
         categoryGroup,
         budgetItemId,
         type: targetType,
-        matchedRuleId: createdRule?.id ?? tx.matchedRuleId,
+        matchedRuleId: ruleForMatching?.id ?? tx.matchedRuleId,
+        allocations: split,
         linkExcluded: false,
         linkExclusionReason: undefined,
       };
@@ -624,6 +699,7 @@ function handleLinkTransaction(
       budgetItemId,
       type: targetType,
       matchedRuleId: createdRule.id,
+      allocations: split ? scaleAllocationsToAmount(split, Math.abs(tx.amount)) : undefined,
       linkExcluded: false,
       linkExclusionReason: undefined,
     };
@@ -639,27 +715,44 @@ function handleLinkTransaction(
       ).length
     : 0;
 
+  const nextRules = updatedRule
+    ? rules.value.map((rule) => (rule.id === updatedRule!.id ? updatedRule! : rule))
+    : createdRule
+      ? [...rules.value, createdRule]
+      : rules.value;
+
+  const nextAfterRules = updatedRule
+    ? applyRulesToTransactions(next, nextRules, savingsGoals.value)
+    : next;
+
   void runSave(
     async () => {
       if (createdRule) {
         await saveRule(createdRule);
       }
-      await persistChangedTransactions(transactions.value, next);
-      if (createdRule) {
-        rules.value = [...rules.value, createdRule];
+      if (updatedRule) {
+        await saveRule(updatedRule);
       }
-      transactions.value = next;
+      await persistChangedTransactions(transactions.value, nextAfterRules);
+      if (createdRule || updatedRule) {
+        rules.value = nextRules;
+      }
+      transactions.value = nextAfterRules;
     },
     {
       title:
         extraLinked > 0
           ? `${extraLinked + 1} rijen gekoppeld aan ${budgetItemName(budgetItemId)}`
-          : `Gekoppeld aan ${budgetItemName(budgetItemId)}`,
+          : split
+            ? `Verdeeld over ${split.length} posten`
+            : `Gekoppeld aan ${budgetItemName(budgetItemId)}`,
       detail: createdRule
         ? extraLinked > 0
           ? `Regel "${createdRule.keyword}" · ${extraLinked} extra ongekoppelde ${extraLinked === 1 ? "rij" : "rijen"}`
           : `Rubriek ${categoryGroup} · koppelregel "${createdRule.keyword}" aangemaakt`
-        : `Rubriek ${categoryGroup}`,
+          : updatedRule
+            ? `Regel "${updatedRule.keyword}" verdeelt over twee posten`
+            : `Rubriek ${categoryGroup}`,
     }
   );
 }
@@ -704,11 +797,18 @@ function handleSaveRule(ruleData: Omit<Rule, "matchedCount">) {
     },
     {
       title: existing
-        ? "Koppelregel bijgewerkt"
+        ? savedRule.allocations && savedRule.allocations.length >= 2
+          ? "Split opgeslagen"
+          : "Koppelregel bijgewerkt"
         : extraLinked > 0
           ? `Regel aangemaakt · ${extraLinked} ${extraLinked === 1 ? "rij gekoppeld" : "rijen gekoppeld"}`
-          : "Koppelregel aangemaakt",
-      detail: `"${savedRule.keyword}" → ${savedRule.targetGroup}`,
+          : savedRule.allocations && savedRule.allocations.length >= 2
+            ? "Split aangemaakt"
+            : "Koppelregel aangemaakt",
+      detail:
+        savedRule.allocations && savedRule.allocations.length >= 2
+          ? `"${savedRule.keyword}" vult ${savedRule.allocations.length} enveloppen`
+          : `"${savedRule.keyword}" → ${savedRule.targetGroup}`,
     }
   );
 }
@@ -1180,6 +1280,7 @@ function handleUnlinkTransaction(txId: string) {
     ...tx,
     budgetItemId: undefined,
     matchedRuleId: undefined,
+    allocations: undefined,
     linkExcluded: true,
     linkExclusionReason: fromName
       ? `Handmatig ontkoppeld van ${fromName}`
@@ -1445,6 +1546,16 @@ function closeSavingsGoalModal() {
           :on-apply-rules-to-all="handleApplyRulesToAll"
           :transactions="transactions"
           :budget-items="currentMonth.items"
+          :on-open-splits="() => setActiveTab('splits')"
+        />
+
+        <SplitsView
+          v-if="activeTab === 'splits'"
+          :rules="rules"
+          :budget-items="currentMonth.items"
+          :transactions="transactions"
+          :current-month="currentMonth"
+          :on-save="handleSaveRule"
         />
 
         <YearOverviewView

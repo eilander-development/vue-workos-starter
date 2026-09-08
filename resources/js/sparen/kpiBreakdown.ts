@@ -1,9 +1,15 @@
-import type { BudgetItem } from "../types";
-import type { KpiBreakdownColumn, KpiBreakdownRow } from "../components/KpiBreakdownModal.vue";
+import type { BudgetItem } from "./types";
+import type { KpiBreakdownColumn, KpiBreakdownRow } from "./components/KpiBreakdownModal.vue";
+import { roundMoney } from "./allocations";
 
 /** Post heeft een begroting in deze maand. */
 export function hasBudget(item: BudgetItem): boolean {
-  return item.actual > 0;
+  return roundMoney(item.actual) >= 0.005;
+}
+
+/** Nog open op de post, in centen (nooit negatief). */
+export function budgetOpenAmount(item: BudgetItem): number {
+  return roundMoney(Math.max(0, Number(item.actual ?? 0) - Number(item.paidOrReceived ?? 0)));
 }
 
 /** Post gebruikt regels per maand (losse regels) als begroting. */
@@ -43,16 +49,14 @@ export function sumMonthEntryBudgetedPaid(items: BudgetItem[]): number {
 
 export function sumFixedBudgetedRemaining(items: BudgetItem[]): number {
   return items.reduce(
-    (sum, item) =>
-      sum + (isFixedBudgetItem(item) ? Math.max(0, item.actual - item.paidOrReceived) : 0),
+    (sum, item) => sum + (isFixedBudgetItem(item) ? budgetOpenAmount(item) : 0),
     0
   );
 }
 
 export function sumMonthEntryBudgetedRemaining(items: BudgetItem[]): number {
   return items.reduce(
-    (sum, item) =>
-      sum + (isMonthEntryBudgetItem(item) ? Math.max(0, item.actual - item.paidOrReceived) : 0),
+    (sum, item) => sum + (isMonthEntryBudgetItem(item) ? budgetOpenAmount(item) : 0),
     0
   );
 }

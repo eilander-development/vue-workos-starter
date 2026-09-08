@@ -1,4 +1,4 @@
-import { defaultReportingMonth } from "./month";
+import { defaultReportingMonth, MONTH_ID_TO_NUMBER } from "./month";
 import type { BudgetItem, MonthlyBudget, Transaction } from "./types";
 import type { KpiBreakdownColumn, KpiBreakdownRow } from "./components/KpiBreakdownModal.vue";
 import {
@@ -215,6 +215,19 @@ export function isActiveReportingMonth(
 ): boolean {
   const anchor = reportingMonth ?? defaultReportingMonth();
   return month.monthId === anchor.monthId && month.year === anchor.year;
+}
+
+function reportingMonthKey(month: Pick<MonthlyBudget, "monthId" | "year">): number {
+  const monthNumber = Number.parseInt(MONTH_ID_TO_NUMBER[month.monthId] ?? "1", 10);
+  return month.year * 12 + monthNumber;
+}
+
+export function isFutureReportingMonth(
+  month: Pick<MonthlyBudget, "monthId" | "year">,
+  reportingMonth?: Pick<MonthlyBudget, "monthId" | "year">
+): boolean {
+  const anchor = reportingMonth ?? defaultReportingMonth();
+  return reportingMonthKey(month) > reportingMonthKey(anchor);
 }
 
 /** Live banksaldo alleen in de huidige rapportagemaand; andere maanden = 0. */

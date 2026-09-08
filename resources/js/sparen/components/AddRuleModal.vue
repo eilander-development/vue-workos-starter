@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { X, Sliders, Search } from "lucide-vue-next";
+import { X, Sliders, Search, Split } from "lucide-vue-next";
 import type {
   Rule,
   BudgetCategoryGroup,
@@ -20,6 +20,7 @@ import {
   reportingPeriodForMonth,
 } from "../month";
 import TransactionDate from "./TransactionDate.vue";
+import { normalizeAllocations } from "../allocations";
 
 const props = withDefaults(
   defineProps<{
@@ -58,6 +59,10 @@ const matchField = ref<"description" | "counterparty" | "both">("description");
 const isActive = ref(true);
 const periodKey = ref("current");
 const searchTerm = ref("");
+const splitEnabled = ref(false);
+const secondItemId = ref("");
+const firstAmount = ref(0);
+const secondAmount = ref(0);
 
 const isEditing = computed(() => !!props.editingRule);
 
@@ -75,6 +80,24 @@ watch(
       targetType.value = editing.targetType;
       matchField.value = editing.matchField;
       isActive.value = editing.isActive;
+      const existingSplit = normalizeAllocations(editing.allocations);
+      if (existingSplit) {
+        splitEnabled.value = true;
+        targetBudgetItemId.value = existingSplit[0].budgetItemId;
+        const firstItem = props.budgetItems.find((item) => item.id === existingSplit[0].budgetItemId);
+        if (firstItem) {
+          targetGroup.value = firstItem.group;
+          applyTypeFromGroup(firstItem.group);
+        }
+        secondItemId.value = existingSplit[1].budgetItemId;
+        firstAmount.value = existingSplit[0].amount;
+        secondAmount.value = existingSplit[1].amount;
+      } else {
+        splitEnabled.value = false;
+        secondItemId.value = "";
+        firstAmount.value = 0;
+        secondAmount.value = 0;
+      }
     } else {
       name.value = props.initialKeyword ? `Regel: ${props.initialKeyword}` : "";
       keyword.value = props.initialKeyword;
@@ -83,6 +106,10 @@ watch(
       matchField.value = "description";
       isActive.value = true;
       applyTypeFromGroup(props.initialGroup);
+      splitEnabled.value = false;
+      secondItemId.value = "";
+      firstAmount.value = 0;
+      secondAmount.value = 0;
     }
 
     periodKey.value = "current";
@@ -197,6 +224,14 @@ function handleGroupChange(grp: BudgetCategoryGroup) {
 function handleSubmit() {
   if (!name.value.trim() || !keyword.value.trim()) return;
 
+  const allocations =
+    splitEnabled.value && targetBudgetItemId.value && secondItemId.value
+      ? normalizeAllocations([
+          { budgetItemId: targetBudgetItemId.value, amount: firstAmount.value },
+          { budgetItemId: secondItemId.value, amount: secondAmount.value },
+        ])
+      : undefined;
+
   props.onSave({
     id: props.editingRule?.id ?? `rule-${Date.now()}`,
     name: name.value.trim(),
@@ -204,11 +239,27 @@ function handleSubmit() {
     matchField: matchField.value,
     targetGroup: targetGroup.value,
     targetBudgetItemId: targetBudgetItemId.value || undefined,
+    allocations,
     targetType: targetType.value,
     isActive: isActive.value,
   });
 
   props.onClose();
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function enableSplit() {
+  splitEnabled.value = true;
+  if (!secondItemId.value && targetBudgetItemId.value === "verz-2") {
+    secondItemId.value = props.budgetItems.some((item) => item.id === "verv-2") ? "verv-2" : "";
+  }
+  const first = props.budgetItems.find((item) => item.id === targetBudgetItemId.value);
+  const second = props.budgetItems.find((item) => item.id === secondItemId.value);
+  firstAmount.value = roundMoney(Math.abs(first?.actual ?? 0));
+  secondAmount.value = roundMoney(Math.abs(second?.actual ?? 0));
 }
 
 function euro(amount: number) {
@@ -294,6 +345,61 @@ function euro(amount: number) {
                   {{ item.name }}
                 </option>
               </select>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                :checked="splitEnabled"
+                type="checkbox"
+                class="mt-0.5 w-4 h-4 accent-indigo-600 rounded cursor-pointer shrink-0"
+                @change="($event.target as HTMLInputElement).checked ? enableSplit() : (splitEnabled = false)"
+              />
+              <div>
+                <span class="font-bold text-white text-xs block flex items-center gap-1.5">
+                  <Split class="w-3.5 h-3.5 text-indigo-400" />
+                  Verdeel over extra post
+                </span>
+                <span class="text-[11px] text-slate-400 block mt-0.5">
+                  Eén bankmutatie betaalt twee enveloppen, zoals InShared auto + woning.
+                </span>
+              </div>
+            </label>
+            <div v-if="splitEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pl-7">
+              <div>
+                <label class="block text-slate-300 font-semibold mb-1">Bedrag eerste post</label>
+                <input
+                  v-model.number="firstAmount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label class="block text-slate-300 font-semibold mb-1">Tweede post</label>
+                <select
+                  v-model="secondItemId"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="">-- Kies extra post --</option>
+                  <option
+                    v-for="item in budgetItems.filter((entry) => entry.id !== targetBudgetItemId)"
+                    :key="item.id"
+                    :value="item.id"
+                  >
+                    {{ item.group }} · {{ item.name }}
+                  </option>
+                </select>
+                <input
+                  v-model.number="secondAmount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  class="mt-1.5 w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
           </div>
 

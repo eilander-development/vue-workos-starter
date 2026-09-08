@@ -14,6 +14,8 @@ class Transaction extends Model
         'amount' => 'decimal:2',
         'date' => 'date',
         'is_pending' => 'boolean',
+        'allocations' => 'array',
+        'bank_payload' => 'array',
     ];
 
     public function budget(): BelongsTo

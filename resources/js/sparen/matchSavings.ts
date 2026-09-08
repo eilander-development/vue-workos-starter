@@ -135,10 +135,6 @@ export function transactionMatchesSavingsGoal(
   goal: Pick<SavingsGoal, "id" | "name" | "accountIban">,
   ownIbans: string[] = []
 ): boolean {
-  if (tx.assignedSavingsGoalId) {
-    return tx.assignedSavingsGoalId === goal.id;
-  }
-
   const haystack = `${tx.description} ${tx.counterparty ?? ""}`;
   const txRef = extractSavingsTransferRef(haystack);
   const goalRef = extractSavingsTransferRef(`${goal.name} ${goal.accountIban ?? ""}`);
@@ -153,6 +149,15 @@ export function transactionMatchesSavingsGoal(
 
   if (txRef && !goalRef && isGenericSavingsLabel(goal.name)) {
     return ibanMatch;
+  }
+
+  // Genummerde ING-storting hoort bij dat rekeningnummer, niet bij Buffer via toewijzing of postnaam.
+  if (txRef) {
+    return false;
+  }
+
+  if (tx.assignedSavingsGoalId) {
+    return tx.assignedSavingsGoalId === goal.id;
   }
 
   const keyword = goal.name.trim().toLowerCase();

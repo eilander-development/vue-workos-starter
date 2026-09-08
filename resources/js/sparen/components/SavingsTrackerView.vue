@@ -27,6 +27,7 @@ import type {
 import {
   transactionMatchesSavingsGoal,
   transactionMatchesSavingsGoalDeposit,
+  isSavingsCashflowTransfer,
   isSavingsWithdrawalTransaction,
   savingsBalanceDelta,
 } from "../matchSavings";
@@ -101,7 +102,9 @@ const goalsWithCalculations = computed(() =>
     }
 
     const matchingTxs = props.transactions.filter((tx) => {
-      if (tx.type !== "Sparen" && tx.categoryGroup !== "Spaargeld") return false;
+      if (!isSavingsCashflowTransfer(tx) && tx.type !== "Sparen" && tx.categoryGroup !== "Spaargeld") {
+        return false;
+      }
       return transactionMatchesSavingsGoal(tx, goal);
     });
 

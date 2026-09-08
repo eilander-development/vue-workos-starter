@@ -30,6 +30,7 @@ import {
   computeMonthKpi,
   kpiFromMonthlyBudget,
   isActiveReportingMonth,
+  isFutureReportingMonth,
   resolvePeriodStartBalance,
 } from "../monthKpi";
 import { potsNeedingCompensation } from "../potSettlement";
@@ -43,7 +44,8 @@ import {
   monthEndBalances,
   type CashflowBucket,
 } from "../cashflow";
-import { formulaRows } from "../kpiBreakdown";
+import { formulaRows, budgetOpenAmount, hasBudget } from "../kpiBreakdown";
+import { expectedPaymentForItem } from "../expectedPayment";
 
 type DashboardKpiKey = "balance" | "income" | "expense" | "netto" | "cashflow";
 
@@ -95,6 +97,10 @@ const isCurrentReportingMonth = computed(() =>
   isActiveReportingMonth(props.currentMonth, reportingAnchor.value)
 );
 
+const isFutureReportingMonthSelected = computed(() =>
+  isFutureReportingMonth(props.currentMonth, reportingAnchor.value)
+);
+
 const periodStartBalance = computed(() =>
   resolvePeriodStartBalance(
     props.currentMonth,
@@ -102,6 +108,8 @@ const periodStartBalance = computed(() =>
     reportingAnchor.value
   )
 );
+
+const showLiveBankBalance = computed(() => isCurrentReportingMonth.value);
 
 const monthKpi = computed(() =>
   computeMonthKpi({
@@ -234,9 +242,28 @@ const yearBalanceMax = computed(() =>
   )
 );
 
-const unpaidExpenses = computed(() =>
-  expenseItems.value.filter((i) => budgetAmount(i) > paidAmount(i) && budgetAmount(i) > 0)
-);
+const unpaidExpenses = computed(() => {
+  const rows = expenseItems.value
+    .filter((item) => hasBudget(item) && budgetOpenAmount(item) >= 0.005)
+    .map((item) => ({
+      item,
+      remaining: budgetOpenAmount(item),
+      expected: expectedPaymentForItem(item, props.transactions, props.currentMonth),
+    }));
+
+  return rows.sort((a, b) => {
+    if (a.expected && b.expected) {
+      return a.expected.date.localeCompare(b.expected.date);
+    }
+    if (a.expected) {
+      return -1;
+    }
+    if (b.expected) {
+      return 1;
+    }
+    return a.item.name.localeCompare(b.item.name, "nl");
+  });
+});
 
 function itemMatchesAliases(item: BudgetItem, aliases: string[]) {
   const group = (item.group || "").toLowerCase().trim();
@@ -475,16 +502,29 @@ function catStats(cat: CatDef) {
         @click="kpiKey = 'balance'"
       >
         <div class="flex items-center justify-between text-slate-400 mb-3">
-          <span class="text-xs font-semibold uppercase tracking-wider">Huidig Saldo (ING)</span>
+          <span class="text-xs font-semibold uppercase tracking-wider">
+            {{ showLiveBankBalance ? "Huidig Saldo (ING)" : "Saldo (ING)" }}
+          </span>
           <div
             class="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400"
           >
             <Wallet class="w-4 h-4" />
           </div>
         </div>
-        <div class="text-2xl font-black text-white font-mono tracking-tight">
+        <div
+          v-if="showLiveBankBalance"
+          class="text-2xl font-black text-white font-mono tracking-tight"
+        >
           € {{ liveAccountBalance.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
+        <div v-else class="text-2xl font-black text-slate-500 font-mono tracking-tight">—</div>
+        <p v-if="!showLiveBankBalance" class="text-[11px] text-slate-500 mt-1">
+          {{
+            isFutureReportingMonthSelected
+              ? "Periode nog niet begonnen — geen banksaldo geladen"
+              : "Geen live banksaldo voor deze periode"
+          }}
+        </p>
         <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
           <div
             class="flex items-center justify-between"
@@ -1126,19 +1166,28 @@ function catStats(cat: CatDef) {
               </p>
             </div>
             <div
-              v-for="item in unpaidExpenses"
-              :key="item.id"
+              v-for="row in unpaidExpenses"
+              :key="row.item.id"
               class="p-3 bg-slate-800/60 hover:bg-slate-800 rounded-xl border border-slate-700/60 flex items-center justify-between gap-3 transition-colors"
             >
-              <div class="overflow-hidden">
-                <p class="text-xs font-semibold text-white truncate">{{ item.name }}</p>
-                <span class="text-[10px] text-slate-400">{{ item.group }}</span>
+              <div class="overflow-hidden min-w-0">
+                <p class="text-xs font-semibold text-white truncate">{{ row.item.name }}</p>
+                <span class="text-[10px] text-slate-400">{{ row.item.group }}</span>
+                <p
+                  v-if="row.expected"
+                  class="text-[10px] mt-0.5 font-medium"
+                  :class="
+                    row.expected.daysFromToday === 0 ? 'text-amber-300' : 'text-slate-400'
+                  "
+                >
+                  {{ row.expected.dateLabel }} · {{ row.expected.remainingLabel }}
+                </p>
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <span class="text-xs font-bold font-mono text-amber-400">
                   €
                   {{
-                    (budgetAmount(item) - paidAmount(item)).toLocaleString("nl-NL", {
+                    row.remaining.toLocaleString("nl-NL", {
                       minimumFractionDigits: 2,
                     })
                   }}

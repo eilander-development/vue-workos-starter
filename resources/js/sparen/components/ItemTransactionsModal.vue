@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   X,
   Receipt,
@@ -19,6 +19,8 @@ import type {
   SavingsGoal,
 } from "../types";
 import { isTransactionInReportingMonth } from "../month";
+import { transactionCountsTowardBudgetItem } from "../budgetPayment";
+import { amountTowardBudgetItem, normalizeAllocations } from "../allocations";
 import {
   hasPotEnvelope,
   computePotSettlement,
@@ -63,6 +65,23 @@ const props = withDefaults(
 const filterScope = ref<"current_month" | "all_history">("current_month");
 const searchTerm = ref("");
 
+watch(
+  () => [props.isOpen, props.budgetItem?.id] as const,
+  () => {
+    if (!props.isOpen || !props.budgetItem) {
+      return;
+    }
+
+    const paidThisPeriod = props.transactions.some(
+      (tx) =>
+        transactionCountsTowardBudgetItem(tx, props.budgetItem!) &&
+        isTransactionInReportingMonth(tx, props.currentMonth)
+    );
+    filterScope.value = paidThisPeriod ? "current_month" : "all_history";
+    searchTerm.value = "";
+  }
+);
+
 function inActiveScope(tx: Transaction): boolean {
   if (filterScope.value === "current_month") {
     return isTransactionInReportingMonth(tx, props.currentMonth);
@@ -76,10 +95,21 @@ function compareTxNewestFirst(a: Transaction, b: Transaction): number {
   return (b.time ?? "").localeCompare(a.time ?? "");
 }
 
+function displayedAmount(tx: Transaction): number {
+  if (!props.budgetItem) {
+    return Math.abs(tx.amount);
+  }
+  return amountTowardBudgetItem(tx, props.budgetItem.id) || Math.abs(tx.amount);
+}
+
+function isSplitTx(tx: Transaction): boolean {
+  return Boolean(normalizeAllocations(tx.allocations));
+}
+
 const linkedTransactions = computed(() => {
   if (!props.budgetItem) return [];
   return props.transactions.filter(
-    (t) => t.budgetItemId === props.budgetItem!.id && inActiveScope(t)
+    (t) => transactionCountsTowardBudgetItem(t, props.budgetItem!) && inActiveScope(t)
   );
 });
 
@@ -132,7 +162,7 @@ const suggestedUnlinkedTransactions = computed(() => {
 
   return props.transactions
     .filter((t) => {
-      if (t.budgetItemId === props.budgetItem!.id) return false;
+      if (transactionCountsTowardBudgetItem(t, props.budgetItem!)) return false;
       if (listedTransferIds.value.has(t.id)) return false;
       if (t.linkExcluded) return false;
       if (t.budgetItemId && t.categoryGroup !== "Ongecategoriseerd") return false;
@@ -143,7 +173,10 @@ const suggestedUnlinkedTransactions = computed(() => {
 });
 
 const totalPaidInView = computed(() =>
-  linkedTransactions.value.reduce((sum, t) => sum + Math.abs(t.amount), 0)
+  linkedTransactions.value.reduce(
+    (sum, t) => sum + amountTowardBudgetItem(t, props.budgetItem!.id),
+    0
+  )
 );
 const listedCount = computed(() => listedTransactions.value.length);
 const potDepositCount = computed(
@@ -584,8 +617,17 @@ function openPot() {
                   :class="tx.amount > 0 ? 'text-emerald-400' : 'text-rose-400'"
                 >
                   {{ tx.amount > 0 ? "+" : "" }}€
-                  {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                  {{
+                    displayedAmount(tx).toLocaleString("nl-NL", { minimumFractionDigits: 2 })
+                  }}
                 </div>
+                <p
+                  v-if="isSplitTx(tx)"
+                  class="text-[10px] text-slate-500 font-mono sm:text-right"
+                >
+                  deel van €
+                  {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                </p>
                 <button
                   v-if="onUnlinkTransaction && role === 'spend'"
                   type="button"

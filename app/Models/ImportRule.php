@@ -9,6 +9,11 @@ class ImportRule extends CatalogModel
 {
     protected $guarded = [];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+        'allocations' => 'array',
+    ];
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);

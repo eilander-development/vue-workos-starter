@@ -147,6 +147,17 @@ class SparenStamdataSeeder extends Seeder
             ]);
         }
 
+        $inshared = ImportRule::query()->where('key', 'rule-14')->first();
+        $auto = Budget::query()->where('key', 'verv-2')->first();
+        $woon = Budget::query()->where('key', 'verz-2')->first();
+        if ($inshared && $auto && $woon && Schema::connection('catalog')->hasColumn('import_rules', 'allocations')) {
+            $inshared->allocations = [
+                ['budgetItemId' => 'verz-2', 'amount' => round((float) $woon->budget, 2)],
+                ['budgetItemId' => 'verv-2', 'amount' => round((float) $auto->budget, 2)],
+            ];
+            $inshared->save();
+        }
+
         $goals = [
             ['goal-1', 'Noodbuffer & Onvoorzien', 'NL83INGB0131342031', 'ING Oranje Spaarrekening', 4500, 2400, 600, 'emerald', 'ShieldCheck', 'spaar-1', 'Vaste maandelijkse bufferopbouw voor onvoorziene kosten'],
             ['goal-2', 'Tuin + Woning Onderhoud', 'NL12KNAB0123456789', 'Knab Spaarrekening', 2000, 1100, 100, 'indigo', 'Home', 'spaar-2', 'Onderhoud woning, schilderwerk en tuin vernieuwing'],

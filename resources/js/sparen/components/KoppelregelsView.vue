@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { Sliders, Plus, Play, CheckCircle2, Trash2, Search, Sparkles, Tag } from "lucide-vue-next";
 import type { Rule, Transaction, BudgetItem } from "../types";
 import { findRulesForTestInput, transactionsMatchingRule, transactionsMatchingTestInput } from "../matchRule";
+import { normalizeAllocations } from "../allocations";
 
 const props = withDefaults(
   defineProps<{
@@ -14,6 +15,7 @@ const props = withDefaults(
     onApplyRulesToAll: () => void;
     transactions: Transaction[];
     budgetItems?: BudgetItem[];
+    onOpenSplits?: () => void;
   }>(),
   {
     budgetItems: () => [],
@@ -72,6 +74,12 @@ function handleRunAll() {
 function matchLabel(rule: Rule) {
   return liveCounts.value.get(rule.id) ?? rule.matchedCount ?? 0;
 }
+
+function extraAllocations(rule: Rule) {
+  return (normalizeAllocations(rule.allocations) ?? []).filter(
+    (row) => row.budgetItemId !== rule.targetBudgetItemId
+  );
+}
 </script>
 
 <template>
@@ -88,7 +96,15 @@ function matchLabel(rule: Rule) {
         </div>
         <p class="text-xs text-slate-400 mt-1">
           Herken bankafschriften automatisch op basis van trefwoorden en ken direct de juiste categorie én
-          begrotingspost toe. Klik een regel om te bewerken.
+          begrotingspost toe. Klik een regel om te bewerken. Een mutatie over meerdere enveloppen beheer je
+          onder
+          <button
+            type="button"
+            class="text-indigo-300 hover:text-white font-medium"
+            @click="onOpenSplits?.()"
+          >
+            Splits
+          </button>.
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -244,6 +260,19 @@ function matchLabel(rule: Rule) {
                     <span>
                       Post:
                       <strong>{{ budgetItemMap.get(rule.targetBudgetItemId)!.name }}</strong>
+                    </span>
+                  </div>
+                  <div
+                    v-for="row in extraAllocations(rule)"
+                    :key="row.budgetItemId"
+                    class="text-[11px] text-indigo-300/90 flex items-center gap-1 mt-0.5"
+                  >
+                    <Tag class="w-3 h-3 text-indigo-400" />
+                    <span>
+                      + {{ budgetItemMap.get(row.budgetItemId)?.name ?? row.budgetItemId }}
+                      <span class="font-mono text-slate-400">
+                        (€ {{ row.amount.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }})
+                      </span>
                     </span>
                   </div>
                 </div>

@@ -30,12 +30,14 @@ import type {
   BudgetType,
   MonthlyBudget,
   SavingsGoal,
+  TransactionAllocation,
 } from "../types";
 import LinkTransactionModal from "./LinkTransactionModal.vue";
 import TransactionDate from "./TransactionDate.vue";
 import { isLinkExcludedTransaction, isUnlinkedTransaction, matchingUnlinkedTransactions } from "../matchRule";
 import { formatReportingPeriodShort, isTransactionInReportingMonth, reportingPeriodForMonth } from "../month";
 import { isSavingsCashflowTransfer, transactionMatchesSavingsGoal } from "../matchSavings";
+import { normalizeAllocations } from "../allocations";
 
 const props = defineProps<{
   transactions: Transaction[];
@@ -51,7 +53,8 @@ const props = defineProps<{
       keyword: string;
       matchField: "description" | "counterparty" | "both";
       targetType: BudgetType;
-    }
+    },
+    allocations?: TransactionAllocation[]
   ) => void;
   onCreateRuleFromTransaction: (
     keyword: string,
@@ -233,7 +236,11 @@ function transactionMatchesSearchToken(
     tx.description.toLowerCase().includes(needle) ||
     (tx.counterparty && tx.counterparty.toLowerCase().includes(needle)) ||
     (!!itemName && itemName.toLowerCase().includes(needle)) ||
-    tx.date.includes(needle)
+    tx.date.includes(needle) ||
+    (normalizeAllocations(tx.allocations) ?? []).some((row) => {
+      const name = budgetItemMap.value.get(row.budgetItemId)?.name ?? row.budgetItemId;
+      return name.toLowerCase().includes(needle);
+    })
   );
 }
 
@@ -348,6 +355,17 @@ function onBulkCategoryChange(grp: BudgetCategoryGroup) {
   bulkBudgetItemId.value = itemsInGrp.length > 0 ? itemsInGrp[0].id : "";
 }
 
+function txAllocations(tx: Transaction) {
+  const split = normalizeAllocations(tx.allocations);
+  if (split) {
+    return split;
+  }
+  if (tx.budgetItemId) {
+    return [{ budgetItemId: tx.budgetItemId, amount: Math.abs(tx.amount) }];
+  }
+  return [];
+}
+
 function handleLink(
   txId: string,
   group: BudgetCategoryGroup,
@@ -357,10 +375,11 @@ function handleLink(
     keyword: string;
     matchField: "description" | "counterparty" | "both";
     targetType: BudgetType;
-  }
+  },
+  allocations?: TransactionAllocation[]
 ) {
   const tx = props.transactions.find((item) => item.id === txId);
-  props.onLinkTransaction(txId, group, budgetItemId, createRule);
+  props.onLinkTransaction(txId, group, budgetItemId, createRule, allocations);
   justLinked.value = {
     txId,
     budgetItemId,
@@ -784,13 +803,21 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                 <div v-else-if="tx.budgetItemId && tx.categoryGroup !== 'Ongecategoriseerd'" class="space-y-1">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <button
+                      v-for="row in txAllocations(tx)"
+                      :key="row.budgetItemId"
                       type="button"
                       class="inline-flex items-center gap-1 font-semibold text-white bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-700/60 px-2 py-0.5 rounded-lg text-xs transition-colors group"
                       title="Klik om de gekoppelde begrotingspost te wijzigen"
                       @click="selectedTxForLinking = tx"
                     >
                       <Tag class="w-3 h-3 text-indigo-400 group-hover:scale-110 transition-transform" />
-                      <span>{{ budgetItemMap.get(tx.budgetItemId)?.name ?? tx.budgetItemId }}</span>
+                      <span>{{ budgetItemMap.get(row.budgetItemId)?.name ?? row.budgetItemId }}</span>
+                      <span
+                        v-if="txAllocations(tx).length > 1"
+                        class="font-mono text-[10px] text-indigo-200"
+                      >
+                        € {{ row.amount.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                      </span>
                     </button>
                     <span
                       v-if="tx.matchedRuleId"
