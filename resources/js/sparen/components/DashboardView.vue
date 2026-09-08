@@ -46,6 +46,7 @@ import {
 } from "../cashflow";
 import { formulaRows, budgetOpenAmount, hasBudget } from "../kpiBreakdown";
 import { expectedPaymentForItem } from "../expectedPayment";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 type DashboardKpiKey = "balance" | "income" | "expense" | "netto" | "cashflow";
 
@@ -58,6 +59,8 @@ const props = defineProps<{
   onNavigateTab: (tab: ActiveTab) => void;
   onOpenUnlinked?: () => void;
 }>();
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const chartView = ref<"incomeExpense" | "netCashflow">("incomeExpense");
 const chartMode = ref<"plan" | "bank">("bank");
@@ -1297,7 +1300,7 @@ function catStats(cat: CatDef) {
         <table class="w-full text-left text-xs">
           <thead>
             <tr class="border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
-              <th class="py-2.5 px-3">Datum & Tijd</th>
+              <th class="py-2.5 px-3">Boekdatum</th>
               <th class="py-2.5 px-3">Omschrijving</th>
               <th class="py-2.5 px-3">Categorie</th>
               <th class="py-2.5 px-3">Type</th>
@@ -1308,7 +1311,9 @@ function catStats(cat: CatDef) {
             <tr
               v-for="tx in transactions.slice(0, 6)"
               :key="tx.id"
-              class="hover:bg-slate-800/40 transition-colors"
+              class="hover:bg-slate-800/40 transition-colors cursor-pointer"
+              title="Bekijk alle gegevens"
+              @click="openTransactionDetail(tx)"
             >
               <td class="py-3 px-3 whitespace-nowrap">
                 <TransactionDate :date="tx.date" :time="tx.time" />

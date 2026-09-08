@@ -18,6 +18,7 @@ import type {
   TransactionAllocation,
 } from "../types";
 import TransactionDate from "./TransactionDate.vue";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 import { extractSmartKeyword, matchingUnlinkedTransactions } from "../matchRule";
 import { normalizeAllocations } from "../allocations";
 
@@ -42,6 +43,8 @@ const props = defineProps<{
   ) => void;
   onOpenAddBudgetItemModal?: (group?: BudgetCategoryGroup) => void;
 }>();
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const selectedGroup = ref<BudgetCategoryGroup>("Dagelijks Leven");
 const selectedBudgetItemId = ref("");
@@ -538,7 +541,9 @@ function openAddBudgetItem() {
                   <li
                     v-for="tx in extraMatches.slice(0, 4)"
                     :key="tx.id"
-                    class="text-[10px] text-slate-400 truncate"
+                    class="text-[10px] text-slate-400 truncate cursor-pointer hover:text-slate-200"
+                    title="Bekijk alle gegevens"
+                    @click="openTransactionDetail(tx)"
                   >
                     {{ tx.date }} · {{ tx.amount > 0 ? "+" : "−" }}€
                     {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}

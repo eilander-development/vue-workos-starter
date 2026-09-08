@@ -4,6 +4,7 @@ import { X, PiggyBank } from "lucide-vue-next";
 import type { MonthlyBudget, SavingsGoal, Transaction } from "../types";
 import type { PotSettlement } from "../potSettlement";
 import TransactionDate from "./TransactionDate.vue";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 const props = defineProps<{
   isOpen: boolean;
@@ -12,6 +13,8 @@ const props = defineProps<{
   settlement: PotSettlement | null;
   currentMonth: MonthlyBudget;
 }>();
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const activeTab = ref<"spent" | "compensated">("spent");
 const searchTerm = ref("");
@@ -174,7 +177,9 @@ function budgetItemLabel(tx: Transaction): string | null {
           <div
             v-for="tx in transactions"
             :key="tx.id"
-            class="bg-slate-800/60 border border-slate-700/60 p-3 rounded-xl flex items-center justify-between gap-3 text-xs"
+            class="bg-slate-800/60 border border-slate-700/60 p-3 rounded-xl flex items-center justify-between gap-3 text-xs cursor-pointer hover:bg-slate-800"
+            title="Bekijk alle gegevens"
+            @click="openTransactionDetail(tx)"
           >
             <div class="min-w-0 space-y-0.5">
               <div class="flex items-center gap-2">

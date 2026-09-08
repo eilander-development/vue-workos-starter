@@ -20,6 +20,7 @@ import {
   reportingPeriodForMonth,
 } from "../month";
 import TransactionDate from "./TransactionDate.vue";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 import { normalizeAllocations } from "../allocations";
 
 const props = withDefaults(
@@ -49,6 +50,8 @@ const props = withDefaults(
     allMonths: () => [],
   }
 );
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const name = ref("");
 const keyword = ref("");
@@ -478,7 +481,9 @@ function euro(amount: number) {
             <div
               v-for="tx in visibleMatches.slice(0, 80)"
               :key="tx.id"
-              class="bg-slate-800/60 border border-slate-700/60 p-2.5 rounded-xl flex items-center justify-between gap-3"
+              class="bg-slate-800/60 border border-slate-700/60 p-2.5 rounded-xl flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-800"
+              title="Bekijk alle gegevens"
+              @click="openTransactionDetail(tx)"
             >
               <div class="min-w-0">
                 <div class="flex items-center gap-2">

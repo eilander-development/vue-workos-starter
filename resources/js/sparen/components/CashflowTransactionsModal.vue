@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { ArrowLeftRight, X } from "lucide-vue-next";
 import type { Transaction } from "../types";
 import TransactionDate from "./TransactionDate.vue";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 const props = defineProps<{
   isOpen: boolean;
@@ -12,6 +13,8 @@ const props = defineProps<{
   onClose: () => void;
   onOpenInTransactions?: () => void;
 }>();
+
+const { openTransactionDetail } = useTransactionDetail();
 
 function euro(n: number): string {
   return n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -63,7 +66,9 @@ const total = computed(() =>
           <li
             v-for="tx in transactions"
             :key="tx.id"
-            class="px-5 py-3 flex items-start justify-between gap-3"
+            class="px-5 py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-slate-800/40"
+            title="Bekijk alle gegevens"
+            @click="openTransactionDetail(tx)"
           >
             <div class="min-w-0">
               <TransactionDate :date="tx.date" :time="tx.time" />

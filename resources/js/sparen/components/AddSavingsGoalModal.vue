@@ -18,6 +18,7 @@ import {
   matchingSavingsTransactions,
   matchingUnlinkedSavingsTransactions,
 } from "../matchSavings";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 const props = withDefaults(
   defineProps<{
@@ -36,6 +37,8 @@ const props = withDefaults(
     budgetItems: () => [],
   }
 );
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const name = ref("");
 const accountIban = ref("");
@@ -356,7 +359,9 @@ function pickBankSuggestion(value: string) {
               <li
                 v-for="tx in previewMatches.slice(0, 4)"
                 :key="tx.id"
-                class="text-[10px] text-slate-400 truncate"
+                class="text-[10px] text-slate-400 truncate cursor-pointer hover:text-slate-200"
+                title="Bekijk alle gegevens"
+                @click="openTransactionDetail(tx)"
               >
                 {{ tx.date }} · {{ tx.description }}
               </li>

@@ -31,6 +31,7 @@ import {
   type PotTransferRole,
 } from "../potSettlement";
 import TransactionDate from "./TransactionDate.vue";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 type ListedTxRole = "spend" | PotTransferRole;
 
@@ -61,6 +62,8 @@ const props = withDefaults(
     ownIbans: () => [],
   }
 );
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const filterScope = ref<"current_month" | "all_history">("current_month");
 const searchTerm = ref("");
@@ -508,7 +511,9 @@ function openPot() {
             <div
               v-for="suggestedTx in suggestedUnlinkedTransactions"
               :key="suggestedTx.id"
-              class="bg-slate-900/90 border border-slate-700/80 p-2.5 rounded-lg flex items-center justify-between gap-3 text-xs"
+              class="bg-slate-900/90 border border-slate-700/80 p-2.5 rounded-lg flex items-center justify-between gap-3 text-xs cursor-pointer"
+              title="Bekijk alle gegevens"
+              @click="openTransactionDetail(suggestedTx)"
             >
               <div class="space-y-0.5 min-w-0">
                 <div class="flex items-center gap-2">
@@ -526,7 +531,7 @@ function openPot() {
                 <button
                   type="button"
                   class="bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 shadow-sm transition-transform active:scale-95"
-                  @click="onLinkTransaction!(suggestedTx.id, budgetItem.group, budgetItem.id)"
+                  @click.stop="onLinkTransaction!(suggestedTx.id, budgetItem.group, budgetItem.id)"
                 >
                   <Link2 class="w-3 h-3" />
                   <span>Koppel nu</span>
@@ -581,8 +586,10 @@ function openPot() {
             <div
               v-for="{ tx, role } in filteredList"
               :key="tx.id"
-              class="bg-slate-800/60 hover:bg-slate-800 border border-slate-700/70 p-3.5 rounded-xl transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              class="bg-slate-800/60 hover:bg-slate-800 border border-slate-700/70 p-3.5 rounded-xl transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs cursor-pointer"
               :class="role !== 'spend' ? 'border-blue-800/50' : ''"
+              title="Bekijk alle gegevens"
+              @click="openTransactionDetail(tx)"
             >
               <div class="space-y-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
@@ -633,7 +640,7 @@ function openPot() {
                   type="button"
                   class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/40 border border-transparent hover:border-rose-800/60 transition-all active:scale-90"
                   title="Ontkoppel deze transactie van deze post"
-                  @click="onUnlinkTransaction(tx.id)"
+                  @click.stop="onUnlinkTransaction(tx.id)"
                 >
                   <Unlink class="w-4 h-4" />
                 </button>

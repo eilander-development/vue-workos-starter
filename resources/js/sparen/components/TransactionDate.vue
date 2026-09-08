@@ -17,6 +17,7 @@ withDefaults(
   <div
     class="font-mono whitespace-nowrap leading-tight"
     :class="align === 'right' ? 'text-right' : ''"
+    title="Boekdatum"
   >
     <div :class="size === 'sm' ? 'text-[11px] text-slate-400' : 'text-slate-200'">
       {{ date }}

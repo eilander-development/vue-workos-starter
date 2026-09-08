@@ -38,6 +38,7 @@ import { isLinkExcludedTransaction, isUnlinkedTransaction, matchingUnlinkedTrans
 import { formatReportingPeriodShort, isTransactionInReportingMonth, reportingPeriodForMonth } from "../month";
 import { isSavingsCashflowTransfer, transactionMatchesSavingsGoal } from "../matchSavings";
 import { normalizeAllocations } from "../allocations";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 const props = defineProps<{
   transactions: Transaction[];
@@ -76,6 +77,8 @@ const props = defineProps<{
   initialPeriodOnly?: boolean;
   onAssignSavingsGoal?: (txId: string, goalId: string | null) => void;
 }>();
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const searchTerm = ref("");
 const filterType = ref<"ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen">(
@@ -687,7 +690,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                   <Square v-else class="w-4 h-4" />
                 </button>
               </th>
-              <th class="py-3.5 px-3 whitespace-nowrap">Datum & Tijd</th>
+              <th class="py-3.5 px-3 whitespace-nowrap">Boekdatum</th>
               <th class="py-3.5 px-3">Omschrijving / Tegenpartij</th>
               <th class="py-3.5 px-3">Rubriek & Begrotingspost</th>
               <th class="py-3.5 px-3">Bron</th>
@@ -706,7 +709,8 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
             <tr
               v-for="tx in filtered"
               :key="tx.id"
-              class="hover:bg-slate-800/40 transition-colors"
+              class="hover:bg-slate-800/40 transition-colors cursor-pointer"
+              title="Bekijk alle gegevens"
               :class="
                 justLinked?.txId === tx.id
                   ? 'bg-emerald-950/40 ring-1 ring-inset ring-emerald-600/40'
@@ -716,8 +720,9 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                       ? 'bg-amber-950/10 hover:bg-amber-950/20'
                       : ''
               "
+              @click="openTransactionDetail(tx)"
             >
-              <td class="py-3 px-3 text-center">
+              <td class="py-3 px-3 text-center" @click.stop>
                 <button
                   type="button"
                   class="text-slate-400 hover:text-white"
@@ -755,6 +760,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                   <select
                     class="w-full bg-slate-800 border border-slate-700 text-[11px] text-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500"
                     :value="tx.assignedSavingsGoalId ?? ''"
+                    @click.stop
                     @change="handleSavingsGoalChange(tx, ($event.target as HTMLSelectElement).value)"
                   >
                     <option value="">
@@ -776,7 +782,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                   Spaardoel: {{ assignedSavingsGoal(tx)?.name }}
                 </p>
               </td>
-              <td class="py-3 px-3">
+              <td class="py-3 px-3" @click.stop>
                 <div v-if="tx.linkExcluded" class="space-y-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span
@@ -871,7 +877,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                 {{ tx.amount > 0 ? "+" : "" }}€
                 {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </td>
-              <td class="py-3 px-3 text-center">
+              <td class="py-3 px-3 text-center" @click.stop>
                 <div class="flex items-center justify-center gap-1">
                   <button
                     v-if="!tx.linkExcluded"

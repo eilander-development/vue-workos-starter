@@ -48,8 +48,10 @@ import AutoProcessTransactionsModal from "./components/AutoProcessTransactionsMo
 import ToastStack from "./components/Toast.vue";
 import PotCompensationBanner from "./components/PotCompensationBanner.vue";
 import PotSettlementModal from "./components/PotSettlementModal.vue";
+import TransactionDetailModal from "./components/TransactionDetailModal.vue";
 import type { AutoProcessSaveAssignment } from "./services/transactionLinkSuggestions";
 import { useToasts } from "./composables/useToasts";
+import { useTransactionDetail } from "./composables/useTransactionDetail";
 import {
   loadSparenState,
   saveBudgetItem,
@@ -148,6 +150,12 @@ const initialRuleBudgetItemId = ref("");
 const isReady = ref(false);
 const saveState = ref<SaveState>("idle");
 const { toasts, notify, dismiss } = useToasts();
+const { selectedTransaction, closeTransactionDetail } = useTransactionDetail();
+const detailTransaction = computed(() => {
+  const selected = selectedTransaction.value;
+  if (!selected) return null;
+  return transactions.value.find((tx) => tx.id === selected.id) ?? selected;
+});
 
 function applyRemoteState(data: Record<string, unknown>) {
   if (data.reporting) {
@@ -1671,6 +1679,14 @@ function closeSavingsGoalModal() {
       :goal="potDetailGoal"
       :settlement="potDetailSettlement"
       :current-month="currentMonth"
+    />
+
+    <TransactionDetailModal
+      :transaction="detailTransaction"
+      :budget-items="currentMonth.items"
+      :rules="rules"
+      :savings-goals="savingsGoals"
+      :on-close="closeTransactionDetail"
     />
 
     <ToastStack :toasts="toasts" @dismiss="dismiss" />

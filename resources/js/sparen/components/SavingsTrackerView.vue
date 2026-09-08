@@ -36,6 +36,7 @@ import { computePeriodCashflow, savingsFlowByMonths, cashflowBucketTransactions,
 import CashflowTransactionsModal from "./CashflowTransactionsModal.vue";
 import TransactionDate from "./TransactionDate.vue";
 import PotSettlementModal from "./PotSettlementModal.vue";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 const props = defineProps<{
   savingsHistory: SavingsRow[];
@@ -50,6 +51,8 @@ const props = defineProps<{
   onUpdateSavingsRow: (monthId: string, updates: Partial<SavingsRow>) => void;
   onNavigateTab?: (tab: ActiveTab) => void;
 }>();
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const expandedGoalId = ref<string | null>(null);
 const potDetailGoalId = ref<string | null>(null);
@@ -600,7 +603,9 @@ function barHeight(totaal: number) {
             <div
               v-for="tx in goal.transactions"
               :key="tx.id"
-              class="bg-slate-800/60 p-2 rounded-lg text-[10px] flex items-center justify-between font-mono"
+              class="bg-slate-800/60 p-2 rounded-lg text-[10px] flex items-center justify-between font-mono cursor-pointer hover:bg-slate-800"
+              title="Bekijk alle gegevens"
+              @click="openTransactionDetail(tx)"
             >
               <div class="truncate max-w-[150px]">
                 <TransactionDate :date="tx.date" :time="tx.time" size="sm" />
@@ -613,7 +618,9 @@ function barHeight(totaal: number) {
             <div
               v-for="tx in goal.withdrawalTxs"
               :key="`w-${tx.id}`"
-              class="bg-slate-800/60 p-2 rounded-lg text-[10px] flex items-center justify-between font-mono"
+              class="bg-slate-800/60 p-2 rounded-lg text-[10px] flex items-center justify-between font-mono cursor-pointer hover:bg-slate-800"
+              title="Bekijk alle gegevens"
+              @click="openTransactionDetail(tx)"
             >
               <div class="truncate max-w-[150px]">
                 <TransactionDate :date="tx.date" :time="tx.time" size="sm" />

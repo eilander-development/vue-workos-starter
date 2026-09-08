@@ -30,6 +30,7 @@ import {
   type TransactionLinkSuggestionResult,
   type SuggestionConfidence,
 } from "../services/transactionLinkSuggestions";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 interface TxAssignmentState {
   selected: boolean;
@@ -51,6 +52,8 @@ const props = defineProps<{
   currentMonth: MonthlyBudget;
   onSave: (assignments: AutoProcessSaveAssignment[]) => void;
 }>();
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const result = ref<TransactionLinkSuggestionResult | null>(null);
 const txStates = ref<Map<string, TxAssignmentState>>(new Map());
@@ -574,7 +577,14 @@ function handleSave() {
                     <Square v-else class="w-4 h-4 text-slate-500" />
                   </button>
 
-                  <div class="min-w-0 flex-1">
+                  <div
+                    class="min-w-0 flex-1 cursor-pointer"
+                    title="Bekijk alle gegevens"
+                    @click="
+                      transactionMap.get(suggestion.transactionId) &&
+                      openTransactionDetail(transactionMap.get(suggestion.transactionId)!)
+                    "
+                  >
                     <div class="flex items-center gap-2">
                       <TransactionDate
                         :date="transactionMap.get(suggestion.transactionId)?.date ?? ''"

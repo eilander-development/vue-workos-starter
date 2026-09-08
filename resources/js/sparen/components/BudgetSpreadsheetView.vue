@@ -53,6 +53,7 @@ import {
   isActiveReportingMonth,
   resolvePeriodStartBalance,
 } from "../monthKpi";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 type SpreadsheetKpiKey = "income" | "expense" | "savings" | "netto";
 
@@ -73,6 +74,8 @@ const props = withDefaults(
     savingsGoals: () => [],
   }
 );
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const euro = (n: number) =>
   n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1218,7 +1221,9 @@ function cardId(groupKey: string) {
                   (t) => t.categoryGroup === selectedGroupModal!.groupKey
                 )"
                 :key="tx.id"
-                class="bg-slate-950/60 border border-slate-800/80 p-2.5 rounded-xl flex items-center justify-between text-xs font-mono"
+                class="bg-slate-950/60 border border-slate-800/80 p-2.5 rounded-xl flex items-center justify-between text-xs font-mono cursor-pointer hover:bg-slate-900"
+                title="Bekijk alle gegevens"
+                @click="openTransactionDetail(tx)"
               >
                 <div class="flex items-center gap-2.5 overflow-hidden">
                   <TransactionDate :date="tx.date" :time="tx.time" size="sm" />
