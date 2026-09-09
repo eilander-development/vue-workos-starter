@@ -22,9 +22,6 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->ensureSqliteFile(config('database.connections.catalog.database'));
-        $this->ensureSqliteFile(config('database.connections.sqlite.database'));
-
         Event::listen(CommandStarting::class, function (CommandStarting $event) {
             if ($event->command !== 'migrate') {
                 return;
@@ -41,32 +38,11 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
-            $this->ensureSqliteFile(config('database.connections.catalog.database'));
-            $this->ensureSqliteFile(config('database.connections.sqlite.database'));
-
             Artisan::call('migrate', [
                 '--database' => 'catalog',
                 '--path' => 'database/migrations/catalog',
                 '--force' => true,
             ]);
         });
-    }
-
-    private function ensureSqliteFile(mixed $path): void
-    {
-        if (! is_string($path) || $path === '' || $path === ':memory:') {
-            return;
-        }
-
-        $directory = dirname($path);
-        if ($directory !== '' && $directory !== '.' && ! is_dir($directory)) {
-            mkdir($directory, 0755, true);
-        }
-
-        if (! is_file($path)) {
-            touch($path);
-        }
-
-        @chmod($path, 0666);
     }
 }

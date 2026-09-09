@@ -5,11 +5,11 @@ use App\Models\EnableBankingSession;
 use App\Models\Transaction;
 use App\Models\User;
 
-test('catalog en ledger gebruiken aparte sqlite-connecties', function () {
+test('catalog en ledger gebruiken aparte connecties', function () {
     expect((new Category)->getConnectionName())->toBe('catalog')
-        ->and((new Transaction)->getConnectionName())->toBe('sqlite')
-        ->and((new EnableBankingSession)->getConnectionName())->toBe('sqlite')
-        ->and((new User)->getConnectionName())->toBe('sqlite');
+        ->and((new Transaction)->getConnectionName())->toBe('ledger')
+        ->and((new EnableBankingSession)->getConnectionName())->toBe('ledger')
+        ->and((new User)->getConnectionName())->toBe('ledger');
 });
 
 test('sparen-state leest catalogus zonder ledger-transacties', function () {

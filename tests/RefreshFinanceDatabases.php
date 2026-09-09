@@ -9,7 +9,7 @@ trait RefreshFinanceDatabases
     use RefreshDatabase;
 
     /** @var list<string> */
-    protected $connectionsToTransact = ['sqlite', 'catalog'];
+    protected $connectionsToTransact = ['ledger', 'catalog'];
 
     protected function afterRefreshingDatabase()
     {

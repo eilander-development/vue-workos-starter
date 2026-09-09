@@ -278,7 +278,11 @@ function openAddBudgetItem() {
       </div>
 
       <form class="p-5 space-y-4 overflow-y-auto text-xs" @submit.prevent="handleSubmit">
-        <div class="bg-slate-800/80 border border-slate-700/80 p-3.5 rounded-xl space-y-2">
+        <div
+          class="bg-slate-800/80 border border-slate-700/80 p-3.5 rounded-xl space-y-2 cursor-pointer hover:bg-slate-800"
+          title="Bekijk alle gegevens"
+          @click="openTransactionDetail(transaction)"
+        >
           <div class="flex items-start justify-between gap-3">
             <div class="space-y-0.5">
               <div class="flex items-center gap-2">

@@ -16,7 +16,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => env('DB_CONNECTION', 'ledger'),
 
     /*
     |--------------------------------------------------------------------------
@@ -31,11 +31,24 @@ return [
 
     'connections' => [
 
-        'sqlite' => [
-            'driver' => 'sqlite',
+        'ledger' => [
+            'driver' => env('DB_LEDGER_DRIVER', 'mysql'),
             'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('ledger.sqlite')),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '3306'),
+            'database' => env('DB_DATABASE', 'finance_ledger'),
+            'username' => env('DB_USERNAME', 'root'),
+            'password' => env('DB_PASSWORD', ''),
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
             'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
             'busy_timeout' => null,
             'journal_mode' => null,
@@ -44,9 +57,23 @@ return [
         ],
 
         'catalog' => [
-            'driver' => 'sqlite',
-            'database' => env('DB_CATALOG_DATABASE', database_path('catalog.sqlite')),
+            'driver' => env('DB_CATALOG_DRIVER', 'mysql'),
+            'url' => env('DB_CATALOG_URL'),
+            'host' => env('DB_CATALOG_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_CATALOG_PORT', env('DB_PORT', '3306')),
+            'database' => env('DB_CATALOG_DATABASE', 'finance_catalog'),
+            'username' => env('DB_CATALOG_USERNAME', env('DB_USERNAME', 'root')),
+            'password' => env('DB_CATALOG_PASSWORD', env('DB_PASSWORD', '')),
+            'unix_socket' => env('DB_CATALOG_SOCKET', env('DB_SOCKET', '')),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
             'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
             'busy_timeout' => null,
             'journal_mode' => 'delete',

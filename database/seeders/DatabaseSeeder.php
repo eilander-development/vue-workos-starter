@@ -8,7 +8,6 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Catalogus staat in database/catalog.sqlite (git). Niet opnieuw seeden.
-        // Ledger (transacties, users) blijft lokaal in database/ledger.sqlite.
+        // Catalogus en ledger staan in aparte MySQL-databases.
     }
 }

@@ -3,32 +3,39 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Laravel\WorkOS\Http\Requests\AuthKitAccountDeletionRequest;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class ProfileController extends Controller
 {
-    /**
-     * Update the user's profile settings.
-     */
     public function update(Request $request): JsonResponse|RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($request->user()->id)],
+            'current_password' => ['nullable', 'required_with:password', 'current_password'],
+            'password' => ['nullable', 'confirmed', Password::defaults()],
         ]);
 
-        $request->user()->update(['name' => $request->name]);
+        $user = $request->user();
+        $user->name = $validated['name'];
+        $user->email = $validated['email'];
+        if (! empty($validated['password'])) {
+            $user->password = $validated['password'];
+        }
+        $user->save();
 
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
                 'user' => [
-                    'id' => $request->user()->id,
-                    'name' => $request->user()->name,
-                    'email' => $request->user()->email,
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
                 ],
             ]);
         }
@@ -36,13 +43,18 @@ class ProfileController extends Controller
         return redirect('/instellingen/profiel');
     }
 
-    /**
-     * Delete the user's account.
-     */
-    public function destroy(AuthKitAccountDeletionRequest $request): RedirectResponse
+    public function destroy(Request $request): RedirectResponse
     {
-        return $request->delete(
-            using: fn (User $user) => $user->delete()
-        );
+        $request->validate([
+            'password' => ['required', 'current_password'],
+        ]);
+
+        $user = $request->user();
+        Auth::logout();
+        $user->delete();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login');
     }
 }

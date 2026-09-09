@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class BankAccount extends Model
 {
-    protected $connection = 'sqlite';
+    protected $connection = 'ledger';
     protected $guarded = [];
 
     protected $casts = [

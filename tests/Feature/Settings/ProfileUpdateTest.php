@@ -16,6 +16,7 @@ test('profile information can be updated', function () {
     $this->actingAs($user)
         ->patchJson('/settings/profile', [
             'name' => 'Updated Name',
+            'email' => $user->email,
         ])
         ->assertOk()
         ->assertJsonPath('user.name', 'Updated Name');
@@ -24,5 +25,13 @@ test('profile information can be updated', function () {
 });
 
 test('user can delete their account', function () {
-    $this->markTestSkipped('Account deletion triggers external WorkOS API call and requires integration test setup.');
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->delete('/settings/profile', [
+            'password' => 'password',
+        ])
+        ->assertRedirect('/login');
+
+    expect(User::query()->find($user->id))->toBeNull();
 });

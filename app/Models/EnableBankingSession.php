@@ -8,7 +8,7 @@ use Illuminate\Support\Carbon;
 
 class EnableBankingSession extends Model
 {
-    protected $connection = 'sqlite';
+    protected $connection = 'ledger';
     protected $guarded = [];
 
     protected $casts = [

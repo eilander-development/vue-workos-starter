@@ -16,7 +16,7 @@ class SparenStamdataSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->command?->warn('Catalogus staat in database/catalog.sqlite (git). Deze seeder overschrijft die data.');
+        $this->command?->warn('Deze seeder overschrijft catalogusdata. Niet gebruiken als bron van waarheid; alleen als nood-herstel.');
         $this->command?->warn('Niet gebruiken als bron van waarheid; alleen als nood-herstel.');
         Schema::disableForeignKeyConstraints();
         Schema::connection('catalog')->disableForeignKeyConstraints();

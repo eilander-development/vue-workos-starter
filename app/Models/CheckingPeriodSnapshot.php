@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CheckingPeriodSnapshot extends Model
 {
-    protected $connection = 'sqlite';
+    protected $connection = 'ledger';
 
     protected $guarded = [];
 

@@ -10,7 +10,7 @@ class PlaidConnection extends Model
 {
     use HasFactory;
 
-    protected $connection = 'sqlite';
+    protected $connection = 'ledger';
 
     protected $fillable = [
         'user_id',

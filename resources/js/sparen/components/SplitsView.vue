@@ -13,6 +13,7 @@ import { formatReportingPeriodLabel, reportingPeriodForMonth } from "../month";
 import { reviewSplits, type SplitReview, type SplitVarianceKind } from "../splitStatus";
 import TransactionDate from "./TransactionDate.vue";
 import SplitEditorModal from "./SplitEditorModal.vue";
+import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 const props = defineProps<{
   rules: Rule[];
@@ -21,6 +22,8 @@ const props = defineProps<{
   currentMonth: MonthlyBudget;
   onSave: (rule: Omit<Rule, "matchedCount">) => void;
 }>();
+
+const { openTransactionDetail } = useTransactionDetail();
 
 const editorOpen = ref(false);
 const editingRule = ref<Rule | null>(null);
@@ -223,7 +226,9 @@ function bannerText(review: SplitReview): string {
             <li
               v-for="row in review.transactions"
               :key="row.tx.id"
-              class="bg-slate-800/50 border border-slate-700/60 rounded-xl px-3 py-2 flex items-center justify-between gap-3"
+              class="bg-slate-800/50 border border-slate-700/60 rounded-xl px-3 py-2 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-800"
+              title="Bekijk alle gegevens"
+              @click="openTransactionDetail(row.tx)"
             >
               <div class="min-w-0">
                 <div class="flex items-center gap-2">

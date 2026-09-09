@@ -20,7 +20,9 @@ const saving = ref(false);
 const saved = ref(false);
 const errors = ref<Record<string, string[]>>({});
 const formError = ref("");
-const loggingOut = ref(false);
+const currentPassword = ref("");
+const password = ref("");
+const passwordConfirmation = ref("");
 
 const { appearance, updateAppearance } = useAppearance();
 
@@ -76,6 +78,9 @@ async function saveProfile() {
       body: JSON.stringify({
         name: name.value.trim(),
         email: email.value.trim(),
+        current_password: currentPassword.value || undefined,
+        password: password.value || undefined,
+        password_confirmation: passwordConfirmation.value || undefined,
       }),
     });
 
@@ -93,6 +98,9 @@ async function saveProfile() {
     }
 
     saved.value = true;
+    currentPassword.value = "";
+    password.value = "";
+    passwordConfirmation.value = "";
     if (window.__SPAREN__?.user) {
       window.__SPAREN__.user = {
         ...window.__SPAREN__.user,
@@ -175,7 +183,7 @@ function fieldError(field: string): string | undefined {
     <div v-if="activeTab === 'profiel'" class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
       <div>
         <h3 class="font-bold text-white text-sm">Profiel</h3>
-        <p class="text-xs text-slate-400 mt-0.5">Pas je naam en e-mailadres aan.</p>
+        <p class="text-xs text-slate-400 mt-0.5">Pas je naam, e-mail en wachtwoord aan.</p>
       </div>
 
       <form class="space-y-4" @submit.prevent="saveProfile">
@@ -202,9 +210,50 @@ function fieldError(field: string): string | undefined {
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-60"
           />
           <p v-if="fieldError('email')" class="text-xs text-rose-400 mt-1">{{ fieldError("email") }}</p>
-          <p class="text-[11px] text-slate-500 mt-1">
-            Alleen naam wordt standaard door de server bijgewerkt; e-mail kan read-only zijn.
+        </div>
+
+        <div>
+          <label class="block text-slate-300 text-xs font-semibold mb-1" for="settings-current-password">
+            Huidig wachtwoord
+          </label>
+          <input
+            id="settings-current-password"
+            v-model="currentPassword"
+            type="password"
+            autocomplete="current-password"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+          />
+          <p v-if="fieldError('current_password')" class="text-xs text-rose-400 mt-1">
+            {{ fieldError("current_password") }}
           </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-300 text-xs font-semibold mb-1" for="settings-password">
+              Nieuw wachtwoord
+            </label>
+            <input
+              id="settings-password"
+              v-model="password"
+              type="password"
+              autocomplete="new-password"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+            />
+            <p v-if="fieldError('password')" class="text-xs text-rose-400 mt-1">{{ fieldError("password") }}</p>
+          </div>
+          <div>
+            <label class="block text-slate-300 text-xs font-semibold mb-1" for="settings-password-confirmation">
+              Bevestigen
+            </label>
+            <input
+              id="settings-password-confirmation"
+              v-model="passwordConfirmation"
+              type="password"
+              autocomplete="new-password"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+            />
+          </div>
         </div>
 
         <p v-if="formError" class="text-xs text-rose-400">{{ formError }}</p>

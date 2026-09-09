@@ -17,7 +17,6 @@ pest()->extend(Tests\TestCase::class)
 
 pest()
     ->beforeEach(function () {
-        $this->withoutMiddleware(\Laravel\WorkOS\Http\Middleware\ValidateSessionWithWorkOS::class);
         $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
     })
     ->in('Feature');

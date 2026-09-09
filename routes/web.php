@@ -11,24 +11,8 @@ use App\Http\Controllers\SparenController;
 use App\Http\Controllers\TransactionsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use Laravel\WorkOS\Http\Middleware\ValidateSessionWithWorkOS;
 
-$authMiddleware = ['auth'];
-if (! app()->environment('local')) {
-    $authMiddleware[] = ValidateSessionWithWorkOS::class;
-}
-
-if (app()->environment('local')) {
-    Route::get('/__local-login', function () {
-        $user = \App\Models\User::query()->firstOrFail();
-        auth()->login($user);
-        request()->session()->regenerate();
-
-        return redirect('/');
-    });
-}
-
-Route::middleware($authMiddleware)->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::get('/', [SparenController::class, 'app'])->name('home');
     Route::get('/maandbegroting', [SparenController::class, 'app'])->name('sparen.maandbegroting');
     Route::get('/dashboard', [SparenController::class, 'app'])->name('dashboard');
