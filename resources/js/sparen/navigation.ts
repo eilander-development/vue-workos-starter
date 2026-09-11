@@ -48,14 +48,17 @@ export function tabFromPath(pathname: string): ActiveTab {
   return SPAREN_PAGES.find((page) => page.path === normalized)?.tab ?? "maandbegroting";
 }
 
-export function settingsSectionFromPath(pathname: string): "profiel" | "uiterlijk" | "uitloggen" {
+export function settingsSectionFromPath(pathname: string): "profiel" | "uiterlijk" | "data" | "uitloggen" {
   const normalized = pathname.replace(/\/+$/, "") || "/";
   if (normalized.endsWith("/uiterlijk")) return "uiterlijk";
+  if (normalized.endsWith("/data")) return "data";
   if (normalized.endsWith("/uitloggen")) return "uitloggen";
   return "profiel";
 }
 
-export function pathForSettingsSection(section: "profiel" | "uiterlijk" | "uitloggen" = "profiel"): string {
+export function pathForSettingsSection(
+  section: "profiel" | "uiterlijk" | "data" | "uitloggen" = "profiel"
+): string {
   return `/instellingen/${section}`;
 }
 

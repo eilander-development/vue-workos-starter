@@ -19,6 +19,7 @@ import {
   ChevronsUpDown,
   UserRound,
   Palette,
+  Archive,
   LogOut,
   Settings,
 } from "lucide-vue-next";
@@ -48,7 +49,7 @@ const emit = defineEmits<{
   toggleCollapse: [];
 }>();
 
-function goSettings(event: MouseEvent, section: "profiel" | "uiterlijk") {
+function goSettings(event: MouseEvent, section: "profiel" | "uiterlijk" | "data") {
   if (event.defaultPrevented || event.button !== 0) return;
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
@@ -437,6 +438,15 @@ async function handleLogout() {
             >
               <Palette class="w-4 h-4 text-slate-400" />
               Uiterlijk
+            </a>
+            <a
+              role="menuitem"
+              href="/instellingen/data"
+              class="flex items-center gap-2.5 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-white transition-colors"
+              @click="(event) => goSettings(event, 'data')"
+            >
+              <Archive class="w-4 h-4 text-slate-400" />
+              Data
             </a>
 
             <div class="my-1 border-t border-slate-800" />

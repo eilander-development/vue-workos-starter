@@ -7,6 +7,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\SavingsController;
 use App\Http\Controllers\EnableBankingController;
+use App\Http\Controllers\DataBackupController;
 use App\Http\Controllers\SparenController;
 use App\Http\Controllers\TransactionsController;
 use Illuminate\Support\Facades\Route;
@@ -27,7 +28,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/jaaroverzicht', [SparenController::class, 'app'])->name('sparen.jaaroverzicht');
     Route::get('/instellingen', [SparenController::class, 'app'])->name('sparen.instellingen');
     Route::get('/instellingen/{section}', [SparenController::class, 'app'])
-        ->whereIn('section', ['profiel', 'uiterlijk', 'uitloggen'])
+        ->whereIn('section', ['profiel', 'uiterlijk', 'data', 'uitloggen'])
         ->name('sparen.instellingen.section');
     Route::get('/api/sparen/state', [SparenController::class, 'state'])->name('sparen.state');
     Route::put('/api/sparen/state', [SparenController::class, 'persist'])->name('sparen.persist');
@@ -43,6 +44,8 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'persistSavingsGoal'])->name('sparen.savings_goal.persist');
     Route::delete('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'destroySavingsGoal'])->name('sparen.savings_goal.destroy');
     Route::post('/api/sparen/sync-bank', [SparenController::class, 'syncBank'])->name('sparen.sync_bank');
+    Route::post('/api/sparen/backup/export', [DataBackupController::class, 'export'])->name('sparen.backup.export');
+    Route::post('/api/sparen/backup/import', [DataBackupController::class, 'import'])->name('sparen.backup.import');
     Route::get('/dashboard/yearly-expenses-chart', [DashboardController::class, 'yearlyExpensesChart'])->name('dashboard.yearly_expenses_chart');
     Route::get('/dashboard/data', [DashboardController::class, 'dashboardData'])->name('dashboard.data');
     Route::post('/dashboard/dynamic-budgets', [DashboardController::class, 'storeDynamicBudgets'])->name('dashboard.dynamic_budgets.store');
