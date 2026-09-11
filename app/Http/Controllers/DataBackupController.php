@@ -5,22 +5,23 @@ namespace App\Http\Controllers;
 use App\Services\DataBackupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 use RuntimeException;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 class DataBackupController extends Controller
 {
     public function __construct(protected DataBackupService $backups) {}
 
-    public function export(): BinaryFileResponse|JsonResponse
+    public function export(): Response|JsonResponse
     {
         $path = $this->backups->newExportPath();
 
         try {
             $result = $this->backups->exportTo($path);
+            $bytes = File::get($result['path']);
         } catch (Throwable $e) {
             File::delete($path);
 
@@ -29,11 +30,12 @@ class DataBackupController extends Controller
             ], 500);
         }
 
-        return response()
-            ->download($result['path'], $result['filename'], [
-                'Content-Type' => 'application/zip',
-            ])
-            ->deleteFileAfterSend(true);
+        File::delete($result['path']);
+
+        return response($bytes, 200, [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename="'.$result['filename'].'"',
+        ]);
     }
 
     public function import(Request $request): JsonResponse

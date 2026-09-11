@@ -4,6 +4,7 @@ use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\DataBackupService;
+use App\Support\BackupZip;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 
@@ -37,25 +38,25 @@ test('export geeft een downloadbare zip en verwijdert het serverbestand', functi
     ]);
 
     $response = $this->actingAs($user)->post('/api/sparen/backup/export');
-    $response->assertOk()->assertDownload();
-    expect($response->headers->get('content-type'))->toContain('zip');
+    $response->assertOk()->assertHeader('content-disposition');
+    expect($response->headers->get('content-type'))->toContain('zip')
+        ->and($response->headers->get('content-disposition'))->toContain('attachment');
 
-    $file = $response->getFile();
-    expect($file)->not->toBeNull();
-    $zipPath = $file->getPathname();
-    $zip = new ZipArchive;
-    expect($zip->open($zipPath))->toBeTrue();
-    $manifest = json_decode((string) $zip->getFromName('manifest.json'), true);
+    $content = $response->getContent();
+    expect($content)->toBeString()->toStartWith("PK");
+
+    $zipPath = sys_get_temp_dir().'/finance-backup-download-'.uniqid().'.zip';
+    file_put_contents($zipPath, $content);
+    $archive = BackupZip::open($zipPath);
+    $manifest = json_decode((string) $archive->get('manifest.json'), true);
     expect($manifest['format'])->toBe(DataBackupService::FORMAT)
         ->and($manifest['connections']['catalog']['categories'])->toBe(1)
         ->and($manifest['connections']['ledger']['transactions'])->toBe(1)
         ->and($manifest['connections']['ledger']['users'])->toBe(1);
-    $zip->close();
 
-    ob_start();
-    $response->sendContent();
-    ob_end_clean();
-    expect(File::exists($zipPath))->toBeFalse();
+    $leftovers = File::glob(storage_path('app/private/backups/finance-backup-*.zip')) ?: [];
+    expect($leftovers)->toBeEmpty();
+    File::delete($zipPath);
 });
 
 test('import overschrijft catalogus en ledger vanuit de zip', function () {

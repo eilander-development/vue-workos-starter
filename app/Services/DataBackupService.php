@@ -2,11 +2,10 @@
 
 namespace App\Services;
 
+use App\Support\BackupZip;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
-use Phar;
-use PharData;
 use RuntimeException;
 
 class DataBackupService
@@ -60,7 +59,7 @@ class DataBackupService
             File::delete($zipPath);
         }
 
-        $archive = $this->createArchive($zipPath);
+        $archive = new BackupZip;
 
         $manifestConnections = [];
         $index = 0;
@@ -79,7 +78,7 @@ class DataBackupService
                 fn ($row) => $this->serializeRow((array) $row)
             )->all();
 
-            $archive->addFromString(
+            $archive->add(
                 "{$connection}/{$table}.json",
                 (string) json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)
             );
@@ -92,11 +91,11 @@ class DataBackupService
             'exported_at' => now()->timezone('Europe/Amsterdam')->toIso8601String(),
             'connections' => $manifestConnections,
         ];
-        $archive->addFromString(
+        $archive->add(
             'manifest.json',
             (string) json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
         );
-        unset($archive);
+        $archive->save($zipPath);
 
         return [
             'path' => $zipPath,
@@ -116,14 +115,15 @@ class DataBackupService
         }
 
         try {
-            $archive = new PharData($zipPath);
+            $archive = BackupZip::open($zipPath);
+        } catch (RuntimeException $e) {
+            throw $e;
         } catch (\Throwable) {
             throw new RuntimeException('Dit bestand is geen geldige zip-backup.');
         }
 
         $manifest = $this->readManifest($archive);
         $payload = $this->readPayload($archive, $manifest);
-        unset($archive);
 
         $plan = $this->importPlan($payload);
         $total = max(1, count($plan));
@@ -351,9 +351,9 @@ class DataBackupService
     /**
      * @return array<string, mixed>
      */
-    private function readManifest(PharData $archive): array
+    private function readManifest(BackupZip $archive): array
     {
-        $raw = $this->archiveFile($archive, 'manifest.json');
+        $raw = $archive->get('manifest.json');
         if ($raw === null || $raw === '') {
             throw new RuntimeException('Backup mist manifest.json.');
         }
@@ -373,7 +373,7 @@ class DataBackupService
      * @param  array<string, mixed>  $manifest
      * @return array<string, array<string, list<array<string, mixed>>>>
      */
-    private function readPayload(PharData $archive, array $manifest): array
+    private function readPayload(BackupZip $archive, array $manifest): array
     {
         $payload = ['catalog' => [], 'ledger' => []];
         $connections = $manifest['connections'] ?? [];
@@ -390,7 +390,7 @@ class DataBackupService
                 if (! is_string($table) || in_array($table, $this->skipTables, true)) {
                     continue;
                 }
-                $raw = $this->archiveFile($archive, "{$connection}/{$table}.json");
+                $raw = $archive->get("{$connection}/{$table}.json");
                 if ($raw === null) {
                     $payload[$connection][$table] = [];
 
@@ -408,25 +408,5 @@ class DataBackupService
         }
 
         return $payload;
-    }
-
-    private function createArchive(string $zipPath): PharData
-    {
-        try {
-            return new PharData($zipPath, 0, 'finance-backup.zip', Phar::ZIP);
-        } catch (\Throwable $e) {
-            throw new RuntimeException('Kon het backup-bestand niet aanmaken.', 0, $e);
-        }
-    }
-
-    private function archiveFile(PharData $archive, string $name): ?string
-    {
-        if (! isset($archive[$name])) {
-            return null;
-        }
-
-        $file = $archive[$name];
-
-        return $file->getContent();
     }
 }
