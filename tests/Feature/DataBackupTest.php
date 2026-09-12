@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\DataBackupService;
 use App\Support\BackupZip;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 
@@ -144,6 +145,57 @@ test('setup-import verdwijnt zodra er een gebruiker is', function () {
     ])->assertNotFound();
 
     File::delete($path);
+});
+
+test('import op één gedeelde database veegt catalogus niet leeg', function () {
+    $user = User::factory()->create([
+        'email' => 'shared@example.com',
+        'name' => 'Shared User',
+    ]);
+    Category::query()->create([
+        'key' => 'cat-shared',
+        'name' => 'Gedeeld',
+        'slug' => 'gedeeld',
+        'type' => 'expense',
+    ]);
+    Transaction::query()->create([
+        'key' => 'tx-shared',
+        'description' => 'Gedeelde mutatie',
+        'amount' => -8,
+        'date' => '2026-09-01',
+        'type' => 'expense',
+        'is_pending' => false,
+    ]);
+
+    $zipPath = makeBackupZip();
+    $sharedPath = sys_get_temp_dir().'/finance-shared-'.uniqid('', true).'.sqlite';
+    File::put($sharedPath, '');
+
+    config([
+        'database.connections.ledger.driver' => 'sqlite',
+        'database.connections.ledger.database' => $sharedPath,
+        'database.connections.catalog.driver' => 'sqlite',
+        'database.connections.catalog.database' => $sharedPath,
+    ]);
+    DB::purge('ledger');
+    DB::purge('catalog');
+
+    $this->artisan('migrate', ['--force' => true]);
+    $this->artisan('migrate', [
+        '--database' => 'catalog',
+        '--path' => 'database/migrations/catalog',
+        '--force' => true,
+    ]);
+
+    app(DataBackupService::class)->importFrom($zipPath);
+
+    expect(Category::query()->count())->toBe(1)
+        ->and(Category::query()->value('name'))->toBe('Gedeeld')
+        ->and(Transaction::query()->count())->toBe(1)
+        ->and(User::query()->where('email', 'shared@example.com')->exists())->toBeTrue();
+
+    File::delete($zipPath);
+    File::delete($sharedPath);
 });
 
 test('ongeldige zip wordt geweigerd', function () {

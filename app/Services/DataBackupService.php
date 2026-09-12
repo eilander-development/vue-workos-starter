@@ -192,6 +192,9 @@ class DataBackupService
                 if (in_array($table, $this->skipTables, true)) {
                     continue;
                 }
+                if (in_array($table, $this->tablesOwnedByOther($connection), true)) {
+                    continue;
+                }
                 if (! Schema::connection($connection)->hasTable($table)) {
                     continue;
                 }
@@ -211,13 +214,29 @@ class DataBackupService
     private function tablesFor(string $connection): array
     {
         $existing = $this->existingTables($connection);
+        $otherOwned = $this->tablesOwnedByOther($connection);
         $ordered = array_values(array_filter(
             $this->preferredOrder[$connection] ?? [],
             fn (string $table) => in_array($table, $existing, true)
         ));
-        $extra = array_values(array_diff($existing, $ordered));
+        $extra = array_values(array_diff($existing, $ordered, $otherOwned));
 
         return array_merge($ordered, $extra);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tablesOwnedByOther(string $connection): array
+    {
+        $owned = [];
+        foreach ($this->preferredOrder as $name => $tables) {
+            if ($name !== $connection) {
+                $owned = array_merge($owned, $tables);
+            }
+        }
+
+        return $owned;
     }
 
     /**
