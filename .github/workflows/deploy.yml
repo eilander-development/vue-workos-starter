@@ -126,4 +126,15 @@ jobs:
         DEPLOY_PATH: ${{ secrets.SSH_PATH }}
       run: |
         TARGET="${DEPLOY_PATH:-public_html}"
-        ssh -p "$SSH_TARGET_PORT" -o BatchMode=yes "${SSH_TARGET_USER}@${SSH_TARGET_HOST}" "cd ${TARGET} && php artisan migrate --force && php artisan optimize && php artisan about --only=environment"
+        ssh -p "$SSH_TARGET_PORT" -o BatchMode=yes "${SSH_TARGET_USER}@${SSH_TARGET_HOST}" "TARGET='${TARGET}' bash -s" <<'EOF'
+        set -e
+        cd "$TARGET"
+        rm -f bootstrap/cache/config.php bootstrap/cache/packages.php bootstrap/cache/services.php
+        KEY=$(grep -E '^APP_KEY=' .env | head -1 | cut -d= -f2- | tr -d '[:space:]')
+        if [ -z "$KEY" ]; then
+          php artisan key:generate --force
+        fi
+        php artisan migrate --force
+        php artisan optimize
+        php artisan about --only=environment
+        EOF
