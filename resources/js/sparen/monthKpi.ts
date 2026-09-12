@@ -247,7 +247,8 @@ export function buildForecastFormulaLines(
   kpi: MonthKpiSnapshot,
   bankBalance: number,
   finalTone: "result" | "subresult" = "subresult",
-  includeStartBalance = true
+  includeStartBalance = true,
+  toCompensate = 0
 ): FormulaLine[] {
   const lines: FormulaLine[] = [];
   if (includeStartBalance) {
@@ -275,32 +276,55 @@ export function buildForecastFormulaLines(
   );
   lines.push({
     id: "expected",
-    label: "= Verwacht saldo eind maand",
+    label: toCompensate > 0 ? "= Verwacht eind (zonder compensatie)" : "= Verwacht saldo eind maand",
     amount: kpi.expectedEndOfMonth,
-    tone: finalTone,
+    tone: toCompensate > 0 ? "subresult" : finalTone,
   });
+  if (toCompensate > 0) {
+    lines.push(
+      {
+        id: "compensate",
+        label: "+ Nog te compenseren",
+        amount: toCompensate,
+        tone: "plus",
+      },
+      {
+        id: "after-compensate",
+        label: "= Na compensatie",
+        amount: kpi.expectedEndOfMonth + toCompensate,
+        tone: finalTone,
+      }
+    );
+  }
   return lines;
 }
 
 export function buildBalanceModalBreakdown(
   kpi: MonthKpiSnapshot,
   bankBalance: number,
-  includeStartBalance = true
+  includeStartBalance = true,
+  toCompensate = 0
 ): KpiModalBreakdown {
   const { columns, rows } = formulaRows(
-    buildForecastFormulaLines(kpi, bankBalance, "result", includeStartBalance)
+    buildForecastFormulaLines(kpi, bankBalance, "result", includeStartBalance, toCompensate)
   );
+  const after = kpi.expectedEndOfMonth + toCompensate;
   return {
     title: "Huidig Saldo (ING)",
     formula: includeStartBalance
-      ? "Huidig saldo + nog te ontvangen − nog te betalen − nog te sparen = verwacht eind"
+      ? toCompensate > 0
+        ? "Huidig saldo − nog te betalen = verwacht eind; + compensatie = na compensatie"
+        : "Huidig saldo + nog te ontvangen − nog te betalen − nog te sparen = verwacht eind"
       : "Nog te ontvangen − nog te betalen − nog te sparen",
-    subtitle: "Zelfde prognose als op maandbegroting",
+    subtitle:
+      toCompensate > 0
+        ? "Verwacht eind is zonder potcompensatie. Na compensatie komt dat bedrag terug op de rekening."
+        : "Zelfde prognose als op maandbegroting",
     columns,
     rows,
-    totalValue: kpi.expectedEndOfMonth,
-    totalLabel: "Verwacht saldo eind maand",
-    totalColorClass: kpi.expectedEndOfMonth >= 0 ? "text-indigo-300" : "text-rose-400",
+    totalValue: toCompensate > 0 ? after : kpi.expectedEndOfMonth,
+    totalLabel: toCompensate > 0 ? "Na compensatie" : "Verwacht saldo eind maand",
+    totalColorClass: (toCompensate > 0 ? after : kpi.expectedEndOfMonth) >= 0 ? "text-indigo-300" : "text-rose-400",
   };
 }
 
@@ -365,6 +389,7 @@ export function buildNettoModalBreakdown(
     mode: "budget" | "dashboard";
     bankBalance: number;
     includeStartBalance?: boolean;
+    toCompensate?: number;
     monthName?: string;
     onOpenItem?: (item: BudgetItem) => void;
     incomeItems?: BudgetItem[];
@@ -372,6 +397,7 @@ export function buildNettoModalBreakdown(
     savingsItems?: BudgetItem[];
   }
 ): KpiModalBreakdown {
+  const toCompensate = options.toCompensate ?? 0;
   if (options.mode === "dashboard") {
     const lines: FormulaLine[] = [
       { id: "sec-cashflow", label: "1 · Werkelijk cashflow (bank)", tone: "section" },
@@ -393,7 +419,8 @@ export function buildNettoModalBreakdown(
         kpi,
         options.bankBalance,
         "subresult",
-        options.includeStartBalance ?? true
+        options.includeStartBalance ?? true,
+        toCompensate
       ),
     ];
     const { columns, rows } = formulaRows(lines);
@@ -409,26 +436,33 @@ export function buildNettoModalBreakdown(
     };
   }
 
+  const after = kpi.expectedEndOfMonth + toCompensate;
   const nettoLines: FormulaLine[] = [
     ...buildForecastFormulaLines(
       kpi,
       options.bankBalance,
       "result",
-      options.includeStartBalance ?? true
+      options.includeStartBalance ?? true,
+      toCompensate
     ),
   ];
   const { columns, rows } = formulaRows(nettoLines);
   return {
     title: "Netto Overschot / Saldo",
     formula: (options.includeStartBalance ?? true)
-      ? "Huidig saldo + nog te ontvangen − nog te betalen (vast) − nog te sparen"
+      ? toCompensate > 0
+        ? "Verwacht eind zonder compensatie; + potcompensatie = na compensatie"
+        : "Huidig saldo + nog te ontvangen − nog te betalen (vast) − nog te sparen"
       : "Nog te ontvangen − nog te betalen (vast) − nog te sparen",
-    subtitle: "Alleen posten met een budget. Categorieën zonder budget tellen niet mee.",
+    subtitle:
+      toCompensate > 0
+        ? "Het grote bedrag is zonder compensatie. Compenseer je de pot, dan stijgt het eindsaldo."
+        : "Alleen posten met een budget. Categorieën zonder budget tellen niet mee.",
     columns,
     rows,
-    totalLabel: "Verwacht saldo eind maand",
-    totalValue: kpi.expectedEndOfMonth,
-    totalColorClass: kpi.expectedEndOfMonth >= 0 ? "text-indigo-300" : "text-rose-400",
+    totalLabel: toCompensate > 0 ? "Na compensatie" : "Verwacht saldo eind maand",
+    totalValue: toCompensate > 0 ? after : kpi.expectedEndOfMonth,
+    totalColorClass: (toCompensate > 0 ? after : kpi.expectedEndOfMonth) >= 0 ? "text-indigo-300" : "text-rose-400",
   };
 }
 

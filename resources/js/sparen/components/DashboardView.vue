@@ -145,6 +145,9 @@ const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
 const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
 const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemaining);
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
+const expectedEndAfterCompensation = computed(
+  () => expectedEndOfMonth.value + totalToCompensate.value
+);
 
 const periodCashflow = computed(() =>
   computePeriodCashflow(
@@ -393,7 +396,8 @@ const kpiBreakdown = computed(() => {
     return buildBalanceModalBreakdown(
       kpi,
       periodStartBalance.value,
-      isCurrentReportingMonth.value
+      isCurrentReportingMonth.value,
+      totalToCompensate.value
     );
   }
   if (key === "income") {
@@ -425,6 +429,7 @@ const kpiBreakdown = computed(() => {
     mode: "budget",
     bankBalance: periodStartBalance.value,
     includeStartBalance: isCurrentReportingMonth.value,
+    toCompensate: totalToCompensate.value,
   });
 });
 
@@ -498,7 +503,7 @@ function catStats(cat: CatDef) {
           alles netjes binnenkomt en je geen extra uitgaven doet.
         </p>
       </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-stretch">
       <button
         type="button"
         class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all relative overflow-hidden h-full flex flex-col"
@@ -551,6 +556,15 @@ function catStats(cat: CatDef) {
             <span>Nog te compenseren</span>
             <span class="font-semibold">
               +€ {{ totalToCompensate.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
+          <div
+            v-if="totalToCompensate > 0"
+            class="flex items-center justify-between pt-1.5 mt-1 border-t border-slate-800/70 text-emerald-300"
+          >
+            <span class="text-slate-400">Na compensatie</span>
+            <span class="font-semibold">
+              € {{ expectedEndAfterCompensation.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
             </span>
           </div>
         </div>
@@ -671,10 +685,13 @@ function catStats(cat: CatDef) {
         <div
           class="text-2xl font-black font-mono tracking-tight"
           :class="expectedEndOfMonth >= 0 ? 'text-white' : 'text-rose-400'"
-          title="Huidig saldo + nog te ontvangen − nog te betalen − nog te sparen"
+          title="Zonder compensatie: huidig saldo + nog te ontvangen − nog te betalen − nog te sparen"
         >
           € {{ expectedEndOfMonth.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
+        <p v-if="totalToCompensate > 0" class="text-[11px] text-slate-500 mt-1">
+          Zonder compensatie
+        </p>
         <div class="mt-3 space-y-1 text-[11px] font-mono pt-3 border-t border-slate-800/80">
           <div
             v-if="isCurrentReportingMonth"
@@ -705,6 +722,15 @@ function catStats(cat: CatDef) {
             <span class="text-slate-400">Nog te compenseren</span>
             <span>+€ {{ totalToCompensate.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}</span>
           </div>
+          <div
+            v-if="totalToCompensate > 0"
+            class="flex items-center justify-between pt-1.5 mt-1 border-t border-slate-800/70 text-emerald-300"
+          >
+            <span class="text-slate-400">Na compensatie</span>
+            <span class="font-semibold">
+              € {{ expectedEndAfterCompensation.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            </span>
+          </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
@@ -731,7 +757,7 @@ function catStats(cat: CatDef) {
         <span class="font-mono font-bold text-amber-300">€ {{ euro(periodCashflow.unlinkedSpent) }}</span>
         <span class="text-xs font-semibold text-white bg-amber-700 px-2 py-1 rounded-lg">Koppelen</span>
       </button>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-stretch">
         <button
           type="button"
           class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm h-full flex flex-col transition-all"

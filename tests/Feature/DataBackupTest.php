@@ -61,7 +61,7 @@ test('export geeft een downloadbare zip en verwijdert het serverbestand', functi
     File::delete($zipPath);
 });
 
-test('import overschrijft catalogus en ledger vanuit de zip', function () {
+test('import voegt toe en wist bestaande extra rijen niet', function () {
     $user = User::factory()->create([
         'email' => 'backup@example.com',
         'name' => 'Backup User',
@@ -98,11 +98,61 @@ test('import overschrijft catalogus en ledger vanuit de zip', function () {
         ->assertOk()
         ->assertJsonPath('ok', true);
 
-    expect(Category::query()->count())->toBe(1)
-        ->and(Category::query()->value('name'))->toBe('Oorspronkelijk')
+    expect(Category::query()->count())->toBe(2)
+        ->and(Category::query()->where('key', 'cat-keep')->value('name'))->toBe('Oorspronkelijk')
+        ->and(Category::query()->where('key', 'cat-extra')->exists())->toBeTrue()
         ->and(Transaction::query()->count())->toBe(1)
-        ->and(Transaction::query()->value('description'))->toBe('Oorspronkelijk')
+        ->and(Transaction::query()->value('description'))->toBe('Gewijzigd')
         ->and(User::query()->where('email', 'backup@example.com')->exists())->toBeTrue();
+
+    File::delete($zipPath);
+});
+
+test('import preview telt nieuw gelijk en conflict zonder te schrijven', function () {
+    $user = User::factory()->create(['email' => 'preview@example.com']);
+    Category::query()->create([
+        'key' => 'cat-keep',
+        'name' => 'Oorspronkelijk',
+        'slug' => 'oorspronkelijk',
+        'type' => 'expense',
+    ]);
+    $zipPath = makeBackupZip();
+    Category::query()->where('key', 'cat-keep')->update(['name' => 'Gewijzigd']);
+
+    $upload = new UploadedFile($zipPath, 'finance-backup.zip', 'application/zip', null, true);
+
+    $this->actingAs($user)
+        ->post('/api/sparen/backup/import', ['file' => $upload, 'preview' => '1'])
+        ->assertOk()
+        ->assertJsonPath('summary.preview', true)
+        ->assertJsonPath('summary.has_conflicts', true);
+
+    expect(Category::query()->where('key', 'cat-keep')->value('name'))->toBe('Gewijzigd');
+
+    File::delete($zipPath);
+});
+
+test('import conflict op catalogus gebruikt backup als dat gekozen is', function () {
+    $user = User::factory()->create(['email' => 'choice@example.com']);
+    Category::query()->create([
+        'key' => 'cat-keep',
+        'name' => 'Oorspronkelijk',
+        'slug' => 'oorspronkelijk',
+        'type' => 'expense',
+    ]);
+    $zipPath = makeBackupZip();
+    Category::query()->where('key', 'cat-keep')->update(['name' => 'Gewijzigd']);
+
+    $upload = new UploadedFile($zipPath, 'finance-backup.zip', 'application/zip', null, true);
+
+    $this->actingAs($user)
+        ->post('/api/sparen/backup/import', [
+            'file' => $upload,
+            'resolutions' => ['catalog.categories' => 'backup'],
+        ])
+        ->assertOk();
+
+    expect(Category::query()->where('key', 'cat-keep')->value('name'))->toBe('Oorspronkelijk');
 
     File::delete($zipPath);
 });

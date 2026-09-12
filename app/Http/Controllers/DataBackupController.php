@@ -45,6 +45,8 @@ class DataBackupController extends Controller
     {
         $validated = $request->validate([
             'file' => ['required', 'file', 'max:51200'],
+            'preview' => ['sometimes'],
+            'resolutions' => ['sometimes'],
         ]);
 
         $file = $validated['file'];
@@ -68,8 +70,14 @@ class DataBackupController extends Controller
             ], 422);
         }
 
+        $preview = $request->boolean('preview');
+        $resolutions = $this->importResolutions($request->input('resolutions'));
+
         try {
-            $summary = $this->backups->importFrom($realPath);
+            $summary = $this->backups->importFrom($realPath, null, [
+                'preview' => $preview,
+                'resolutions' => $resolutions,
+            ]);
         } catch (RuntimeException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -78,7 +86,9 @@ class DataBackupController extends Controller
 
         return response()->json([
             'ok' => true,
-            'message' => 'Backup gezet. Alle data is overschreven.',
+            'message' => $preview
+                ? 'Vergelijking klaar. Nieuwe rijen worden toegevoegd; bestaande blijven tenzij je de backup kiest.'
+                : 'Import klaar. Nieuwe rijen zijn toegevoegd, bestaande data is niet gewist.',
             'summary' => $summary,
         ]);
     }
@@ -127,5 +137,28 @@ class DataBackupController extends Controller
         $user->save();
 
         return redirect()->route('login')->with('status', 'Backup gezet. Log in met '.$user->email.'.');
+    }
+
+    /**
+     * @return array<string, 'live'|'backup'>
+     */
+    private function importResolutions(mixed $raw): array
+    {
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : [];
+        }
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $resolutions = [];
+        foreach ($raw as $key => $value) {
+            if (is_string($key) && in_array($value, ['live', 'backup'], true)) {
+                $resolutions[$key] = $value;
+            }
+        }
+
+        return $resolutions;
     }
 }

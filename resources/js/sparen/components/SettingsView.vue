@@ -4,8 +4,8 @@ import { Archive, Download, LogOut, Monitor, Moon, Sun, Upload, User } from "luc
 import { useAppearance } from "@/composables/useAppearance";
 import { getSparenUser, logoutSparen, type SparenUser } from "../auth";
 import { pathForSettingsSection, settingsSectionFromPath } from "../navigation";
-import ConfirmDialog from "./ConfirmDialog.vue";
 import DataBackupModal, { type BackupStep } from "./DataBackupModal.vue";
+import ImportReviewDialog, { type ImportTableSummary } from "./ImportReviewDialog.vue";
 
 type SettingsTab = "profiel" | "uiterlijk" | "data" | "uitloggen";
 
@@ -28,7 +28,9 @@ const passwordConfirmation = ref("");
 const loggingOut = ref(false);
 const importInput = ref<HTMLInputElement | null>(null);
 const pendingImportFile = ref<File | null>(null);
-const confirmImportOpen = ref(false);
+const reviewOpen = ref(false);
+const reviewBusy = ref(false);
+const reviewTables = ref<ImportTableSummary[]>([]);
 const backupOpen = ref(false);
 const backupTitle = ref("Backup");
 const backupDescription = ref("");
@@ -164,29 +166,68 @@ function onImportFile(event: Event) {
   input.value = "";
   if (!file) return;
   pendingImportFile.value = file;
-  confirmImportOpen.value = true;
+  void previewImport(file);
 }
 
-async function confirmImport() {
+async function previewImport(file: File) {
+  reviewBusy.value = true;
+  reviewOpen.value = true;
+  try {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("preview", "1");
+    const response = await fetch("/api/sparen/backup/import", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: csrfHeaders("application/json", false),
+      body,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || "Vergelijken mislukt.");
+    }
+    reviewTables.value = (data.summary?.tables ?? []) as ImportTableSummary[];
+  } catch (error) {
+    reviewOpen.value = false;
+    pendingImportFile.value = null;
+    backupOpen.value = true;
+    backupTitle.value = "Data importeren";
+    backupDescription.value = "";
+    backupError.value = error instanceof Error ? error.message : "Vergelijken mislukt.";
+    backupDone.value = false;
+    backupSteps.value = [];
+  } finally {
+    reviewBusy.value = false;
+  }
+}
+
+function updateReviewResolution(key: string, value: "live" | "backup") {
+  reviewTables.value = reviewTables.value.map((table) =>
+    `${table.connection}.${table.table}` === key ? { ...table, resolution: value } : table
+  );
+}
+
+async function confirmImport(resolutions: Record<string, "live" | "backup">) {
   const file = pendingImportFile.value;
-  confirmImportOpen.value = false;
   if (!file) return;
 
+  reviewOpen.value = false;
   backupOpen.value = true;
   backupTitle.value = "Data importeren";
-  backupDescription.value = "Alle huidige data wordt overschreven met deze zip.";
+  backupDescription.value = "Nieuwe rijen worden toegevoegd. Bestaande rijen blijven, tenzij je de backup koos.";
   backupError.value = "";
   backupDone.value = false;
   backupDoneLabel.value = "";
   backupSteps.value = [
     { id: "upload", label: "Zip uploaden", status: "active" },
-    { id: "replace", label: "Catalogus en ledger overschrijven", status: "pending" },
+    { id: "merge", label: "Rijen vergelijken en zetten", status: "pending" },
     { id: "reload", label: "App vernieuwen", status: "pending" },
   ];
 
   try {
     const body = new FormData();
     body.append("file", file);
+    body.append("resolutions", JSON.stringify(resolutions));
     const response = await fetch("/api/sparen/backup/import", {
       method: "POST",
       credentials: "same-origin",
@@ -199,10 +240,10 @@ async function confirmImport() {
     }
 
     markStep("upload", "done");
-    markStep("replace", "done");
+    markStep("merge", "done");
     markStep("reload", "active");
     backupDone.value = true;
-    backupDoneLabel.value = "Backup gezet. De pagina wordt vernieuwd.";
+    backupDoneLabel.value = "Import klaar. De pagina wordt vernieuwd.";
     window.setTimeout(() => window.location.reload(), 700);
   } catch (error) {
     backupError.value = error instanceof Error ? error.message : "Import mislukt.";
@@ -461,7 +502,7 @@ function fieldError(field: string): string | undefined {
         <div>
           <h3 class="font-bold text-white text-sm">Backup</h3>
           <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
-            Exporteer catalogus en ledger als zip. Import overschrijft alle data met dat bestand.
+            Exporteer alles als zip. Import voegt ontbrekende rijen toe en vraagt bij twijfel of live of backup wint.
           </p>
         </div>
       </div>
@@ -510,13 +551,13 @@ function fieldError(field: string): string | undefined {
       </button>
     </div>
 
-    <ConfirmDialog
-      :is-open="confirmImportOpen"
-      title="Alle data overschrijven?"
-      description="Import vervangt catalogus en ledger volledig door de gekozen zip. Dit kan niet ongedaan worden gemaakt."
-      confirm-label="Overschrijven"
-      :on-confirm="confirmImport"
-      :on-cancel="() => { confirmImportOpen = false; pendingImportFile = null; }"
+    <ImportReviewDialog
+      :is-open="reviewOpen"
+      :tables="reviewTables"
+      :busy="reviewBusy"
+      @cancel="() => { reviewOpen = false; pendingImportFile = null; }"
+      @confirm="confirmImport"
+      @update="updateReviewResolution"
     />
 
     <DataBackupModal

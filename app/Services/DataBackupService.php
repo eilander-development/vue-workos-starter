@@ -47,6 +47,43 @@ class DataBackupService
         ],
     ];
 
+    /** @var array<string, list<list<string>>> */
+    private array $identityColumns = [
+        'categories' => [['key'], ['slug']],
+        'budgets' => [['key']],
+        'import_rules' => [['key']],
+        'savings_goals' => [['key']],
+        'budget_month_values' => [['budget_id', 'month_id', 'year']],
+        'users' => [['email']],
+        'transactions' => [['source_hash'], ['key']],
+        'bank_accounts' => [['key'], ['enable_banking_uid']],
+        'enable_banking_sessions' => [['session_id']],
+        'plaid_connections' => [['item_id']],
+        'checking_period_snapshots' => [['year', 'month_id']],
+        'dynamic_budgets' => [['month', 'name']],
+    ];
+
+    /** @var array<string, 'live'|'backup'> */
+    private array $defaultResolution = [
+        'categories' => 'backup',
+        'budgets' => 'backup',
+        'import_rules' => 'backup',
+        'savings_goals' => 'backup',
+        'budget_month_values' => 'backup',
+        'users' => 'live',
+        'transactions' => 'live',
+        'bank_accounts' => 'live',
+        'enable_banking_sessions' => 'live',
+        'plaid_connections' => 'live',
+        'checking_period_snapshots' => 'live',
+        'dynamic_budgets' => 'live',
+    ];
+
+    /** @var list<string> */
+    private array $protectNewFromBackup = [
+        'enable_banking_sessions',
+    ];
+
     /**
      * @param  callable(string, string, string, int, int):void|null  $onProgress
      * @return array{path: string, filename: string, manifest: array<string, mixed>}
@@ -106,9 +143,10 @@ class DataBackupService
 
     /**
      * @param  callable(string, string, string, int, int):void|null  $onProgress
+     * @param  array{preview?: bool, replace?: bool, resolutions?: array<string, 'live'|'backup'>}  $options
      * @return array<string, mixed>
      */
-    public function importFrom(string $zipPath, ?callable $onProgress = null): array
+    public function importFrom(string $zipPath, ?callable $onProgress = null, array $options = []): array
     {
         if (! is_file($zipPath)) {
             throw new RuntimeException('Backup-bestand niet gevonden.');
@@ -124,26 +162,57 @@ class DataBackupService
 
         $manifest = $this->readManifest($archive);
         $payload = $this->readPayload($archive, $manifest);
+        $preview = (bool) ($options['preview'] ?? false);
+        $replace = (bool) ($options['replace'] ?? false);
+        /** @var array<string, 'live'|'backup'> $resolutions */
+        $resolutions = $options['resolutions'] ?? [];
 
         $plan = $this->importPlan($payload);
         $total = max(1, count($plan));
         $index = 0;
-        $imported = [];
+        $tables = [];
+
+        $apply = function () use ($plan, $payload, $onProgress, &$index, $total, &$tables, $preview, $replace, $resolutions) {
+            foreach ($plan as $item) {
+                $index++;
+                $connection = $item['connection'];
+                $table = $item['table'];
+                if ($onProgress) {
+                    $onProgress($preview ? 'preview' : 'import', $connection, $table, $index, $total);
+                }
+
+                $rows = $payload[$connection][$table] ?? [];
+                if ($replace && ! $preview) {
+                    $this->replaceTable($connection, $table, $rows);
+                    $tables[] = [
+                        'connection' => $connection,
+                        'table' => $table,
+                        'insert' => count($rows),
+                        'skip' => 0,
+                        'conflict' => 0,
+                        'protected' => 0,
+                        'resolution' => 'backup',
+                    ];
+
+                    continue;
+                }
+
+                $tables[] = $this->mergeTable(
+                    $connection,
+                    $table,
+                    $rows,
+                    $this->resolutionFor($connection, $table, $resolutions),
+                    apply: ! $preview
+                );
+            }
+        };
 
         try {
-            $this->withoutForeignKeys(function () use ($plan, $payload, $onProgress, &$index, $total, &$imported) {
-                foreach ($plan as $item) {
-                    $index++;
-                    $connection = $item['connection'];
-                    $table = $item['table'];
-                    if ($onProgress) {
-                        $onProgress('import', $connection, $table, $index, $total);
-                    }
-
-                    $this->replaceTable($connection, $table, $payload[$connection][$table] ?? []);
-                    $imported[$connection][$table] = count($payload[$connection][$table] ?? []);
-                }
-            });
+            if ($preview) {
+                $apply();
+            } else {
+                $this->withoutForeignKeys($apply);
+            }
         } catch (\Throwable $e) {
             throw new RuntimeException('Import mislukt: '.$e->getMessage(), 0, $e);
         }
@@ -151,7 +220,10 @@ class DataBackupService
         return [
             'format' => self::FORMAT,
             'version' => self::VERSION,
-            'connections' => $imported,
+            'mode' => $replace ? 'replace' : 'merge',
+            'preview' => $preview,
+            'tables' => $tables,
+            'has_conflicts' => collect($tables)->contains(fn (array $row) => ($row['conflict'] ?? 0) > 0),
         ];
     }
 
@@ -306,6 +378,232 @@ class DataBackupService
         }
 
         return $payload;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  'live'|'backup'  $resolution
+     * @return array{connection: string, table: string, insert: int, skip: int, conflict: int, protected: int, resolution: string, examples: list<string>}
+     */
+    private function mergeTable(string $connection, string $table, array $rows, string $resolution, bool $apply): array
+    {
+        $db = DB::connection($connection);
+        $columns = Schema::connection($connection)->getColumnListing($table);
+        $existing = $db->table($table)->get()->map(fn ($row) => (array) $row)->all();
+        $index = $this->buildIdentityIndex($table, $existing);
+        $usedIds = [];
+        foreach ($existing as $row) {
+            if (isset($row['id'])) {
+                $usedIds[(string) $row['id']] = true;
+            }
+        }
+
+        $insert = 0;
+        $skip = 0;
+        $conflict = 0;
+        $protected = 0;
+        $examples = [];
+        $insertRows = [];
+        $updateRows = [];
+
+        $protectNew = in_array($table, $this->protectNewFromBackup, true)
+            && $existing !== []
+            && $resolution === 'live';
+
+        foreach ($rows as $row) {
+            $prepared = $this->prepareInsertRow($row, $columns);
+            if ($prepared === []) {
+                continue;
+            }
+
+            $match = $this->findExistingRow($table, $prepared, $index);
+            if ($match === null) {
+                if ($protectNew) {
+                    $protected++;
+                    if (count($examples) < 5) {
+                        $examples[] = $this->rowLabel($table, $prepared).' (niet toegevoegd: live heeft al een banksessie)';
+                    }
+
+                    continue;
+                }
+
+                if (isset($prepared['id']) && isset($usedIds[(string) $prepared['id']])) {
+                    unset($prepared['id']);
+                }
+                $insert++;
+                $insertRows[] = $prepared;
+
+                continue;
+            }
+
+            if (! $this->rowsDiffer($match, $prepared, $columns)) {
+                $skip++;
+
+                continue;
+            }
+
+            $conflict++;
+            if (count($examples) < 5) {
+                $examples[] = $this->rowLabel($table, $prepared);
+            }
+
+            if ($resolution === 'backup') {
+                $update = $prepared;
+                if (isset($match['id'])) {
+                    $update['id'] = $match['id'];
+                }
+                $updateRows[] = $update;
+            }
+        }
+
+        if ($apply) {
+            foreach (array_chunk($insertRows, 500) as $chunk) {
+                $db->table($table)->insert($chunk);
+            }
+            foreach ($updateRows as $update) {
+                if (! isset($update['id'])) {
+                    continue;
+                }
+                $id = $update['id'];
+                unset($update['id']);
+                $db->table($table)->where('id', $id)->update($update);
+            }
+            if ($insertRows !== [] && in_array('id', $columns, true) && in_array($db->getDriverName(), ['mysql', 'mariadb'], true)) {
+                $max = (int) $db->table($table)->max('id');
+                $quoted = str_replace('`', '', $table);
+                $db->statement('ALTER TABLE `'.$quoted.'` AUTO_INCREMENT = '.($max + 1));
+            }
+        }
+
+        return [
+            'connection' => $connection,
+            'table' => $table,
+            'insert' => $insert,
+            'skip' => $skip,
+            'conflict' => $conflict,
+            'protected' => $protected,
+            'resolution' => $resolution,
+            'examples' => $examples,
+        ];
+    }
+
+    /**
+     * @param  array<string, 'live'|'backup'>  $resolutions
+     * @return 'live'|'backup'
+     */
+    private function resolutionFor(string $connection, string $table, array $resolutions): string
+    {
+        $key = $connection.'.'.$table;
+        $chosen = $resolutions[$key] ?? $this->defaultResolution[$table] ?? 'live';
+
+        return $chosen === 'backup' ? 'backup' : 'live';
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildIdentityIndex(string $table, array $rows): array
+    {
+        $index = [];
+        foreach ($rows as $row) {
+            foreach ($this->identityColumns[$table] ?? [['id']] as $columns) {
+                $value = $this->identityValue($row, $columns);
+                if ($value !== null) {
+                    $index[$value] = $row;
+                }
+            }
+        }
+
+        return $index;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, array<string, mixed>>  $index
+     * @return array<string, mixed>|null
+     */
+    private function findExistingRow(string $table, array $row, array $index): ?array
+    {
+        foreach ($this->identityColumns[$table] ?? [['id']] as $columns) {
+            $value = $this->identityValue($row, $columns);
+            if ($value !== null && isset($index[$value])) {
+                return $index[$value];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  list<string>  $columns
+     */
+    private function identityValue(array $row, array $columns): ?string
+    {
+        $parts = [];
+        foreach ($columns as $column) {
+            $value = $row[$column] ?? null;
+            if ($value === null || $value === '') {
+                return null;
+            }
+            $parts[] = $column.'='.$value;
+        }
+
+        return implode('|', $parts);
+    }
+
+    /**
+     * @param  array<string, mixed>  $live
+     * @param  array<string, mixed>  $backup
+     * @param  list<string>  $columns
+     */
+    private function rowsDiffer(array $live, array $backup, array $columns): bool
+    {
+        $ignore = ['created_at', 'updated_at', 'remember_token', 'password'];
+        foreach ($columns as $column) {
+            if (in_array($column, $ignore, true)) {
+                continue;
+            }
+            if ($this->normalizeCompareValue($live[$column] ?? null) !== $this->normalizeCompareValue($backup[$column] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeCompareValue(mixed $value): string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+        if (is_array($value) || is_object($value)) {
+            return (string) json_encode($value, JSON_UNESCAPED_UNICODE);
+        }
+        if ($value === null) {
+            return '';
+        }
+
+        return is_numeric($value) ? (string) (0 + $value) : trim((string) $value);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function rowLabel(string $table, array $row): string
+    {
+        foreach (['key', 'email', 'name', 'session_id', 'description', 'iban'] as $column) {
+            $value = $row[$column] ?? null;
+            if (is_string($value) && $value !== '') {
+                return $table.': '.$value;
+            }
+        }
+
+        return $table;
     }
 
     /**

@@ -259,6 +259,10 @@ const totalToCompensate = computed(() =>
   potCompensationNeeds.value.reduce((sum, row) => sum + row.shortfall, 0)
 );
 
+const expectedEndAfterCompensation = computed(
+  () => expectedEndOfMonth.value + totalToCompensate.value
+);
+
 function openItemFromKpi(item: BudgetItem) {
   kpiKey.value = null;
   props.onOpenItemTransactions?.(item);
@@ -317,6 +321,7 @@ const kpiBreakdown = computed(() => {
     mode: "budget",
     bankBalance: periodStartBalance.value,
     includeStartBalance: isCurrentReportingMonth.value,
+    toCompensate: totalToCompensate.value,
   });
 });
 
@@ -426,7 +431,7 @@ function cardId(groupKey: string) {
       </p>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5 items-stretch">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3.5 items-stretch">
       <button
         type="button"
         class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
@@ -538,10 +543,13 @@ function cardId(groupKey: string) {
         <div
           class="text-lg font-bold font-mono"
           :class="expectedEndOfMonth >= 0 ? 'text-white' : 'text-rose-400'"
-          title="Huidig saldo + nog te ontvangen − nog te betalen − nog te sparen"
+          title="Zonder compensatie: huidig saldo + nog te ontvangen − nog te betalen − nog te sparen"
         >
           € {{ euro(expectedEndOfMonth) }}
         </div>
+        <p v-if="totalToCompensate > 0" class="text-[10px] text-slate-500 mt-0.5">
+          Zonder compensatie
+        </p>
         <div class="mt-1.5 space-y-0.5 text-[11px] font-mono">
           <div
             v-if="isCurrentReportingMonth"
@@ -566,6 +574,12 @@ function cardId(groupKey: string) {
             class="flex justify-between text-amber-300"
           >
             <span>Nog te compenseren</span><span>+€ {{ euro(totalToCompensate) }}</span>
+          </div>
+          <div
+            v-if="totalToCompensate > 0"
+            class="flex justify-between pt-1 mt-1 border-t border-slate-800/70 text-emerald-300"
+          >
+            <span>Na compensatie</span><span class="font-semibold">€ {{ euro(expectedEndAfterCompensation) }}</span>
           </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
