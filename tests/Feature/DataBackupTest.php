@@ -7,6 +7,7 @@ use App\Services\DataBackupService;
 use App\Support\BackupZip;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 
 function makeBackupZip(): string
 {
@@ -103,6 +104,46 @@ test('import overschrijft catalogus en ledger vanuit de zip', function () {
         ->and(User::query()->where('email', 'backup@example.com')->exists())->toBeTrue();
 
     File::delete($zipPath);
+});
+
+test('gasten kunnen een backup zetten als er nog geen gebruiker is', function () {
+    $user = User::factory()->create([
+        'email' => 'setup@example.com',
+        'password' => 'old-password',
+    ]);
+    $zipPath = makeBackupZip();
+    $user->delete();
+
+    expect(User::query()->exists())->toBeFalse();
+
+    $upload = new UploadedFile($zipPath, 'finance-backup.zip', 'application/zip', null, true);
+
+    $this->post('/setup/import', [
+        'file' => $upload,
+        'password' => 'nieuw-wachtwoord',
+        'password_confirmation' => 'nieuw-wachtwoord',
+    ])->assertRedirect('/login');
+
+    $imported = User::query()->where('email', 'setup@example.com')->first();
+    expect($imported)->not->toBeNull();
+    expect(Hash::check('nieuw-wachtwoord', $imported->password))->toBeTrue();
+
+    File::delete($zipPath);
+});
+
+test('setup-import verdwijnt zodra er een gebruiker is', function () {
+    User::factory()->create();
+    $path = sys_get_temp_dir().'/finance-backup-setup-'.uniqid().'.zip';
+    file_put_contents($path, 'PK');
+    $upload = new UploadedFile($path, 'finance-backup.zip', 'application/zip', null, true);
+
+    $this->post('/setup/import', [
+        'file' => $upload,
+        'password' => 'nieuw-wachtwoord',
+        'password_confirmation' => 'nieuw-wachtwoord',
+    ])->assertNotFound();
+
+    File::delete($path);
 });
 
 test('ongeldige zip wordt geweigerd', function () {
