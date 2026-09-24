@@ -235,8 +235,8 @@ class SparenController extends Controller
             $sessionData = $this->enableBanking->getSessionData($sessionId);
             $this->sessions->remember($sessionId, $sessionData);
             $list = $this->sessions->current()?->accounts ?: $list;
-        } catch (\Throwable) {
-            if (! is_array($list) || $list === []) {
+        } catch (\Throwable $e) {
+            if ($this->isLostBankAccess($e) || ! is_array($list) || $list === []) {
                 $this->sessions->markExpired($sessionId);
 
                 return $this->reconnectResponse();
@@ -247,57 +247,71 @@ class SparenController extends Controller
             return $this->reconnectResponse();
         }
 
-        $mapped = $this->enableBankingData->mapAccountBalances(is_array($list) ? $list : [], $this->enableBanking);
-        $today = Carbon::now('Europe/Amsterdam')->toDateString();
-        $imported = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0];
+        try {
+            $mapped = $this->enableBankingData->mapAccountBalances(is_array($list) ? $list : [], $this->enableBanking);
+            $today = Carbon::now('Europe/Amsterdam')->toDateString();
+            $imported = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0];
 
-        foreach ($mapped as $index => $account) {
-            $iban = data_get($account, 'raw.account_id.iban')
-                ?? data_get($account, 'raw.iban')
-                ?? null;
-            $uid = $account['accountId'] ?? null;
-            $record = BankAccount::query()->updateOrCreate(
-                ['key' => $uid ? 'eb-'.$uid : 'eb-checking-'.$index],
-                [
-                    'name' => $account['name'] ?? 'ING Betaalrekening',
-                    'bank_name' => data_get($account, 'raw.servicer.name', 'ING Bank'),
-                    'iban' => $iban,
-                    'type' => 'checking',
-                    'balance' => $account['balance'] ?? 0,
-                    'available_balance' => $account['available'] ?? ($account['balance'] ?? 0),
-                    'currency' => $account['currency'] ?? 'EUR',
-                    'status' => 'connected',
-                    'enable_banking_uid' => $uid,
-                    'last_synced_at' => now(),
-                ]
-            );
+            foreach ($mapped as $index => $account) {
+                $iban = data_get($account, 'raw.account_id.iban')
+                    ?? data_get($account, 'raw.iban')
+                    ?? null;
+                $uid = $account['accountId'] ?? null;
+                $record = BankAccount::query()->updateOrCreate(
+                    ['key' => $uid ? 'eb-'.$uid : 'eb-checking-'.$index],
+                    [
+                        'name' => $account['name'] ?? 'ING Betaalrekening',
+                        'bank_name' => data_get($account, 'raw.servicer.name', 'ING Bank'),
+                        'iban' => $iban,
+                        'type' => 'checking',
+                        'balance' => $account['balance'] ?? 0,
+                        'available_balance' => $account['available'] ?? ($account['balance'] ?? 0),
+                        'currency' => $account['currency'] ?? 'EUR',
+                        'status' => 'connected',
+                        'enable_banking_uid' => $uid,
+                        'last_synced_at' => now(),
+                    ]
+                );
 
-            if ($record->sync_count_date?->toDateString() !== $today) {
-                $record->sync_count_today = 0;
-                $record->sync_count_date = $today;
+                if ($record->sync_count_date?->toDateString() !== $today) {
+                    $record->sync_count_today = 0;
+                    $record->sync_count_date = $today;
+                }
+                $record->sync_count_today++;
+                $record->save();
+
+                if (! $uid) {
+                    continue;
+                }
+
+                $transactions = $this->enableBanking->getAllTransactions($uid, [
+                    'date_from' => now()->subDays(90)->format('Y-m-d'),
+                ]);
+
+                foreach ($transactions as &$row) {
+                    $row['account_iban'] = $iban;
+                }
+                unset($row);
+
+                $this->dumpRawTransactions($iban, $transactions);
+
+                $stats = $this->importer->import($transactions);
+                foreach ($stats as $key => $value) {
+                    $imported[$key] = ($imported[$key] ?? 0) + $value;
+                }
             }
-            $record->sync_count_today++;
-            $record->save();
+        } catch (\Throwable $e) {
+            if ($this->isLostBankAccess($e)) {
+                $this->sessions->markExpired($sessionId);
 
-            if (! $uid) {
-                continue;
+                return $this->reconnectResponse();
             }
 
-            $transactions = $this->enableBanking->getAllTransactions($uid, [
-                'date_from' => now()->subDays(90)->format('Y-m-d'),
-            ]);
+            report($e);
 
-            foreach ($transactions as &$row) {
-                $row['account_iban'] = $iban;
-            }
-            unset($row);
-
-            $this->dumpRawTransactions($iban, $transactions);
-
-            $stats = $this->importer->import($transactions);
-            foreach ($stats as $key => $value) {
-                $imported[$key] = ($imported[$key] ?? 0) + $value;
-            }
+            return response()->json([
+                'error' => $this->bankErrorMessage($e),
+            ], 502);
         }
 
         return response()->json([
@@ -309,8 +323,17 @@ class SparenController extends Controller
 
     private function reconnectResponse(): JsonResponse
     {
-        $redirectUri = config('services.enablebanking.redirect_uri') ?? url('/enabled-banking/auth_redirect');
-        $auth = $this->enableBanking->initAuth($redirectUri, 'ING', 'NL');
+        try {
+            $redirectUri = config('services.enablebanking.redirect_uri') ?? url('/enabled-banking/auth_redirect');
+            $auth = $this->enableBanking->initAuth($redirectUri, 'ING', 'NL');
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'error' => $this->bankErrorMessage($e),
+            ], 502);
+        }
+
         if (isset($auth['generated_state'])) {
             session(['eb_oauth_state' => $auth['generated_state']]);
         }
@@ -319,6 +342,27 @@ class SparenController extends Controller
             'needsConnect' => true,
             'url' => $auth['url'] ?? null,
         ], 409);
+    }
+
+    private function isLostBankAccess(\Throwable $e): bool
+    {
+        $status = method_exists($e, 'getResponse') && $e->getResponse()
+            ? $e->getResponse()->getStatusCode()
+            : $e->getCode();
+
+        return in_array((int) $status, [400, 401, 403, 404], true);
+    }
+
+    private function bankErrorMessage(\Throwable $e): string
+    {
+        if (method_exists($e, 'getResponse') && $e->getResponse()) {
+            $payload = json_decode((string) $e->getResponse()->getBody(), true);
+            if (is_array($payload) && is_string($payload['message'] ?? null) && $payload['message'] !== '') {
+                return $payload['message'];
+            }
+        }
+
+        return 'Banksynchronisatie mislukt';
     }
 
     /**

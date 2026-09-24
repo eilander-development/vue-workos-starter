@@ -103,6 +103,64 @@ test('sync vraagt opnieuw om koppeling als er geen sessie is', function () {
         ->assertJsonPath('url', 'https://bank.test/auth');
 });
 
+test('sync vraagt opnieuw om koppeling als de bankrekening niet meer bestaat', function () {
+    $this->actingAs(User::factory()->create());
+
+    EnableBankingSession::query()->create([
+        'session_id' => 'sess-stale',
+        'status' => 'authorized',
+        'valid_until' => now()->addDays(180),
+        'aspsp_name' => 'ING',
+        'aspsp_country' => 'NL',
+        'accounts' => [
+            [
+                'uid' => 'acc-gone',
+                'name' => 'Betaalrekening',
+                'currency' => 'EUR',
+                'account_id' => ['iban' => 'NL00INGB0000000000'],
+            ],
+        ],
+    ]);
+
+    $this->mock(EnableBanking::class, function ($mock) {
+        $mock->shouldReceive('getSessionData')->once()->andReturn([
+            'session_id' => 'sess-stale',
+            'accounts' => [
+                [
+                    'uid' => 'acc-gone',
+                    'name' => 'Betaalrekening',
+                    'currency' => 'EUR',
+                    'account_id' => ['iban' => 'NL00INGB0000000000'],
+                ],
+            ],
+            'access' => ['valid_until' => now()->addDays(180)->toIso8601String()],
+            'aspsp' => ['name' => 'ING', 'country' => 'NL'],
+        ]);
+        $mock->shouldReceive('getBalances')->once()->andReturn([
+            'balances' => [['balance_amount' => ['amount' => 12.34]]],
+        ]);
+        $mock->shouldReceive('getAllTransactions')->once()->andThrow(
+            new \GuzzleHttp\Exception\ClientException(
+                'Not found',
+                new \GuzzleHttp\Psr7\Request('GET', 'https://api.enablebanking.com/accounts/acc-gone/transactions'),
+                new \GuzzleHttp\Psr7\Response(404, [], json_encode([
+                    'error' => 'ACCOUNT_DOES_NOT_EXIST',
+                    'message' => 'No account found matching provided id',
+                ])),
+            )
+        );
+        $mock->shouldReceive('initAuth')->once()->andReturn([
+            'url' => 'https://bank.test/auth',
+            'generated_state' => 'state-2',
+        ]);
+    });
+
+    $this->postJson('/api/sparen/sync-bank')
+        ->assertStatus(409)
+        ->assertJsonPath('needsConnect', true)
+        ->assertJsonPath('url', 'https://bank.test/auth');
+});
+
 test('een laravel-sessie wordt overgenomen in de database', function () {
     $this->actingAs(User::factory()->create());
 
