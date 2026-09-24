@@ -76,6 +76,7 @@ const props = defineProps<{
   savingsGoals?: SavingsGoal[];
   initialPeriodOnly?: boolean;
   onAssignSavingsGoal?: (txId: string, goalId: string | null) => void;
+  onOpenSavingsGoal?: (goal: SavingsGoal) => void;
 }>();
 
 const { openTransactionDetail } = useTransactionDetail();
@@ -419,6 +420,15 @@ function assignedSavingsGoal(tx: Transaction): SavingsGoal | undefined {
     return undefined;
   }
   return (props.savingsGoals ?? []).find((goal) => goal.id === tx.assignedSavingsGoalId);
+}
+
+function savingsGoalForTransaction(tx: Transaction): SavingsGoal | undefined {
+  return assignedSavingsGoal(tx) ?? autoMatchedSavingsGoal(tx);
+}
+
+function handleOpenSavingsGoal(tx: Transaction) {
+  const goal = savingsGoalForTransaction(tx);
+  if (goal) props.onOpenSavingsGoal?.(goal);
 }
 
 function showSavingsGoalPicker(tx: Transaction): boolean {
@@ -784,24 +794,27 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
               </td>
               <td class="py-3 px-3" @click.stop>
                 <div v-if="tx.linkExcluded" class="space-y-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span
-                      class="inline-flex items-center gap-1 bg-slate-700/60 text-slate-300 border border-slate-600 px-2 py-0.5 rounded-lg font-medium text-[11px]"
-                      :title="tx.linkExclusionReason || 'Deze mutatie wordt niet gekoppeld aan een rubriek'"
-                    >
-                      <CheckCircle2 class="w-3 h-3 text-slate-400" />
-                      Niet koppelen
+                  <button
+                    v-if="savingsGoalForTransaction(tx) && onOpenSavingsGoal"
+                    type="button"
+                    class="inline-flex items-center gap-1.5 bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-200 border border-indigo-700/60 px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors group"
+                    :title="`Bekijk ${savingsGoalForTransaction(tx)?.kind === 'pot' ? 'potje' : 'spaarrekening'}`"
+                    @click="handleOpenSavingsGoal(tx)"
+                  >
+                    <PiggyBank class="w-3 h-3 text-indigo-400" />
+                    <span>
+                      {{ savingsGoalForTransaction(tx)?.kind === "pot" ? "Potje" : "Spaarrekening" }}:
+                      {{ savingsGoalForTransaction(tx)?.name }}
                     </span>
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-all shadow-sm active:scale-95"
-                      title="Toch aan een begrotingspost koppelen"
-                      @click="selectedTxForLinking = tx"
-                    >
-                      <Link2 class="w-3 h-3" />
-                      <span>Toch koppelen</span>
-                    </button>
-                  </div>
+                    <ChevronRight class="w-3 h-3 text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                  <span
+                    v-else
+                    class="inline-flex items-center gap-1 bg-slate-700/60 text-slate-300 border border-slate-600 px-2 py-0.5 rounded-lg font-medium text-[11px]"
+                  >
+                    <CheckCircle2 class="w-3 h-3 text-slate-400" />
+                    Automatisch verwerkt als spaaroverboeking
+                  </span>
                   <div v-if="tx.linkExclusionReason" class="text-[10px] text-slate-500 leading-snug">
                     {{ tx.linkExclusionReason }}
                   </div>

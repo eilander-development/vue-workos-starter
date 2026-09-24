@@ -4,6 +4,7 @@ import { X, Receipt } from "lucide-vue-next";
 import type { BudgetItem, Rule, SavingsGoal, Transaction } from "../types";
 import TransactionDate from "./TransactionDate.vue";
 import { normalizeAllocations } from "../allocations";
+import { transactionMatchesSavingsGoal } from "../matchSavings";
 
 const props = withDefaults(
   defineProps<{
@@ -38,9 +39,12 @@ const matchedRule = computed(() => {
 });
 
 const savingsGoal = computed(() => {
-  const id = props.transaction?.assignedSavingsGoalId;
-  if (!id) return null;
-  return props.savingsGoals.find((goal) => goal.id === id) ?? null;
+  const transaction = props.transaction;
+  if (!transaction) return null;
+  if (transaction.assignedSavingsGoalId) {
+    return props.savingsGoals.find((goal) => goal.id === transaction.assignedSavingsGoalId) ?? null;
+  }
+  return props.savingsGoals.find((goal) => transactionMatchesSavingsGoal(transaction, goal)) ?? null;
 });
 
 const allocations = computed(() =>
@@ -262,9 +266,12 @@ onUnmounted(() => {
               <dd class="text-slate-200 text-right">{{ savingsGoal.name }}</dd>
             </div>
             <div v-if="transaction.linkExcluded" class="px-3.5 py-2.5 flex justify-between gap-3">
-              <dt class="text-slate-500 shrink-0">Koppelen</dt>
+              <dt class="text-slate-500 shrink-0">Verwerking</dt>
               <dd class="text-slate-200 text-right">
-                Niet koppelen
+                Automatisch verwerkt als spaaroverboeking
+                <span v-if="savingsGoal" class="block text-indigo-300 mt-0.5">
+                  {{ savingsGoal.kind === "pot" ? "Potje" : "Spaarrekening" }}: {{ savingsGoal.name }}
+                </span>
                 <span v-if="transaction.linkExclusionReason" class="block text-slate-500 mt-0.5">
                   {{ transaction.linkExclusionReason }}
                 </span>

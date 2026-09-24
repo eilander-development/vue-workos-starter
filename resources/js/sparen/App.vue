@@ -433,6 +433,13 @@ function openPotDetail(goal: SavingsGoal) {
   potDetailGoal.value = goal;
 }
 
+function handleOpenSavingsGoalFromTransaction(goal: SavingsGoal) {
+  setActiveTab("sparen");
+  if (isPotGoal(goal)) {
+    openPotDetail(goal);
+  }
+}
+
 function openPotFromCompensation(need: PotCompensationNeed) {
   openPotDetail(need.goal);
 }
@@ -1514,6 +1521,7 @@ function closeSavingsGoalModal() {
           :on-delete-transaction="handleDeleteTransaction"
           :on-link-transaction="handleLinkTransaction"
           :on-assign-savings-goal="handleAssignSavingsGoal"
+          :on-open-savings-goal="handleOpenSavingsGoalFromTransaction"
           :on-create-rule-from-transaction="handleCreateRuleFromTransaction"
           :on-bulk-update-category="handleBulkUpdateCategory"
           :rules="rules"
