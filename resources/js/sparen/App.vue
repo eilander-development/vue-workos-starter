@@ -370,7 +370,7 @@ const monthlyBudgets = computed(() => {
         const settlement = potGoal
           ? computePotSettlement(potGoal, mb, transactions.value)
           : null;
-        const envelopePaid = Math.min(item.actual ?? 0, settlement?.compensated ?? 0);
+        const envelopePaid = Math.min(item.actual ?? 0, settlement?.funded ?? 0);
         const hasPotActivity = (settlement?.spent ?? 0) > 0;
         return {
           ...item,
