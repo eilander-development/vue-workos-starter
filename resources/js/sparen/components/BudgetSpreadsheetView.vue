@@ -48,14 +48,16 @@ import {
   buildBudgetExpenseModalBreakdown,
   buildBudgetIncomeModalBreakdown,
   buildBudgetSavingsModalBreakdown,
+  buildDeferredPaymentModalBreakdown,
   buildNettoModalBreakdown,
+  computeDeferredPaymentKpi,
   computeMonthKpi,
   isActiveReportingMonth,
   resolvePeriodStartBalance,
 } from "../monthKpi";
 import { useTransactionDetail } from "../composables/useTransactionDetail";
 
-type SpreadsheetKpiKey = "income" | "expense" | "savings" | "netto";
+type SpreadsheetKpiKey = "income" | "expense" | "savings" | "deferred" | "netto";
 
 const props = withDefaults(
   defineProps<{
@@ -249,6 +251,7 @@ const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemainin
 const totalSavingsOver = computed(() => monthKpi.value.totalSavingsOver);
 const totalIncomeOver = computed(() => monthKpi.value.totalIncomeOver);
 const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
+const deferredPaymentKpi = computed(() => computeDeferredPaymentKpi(expenseItems.value));
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
 
 const potCompensationNeeds = computed(() =>
@@ -316,6 +319,9 @@ const kpiBreakdown = computed(() => {
   }
   if (key === "savings") {
     return buildBudgetSavingsModalBreakdown(savingsItems.value, monthKpi.value, openFn);
+  }
+  if (key === "deferred") {
+    return buildDeferredPaymentModalBreakdown(expenseItems.value, openFn);
   }
   return buildNettoModalBreakdown(monthKpi.value, {
     mode: "budget",
@@ -431,7 +437,7 @@ function cardId(groupKey: string) {
       </p>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3.5 items-stretch">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3.5 items-stretch">
       <button
         type="button"
         class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
@@ -527,6 +533,40 @@ function cardId(groupKey: string) {
             <div class="flex justify-between text-emerald-400">
               <span>Meer gespaard</span><span>+€ {{ euro(totalSavingsOver) }}</span>
             </div>
+          </div>
+        </div>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
+      </button>
+      <button
+        type="button"
+        class="text-left bg-[#101726] border border-rose-900/60 hover:border-rose-500/70 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
+        @click="kpiKey = 'deferred'"
+      >
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span>Vooruit uitgegeven</span>
+          <span class="text-rose-400 font-semibold">Klarna + creditcard</span>
+        </div>
+        <div
+          class="text-lg font-bold font-mono"
+          :class="deferredPaymentKpi.remaining > 0 ? 'text-rose-400' : 'text-emerald-400'"
+        >
+          € {{ euro(deferredPaymentKpi.remaining) }}
+        </div>
+        <div class="mt-1.5 space-y-0.5 text-[11px] font-mono">
+          <div class="flex justify-between text-slate-300">
+            <span>Deze maand</span><span>€ {{ euro(deferredPaymentKpi.budget) }}</span>
+          </div>
+          <div class="flex justify-between text-emerald-400">
+            <span>Afgelost</span><span>€ {{ euro(deferredPaymentKpi.paid) }}</span>
+          </div>
+          <div
+            v-if="deferredPaymentKpi.over > 0"
+            class="flex justify-between text-rose-300"
+          >
+            <span>Extra afgelost</span><span>+€ {{ euro(deferredPaymentKpi.over) }}</span>
+          </div>
+          <div class="flex justify-between text-rose-400">
+            <span>Nog open</span><span>€ {{ euro(deferredPaymentKpi.remaining) }}</span>
           </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>

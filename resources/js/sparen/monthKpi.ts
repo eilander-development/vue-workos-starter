@@ -32,6 +32,49 @@ export type MonthKpiInput = {
   bankTotalsFromTransactions?: boolean;
 };
 
+export type DeferredPaymentKpi = {
+  items: BudgetItem[];
+  budget: number;
+  paid: number;
+  remaining: number;
+  over: number;
+};
+
+/** Creditcard en achteraf-betaaldiensten die als losse maandpost worden afgelost. */
+export function computeDeferredPaymentKpi(expenseItems: BudgetItem[]): DeferredPaymentKpi {
+  const items = expenseItems.filter((item) => {
+    const name = item.name.trim().toLocaleLowerCase("nl-NL");
+    return name === "creditcard" || name === "klarna";
+  });
+
+  return {
+    items,
+    budget: sumBudgetedAmount(items),
+    paid: sumAllPaid(items),
+    remaining: sumBudgetedRemaining(items),
+    over: sumBudgetedOver(items),
+  };
+}
+
+export function buildDeferredPaymentModalBreakdown(
+  expenseItems: BudgetItem[],
+  onOpenItem?: (item: BudgetItem) => void
+): KpiModalBreakdown {
+  const deferred = computeDeferredPaymentKpi(expenseItems);
+  const { columns, rows } = budgetItemRows(deferred.items, "budget", onOpenItem);
+
+  return {
+    title: "Vooruit uitgegeven",
+    formula: "Nog open = deze maand af te lossen - al afgelost (minimaal EUR 0 per post).",
+    subtitle: "Klarna en creditcard: eerder uitgegeven geld dat nog van de betaalrekening afgaat. Dit zit al in Totaal Uitgaven.",
+    columns,
+    rows,
+    totalValue: deferred.remaining,
+    totalLabel: "Nog open",
+    totalColorClass: deferred.remaining > 0 ? "text-rose-400" : "text-emerald-400",
+  };
+}
+
 /** Sommeer inkomsten/uitgaven/sparen direct uit bankmutaties (volledig cashflow-beeld). */
 export function sumRawBankTotals(transactions: Transaction[]): {
   totalIncomeBank: number;

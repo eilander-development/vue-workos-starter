@@ -26,7 +26,9 @@ import {
   buildBalanceModalBreakdown,
   buildBudgetExpenseModalBreakdown,
   buildBudgetIncomeModalBreakdown,
+  buildDeferredPaymentModalBreakdown,
   buildNettoModalBreakdown,
+  computeDeferredPaymentKpi,
   computeMonthKpi,
   kpiFromMonthlyBudget,
   isActiveReportingMonth,
@@ -48,7 +50,7 @@ import { formulaRows, budgetOpenAmount, hasBudget } from "../kpiBreakdown";
 import { expectedPaymentForItem } from "../expectedPayment";
 import { useTransactionDetail } from "../composables/useTransactionDetail";
 
-type DashboardKpiKey = "balance" | "income" | "expense" | "netto" | "cashflow";
+type DashboardKpiKey = "balance" | "income" | "expense" | "deferred" | "netto" | "cashflow";
 
 const props = defineProps<{
   currentMonth: MonthlyBudget;
@@ -143,6 +145,7 @@ const totalExpenseBudget = computed(() => monthKpi.value.totalExpenseBudget);
 const totalExpensePaid = computed(() => monthKpi.value.totalExpensePaid);
 const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
 const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
+const deferredPaymentKpi = computed(() => computeDeferredPaymentKpi(expenseItems.value));
 const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemaining);
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
 const expectedEndAfterCompensation = computed(
@@ -406,6 +409,9 @@ const kpiBreakdown = computed(() => {
   if (key === "expense") {
     return buildBudgetExpenseModalBreakdown(expenseItems.value, kpi);
   }
+  if (key === "deferred") {
+    return buildDeferredPaymentModalBreakdown(expenseItems.value);
+  }
   if (key === "cashflow") {
     const flow = periodCashflow.value;
     const { columns, rows } = formulaRows([
@@ -503,7 +509,7 @@ function catStats(cat: CatDef) {
           alles netjes binnenkomt en je geen extra uitgaven doet.
         </p>
       </div>
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-stretch">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 items-stretch">
       <button
         type="button"
         class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all relative overflow-hidden h-full flex flex-col"
@@ -671,6 +677,45 @@ function catStats(cat: CatDef) {
           </div>
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
+      </button>
+
+      <button
+        type="button"
+        class="text-left bg-slate-900 border border-rose-900/60 hover:border-rose-500/70 p-5 rounded-2xl shadow-sm transition-all h-full flex flex-col"
+        @click="kpiKey = 'deferred'"
+      >
+        <div class="flex items-center justify-between text-slate-400 mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider">Vooruit uitgegeven</span>
+          <Clock class="w-5 h-5 text-rose-400" />
+        </div>
+        <div
+          class="text-2xl font-black font-mono tracking-tight"
+          :class="deferredPaymentKpi.remaining > 0 ? 'text-rose-400' : 'text-emerald-400'"
+        >
+          € {{ euro(deferredPaymentKpi.remaining) }}
+        </div>
+        <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
+          <div class="flex items-center justify-between text-slate-300">
+            <span class="text-slate-400">Deze maand</span>
+            <span>€ {{ euro(deferredPaymentKpi.budget) }}</span>
+          </div>
+          <div class="flex items-center justify-between text-emerald-400">
+            <span class="text-slate-400">Afgelost</span>
+            <span>€ {{ euro(deferredPaymentKpi.paid) }}</span>
+          </div>
+          <div
+            v-if="deferredPaymentKpi.over > 0"
+            class="flex items-center justify-between text-rose-300"
+          >
+            <span class="text-slate-400">Extra afgelost</span>
+            <span>+€ {{ euro(deferredPaymentKpi.over) }}</span>
+          </div>
+          <div class="flex items-center justify-between text-rose-400">
+            <span class="text-slate-400">Nog open</span>
+            <span>€ {{ euro(deferredPaymentKpi.remaining) }}</span>
+          </div>
+        </div>
+        <p class="mt-auto pt-2 text-[10px] text-slate-500">Klarna + creditcard · klik voor detail</p>
       </button>
 
       <button
