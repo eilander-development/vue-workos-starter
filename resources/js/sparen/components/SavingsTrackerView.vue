@@ -31,7 +31,7 @@ import {
   isSavingsWithdrawalTransaction,
   savingsBalanceDelta,
 } from "../matchSavings";
-import { computePotSettlement, isPotGoal, potCompensationStatus, type PotSettlement } from "../potSettlement";
+import { computePotSettlement, computePotPeriodBalance, isPotGoal, potCompensationStatus, type PotSettlement } from "../potSettlement";
 import { computePeriodCashflow, savingsFlowByMonths, cashflowBucketTransactions, compactEuro, type CashflowBucket } from "../cashflow";
 import CashflowTransactionsModal from "./CashflowTransactionsModal.vue";
 import TransactionDate from "./TransactionDate.vue";
@@ -221,6 +221,22 @@ function potFor(goal: SavingsGoal) {
   return isPotGoal(goal) && props.currentMonth
     ? computePotSettlement(goal, props.currentMonth, props.transactions)
     : null;
+}
+
+function potFunding(goal: SavingsGoal) {
+  return isPotGoal(goal) && props.currentMonth
+    ? computePotPeriodBalance(goal, props.currentMonth, props.transactions)
+    : null;
+}
+
+function potFilled(goal: SavingsGoal): boolean {
+  const funding = potFunding(goal);
+  return !!funding && funding.totalDeposits >= (goal.monthlyContribution ?? 0);
+}
+
+function latestPotDepositDate(goal: SavingsGoal): string | null {
+  const funding = potFunding(goal);
+  return funding?.depositTransactions.map((tx) => tx.date).sort().at(-1) ?? null;
 }
 
 function potStatus(goal: SavingsGoal) {
@@ -472,11 +488,12 @@ function barHeight(totaal: number) {
             </div>
 
             <div class="flex justify-between text-slate-300">
-              <span>Begroot / in pot</span>
+              <span>Pot gevuld</span>
               <span>
-                € {{ potFor(goal)!.budgeted.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+                € {{ potFunding(goal)?.totalDeposits.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </span>
             </div>
+            <div>Gevuld op: {{ latestPotDepositDate(goal) }}</div>
             <button
               type="button"
               class="w-full flex justify-between text-rose-300 hover:text-rose-200 transition-colors group"
@@ -502,6 +519,7 @@ function barHeight(totaal: number) {
                 {{ potFor(goal)!.compensated.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
               </span>
             </div>
+            <div>Beschikbaar: € {{ potFor(goal)!.available.toFixed(2) }}</div>
             <div
               v-if="!potStatus(goal)?.sufficient"
               class="flex justify-between font-bold pt-1 border-t border-amber-800/40 text-yellow-400"

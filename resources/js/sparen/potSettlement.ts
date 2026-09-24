@@ -174,6 +174,8 @@ export type PotSettlement = {
   budgetItem?: BudgetItem;
   budgeted: number;
   spent: number;
+  funded: number;
+  available: number;
   compensated: number;
   toTransfer: number;
   overBudget: number;
@@ -278,7 +280,9 @@ export function computePotSettlement(
   const compensationTransactions = monthTxs.filter((tx) =>
     isLikelyPotCompensation(tx, goal)
   );
-  const compensated = compensationTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const funded = Math.max(0, Number(goal.initialAmount ?? 0) + monthTxs.filter((tx) => transactionMatchesSavingsGoalDeposit(tx, goal)).reduce((sum, tx) => sum + savingsBalanceDelta(tx), 0));
+  const compensated = Math.min(spent, funded);
+  const available = Math.max(0, funded - compensated);
 
   const linkedTxCount = spentTransactions.length;
   const toTransfer = Math.max(0, spent - compensated);
@@ -290,6 +294,8 @@ export function computePotSettlement(
     budgetItem: budgetItems[0],
     budgeted,
     spent,
+    funded,
+    available,
     compensated,
     toTransfer,
     overBudget,

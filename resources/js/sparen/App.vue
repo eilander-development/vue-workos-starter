@@ -366,14 +366,18 @@ const monthlyBudgets = computed(() => {
       const paymentCount = matchingTxs.length;
 
       if (isPotEnvelope) {
-        const envelopePaid = item.actual ?? 0;
-        const hasPotActivity = totalFromTxs > 0;
+        const potGoal = potGoalsLinkedToItem(item.id, savingsGoals.value)[0];
+        const settlement = potGoal
+          ? computePotSettlement(potGoal, mb, transactions.value)
+          : null;
+        const envelopePaid = Math.min(item.actual ?? 0, settlement?.compensated ?? 0);
+        const hasPotActivity = (settlement?.spent ?? 0) > 0;
         return {
           ...item,
           paidOrReceived: hasPotActivity ? envelopePaid : 0,
           shadowSpent: totalFromTxs,
           paymentCount,
-          isPaid: hasPotActivity && envelopePaid > 0,
+          isPaid: hasPotActivity && envelopePaid >= (item.actual ?? 0) && (item.actual ?? 0) > 0,
         };
       }
 

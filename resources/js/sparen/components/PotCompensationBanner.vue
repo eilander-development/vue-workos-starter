@@ -17,11 +17,12 @@ function euro(n: number) {
 }
 
 const total = computed(() => props.needs.reduce((sum, row) => sum + row.shortfall, 0));
+const activeNeeds = computed(() => props.needs.filter((need) => need.shortfall > 0));
 </script>
 
 <template>
   <div
-    v-if="needs.length > 0"
+    v-if="activeNeeds.length > 0"
     class="bg-amber-950/40 border border-amber-700/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
     role="status"
   >
@@ -44,7 +45,7 @@ const total = computed(() => props.needs.reduce((sum, row) => sum + row.shortfal
       </p>
       <div class="mt-2 flex flex-wrap gap-1.5">
         <button
-          v-for="need in needs"
+          v-for="need in activeNeeds"
           :key="need.goal.id"
           type="button"
           class="inline-flex items-center gap-1.5 text-[11px] font-mono bg-amber-900/50 hover:bg-amber-800/60 border border-amber-700/40 text-amber-100 px-2 py-1 rounded-lg transition-colors"
