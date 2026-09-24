@@ -458,6 +458,9 @@ class DataBackupService
 
         if ($apply) {
             foreach (array_chunk($insertRows, 500) as $chunk) {
+                $chunkColumns = array_values(array_unique(array_merge(...array_map(fn (array $row) => array_keys($row), $chunk))));
+                $defaults = array_fill_keys($chunkColumns, null);
+                $chunk = array_map(fn (array $row) => array_replace($defaults, $row), $chunk);
                 $db->table($table)->insert($chunk);
             }
             foreach ($updateRows as $update) {
