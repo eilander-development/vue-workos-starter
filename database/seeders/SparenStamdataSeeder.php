@@ -71,7 +71,7 @@ class SparenStamdataSeeder extends Seeder
             ['verz-1', 'Begrafenis (asr)', 'Verzekeringen', 12.68],
             ['verz-2', 'Woonverzekering (InShared)', 'Verzekeringen', 41.29],
             ['verz-3', 'Overlijdensrisico (NN)', 'Verzekeringen', 32.84],
-            ['spaar-1', 'Buffer', 'Spaargeld', 600],
+            ['spaar-1', 'Buffer', 'Spaargeld', 500],
             ['spaar-2', 'Tuin + Woning', 'Spaargeld', 100],
             ['spaar-3', 'Uitjes', 'Spaargeld', 100],
             ['spaar-4', 'Timmie (kat)', 'Spaargeld', 50],
@@ -159,7 +159,7 @@ class SparenStamdataSeeder extends Seeder
         }
 
         $goals = [
-            ['goal-1', 'Noodbuffer & Onvoorzien', 'NL83INGB0131342031', 'ING Oranje Spaarrekening', 4500, 2400, 600, 'emerald', 'ShieldCheck', 'spaar-1', 'Vaste maandelijkse bufferopbouw voor onvoorziene kosten'],
+            ['goal-1', 'Noodbuffer & Onvoorzien', 'NL83INGB0131342031', 'ING Oranje Spaarrekening', 4500, 2400, 500, 'emerald', 'ShieldCheck', 'spaar-1', 'Vaste maandelijkse bufferopbouw voor onvoorziene kosten'],
             ['goal-2', 'Tuin + Woning Onderhoud', 'NL12KNAB0123456789', 'Knab Spaarrekening', 2000, 1100, 100, 'indigo', 'Home', 'spaar-2', 'Onderhoud woning, schilderwerk en tuin vernieuwing'],
             ['goal-3', 'Vakantie & Uitjes', 'NL99RABO0987654321', 'Rabobank Doelsparen', 1500, 700, 100, 'amber', 'Palmtree', 'spaar-3', 'Zomervakantie en weekendjes weg met het gezin'],
             ['goal-4', 'Timmie (Dierenartskosten Kat)', 'NL44BUNQ2098765432', 'Bunq Spaarpot', 600, 400, 50, 'purple', 'Cat', 'spaar-4', 'Gezondheid, inentingen en onverwachte dierenartsbezoeken'],

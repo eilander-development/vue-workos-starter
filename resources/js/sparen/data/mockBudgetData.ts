@@ -416,7 +416,7 @@ function createMonthTemplate(
     "verz-3": { name: "Overlijdensrisico (NN)", group: "Verzekeringen" as const, type: "uitgaven" as const, estimated: 32.84, actual: 32.84, paid: 32.84 },
 
     // Spaargeld
-    "spaar-1": { name: "Buffer", group: "Spaargeld" as const, type: "sparen" as const, estimated: 600.00, actual: 600.00, paid: 600.00 },
+    "spaar-1": { name: "Buffer", group: "Spaargeld" as const, type: "sparen" as const, estimated: 500.00, actual: 600.00, paid: 600.00 },
     "spaar-2": { name: "Tuin + Woning", group: "Spaargeld" as const, type: "sparen" as const, estimated: 100.00, actual: 100.00, paid: 100.00 },
     "spaar-3": { name: "Uitjes", group: "Spaargeld" as const, type: "sparen" as const, estimated: 100.00, actual: 100.00, paid: 100.00 },
     "spaar-4": { name: "Timmie (kat)", group: "Spaargeld" as const, type: "sparen" as const, estimated: 50.00, actual: 50.00, paid: 50.00 },
@@ -476,7 +476,7 @@ export const INITIAL_MONTHLY_BUDGETS: MonthlyBudget[] = [
     "ink-1": { estimated: 3975.66, actual: 4175.66, paid: 4175.66 },
     "won-2": { estimated: 250.00, actual: 250.00, paid: 250.00 },
     "dag-4": { estimated: 102.00, actual: 0.00, paid: 0.00 },
-    "spaar-1": { estimated: 600.00, actual: 0.00, paid: 0.00 },
+    "spaar-1": { estimated: 500.00, actual: 0.00, paid: 0.00 },
     "ovk-4": { estimated: 1429.56, actual: 1429.56, paid: 1429.56 },
   }),
 
@@ -484,7 +484,7 @@ export const INITIAL_MONTHLY_BUDGETS: MonthlyBudget[] = [
   createMonthTemplate("feb", "Februari", 92.87, {
     "dag-4": { estimated: 102.00, actual: 0.00, paid: 0.00 },
     "dag-2": { estimated: 30.00, actual: 30.00, paid: 0.00 },
-    "spaar-1": { estimated: 600.00, actual: 0.00, paid: 0.00 },
+    "spaar-1": { estimated: 500.00, actual: 0.00, paid: 0.00 },
     "ovk-4": { estimated: 882.99, actual: 882.99, paid: 882.99 },
   }),
 
@@ -492,7 +492,7 @@ export const INITIAL_MONTHLY_BUDGETS: MonthlyBudget[] = [
   createMonthTemplate("mrt", "Maart", 66.62, {
     "ink-3": { estimated: 353.93, actual: 353.93, paid: 353.93 },
     "won-3": { estimated: 68.10, actual: 109.10, paid: 109.10 },
-    "spaar-1": { estimated: 600.00, actual: 1000.00, paid: 1000.00 },
+    "spaar-1": { estimated: 500.00, actual: 1000.00, paid: 1000.00 },
     "ovk-4": { estimated: 240.30, actual: 240.30, paid: 240.30 },
   }),
 
@@ -506,7 +506,7 @@ export const INITIAL_MONTHLY_BUDGETS: MonthlyBudget[] = [
   createMonthTemplate("mei", "Mei", 78.51, {
     "ink-1": { estimated: 3975.66, actual: 6824.39, paid: 6824.39 },
     "won-3": { estimated: 68.10, actual: 68.10, paid: 44.00 },
-    "spaar-1": { estimated: 600.00, actual: 0.00, paid: 0.00 },
+    "spaar-1": { estimated: 500.00, actual: 0.00, paid: 0.00 },
     "ovv-2": { estimated: 0.00, actual: 0.00, paid: 0.00 },
     "ovk-4": { estimated: 670.33, actual: 670.33, paid: 670.33 },
   }),
@@ -531,7 +531,7 @@ export const INITIAL_MONTHLY_BUDGETS: MonthlyBudget[] = [
     "won-2": { estimated: 150.00, actual: 150.00, paid: 0.00 },
     "won-3": { estimated: 68.10, actual: 68.10, paid: 0.00 },
     "won-4": { estimated: 78.00, actual: 78.00, paid: 78.00 },
-    "spaar-1": { estimated: 600.00, actual: 600.00, paid: 0.00 },
+    "spaar-1": { estimated: 500.00, actual: 600.00, paid: 0.00 },
     "spaar-2": { estimated: 100.00, actual: 100.00, paid: 0.00 },
     "spaar-3": { estimated: 100.00, actual: 100.00, paid: 0.00 },
     "spaar-4": { estimated: 50.00, actual: 50.00, paid: 0.00 },
@@ -561,7 +561,7 @@ export const INITIAL_MONTHLY_BUDGETS: MonthlyBudget[] = [
     "ink-2": { estimated: 184.00, actual: 184.00, paid: 245.00 },
     "ink-4": { estimated: 559.50, actual: 559.50, paid: 559.50 },
     "dag-1": { estimated: 500.00, actual: 500.00, paid: 105.38 },
-    "spaar-1": { estimated: 600.00, actual: 600.00, paid: 2197.62 },
+    "spaar-1": { estimated: 500.00, actual: 600.00, paid: 2197.62 },
     "ovv-2": { estimated: 0.00, actual: 0.00, paid: 0.00 },
     "ovk-5": { estimated: 39.30, actual: 39.30, paid: 39.30 },
   }),
