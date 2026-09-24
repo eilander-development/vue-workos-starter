@@ -111,28 +111,71 @@ class EnableBanking
         $jwt = $this->generateJwt();
         $state = bin2hex(random_bytes(16)); // Genereer de unieke state hier
 
-        $response = $this->http->post("{$this->baseUri}/auth", [
-            'headers' => [
-                'Authorization' => "Bearer {$jwt}",
-                'Content-Type'  => 'application/json',
-                'Accept'        => 'application/json',
+        $payload = [
+            'access' => [
+                'valid_until' => date('Y-m-d\\TH:i:s\\Z', strtotime('+180 days')),
             ],
-            'json' => [
-                'access' => [
-                    'valid_until' => date('Y-m-d\TH:i:s\Z', strtotime('+180 days'))
-                ],
-                'aspsp' => [
-                    'name'    => $bankName,
-                    'country' => $country
-                ],
-                'state'        => $state, // Stuur de state naar de bank
-                'redirect_url' => $redirectUri,
-            ]
-        ]);
+            'aspsp' => [
+                'name' => $bankName,
+                'country' => $country,
+            ],
+            'state' => $state,
+            'redirect_url' => $redirectUri,
+        ];
 
-        $data = json_decode($response->getBody()->getContents(), true);
-        
-        // Voeg de gegenereerde state toe aan de return array zodat de controller erbij kan
+        try {
+            $response = $this->http->post("{$this->baseUri}/auth", [
+                'headers' => [
+                    'Authorization' => "Bearer {$jwt}",
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                ],
+                'json' => $payload,
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+        } catch (\Throwable $e) {
+            $shouldRetry = false;
+
+            if (method_exists($e, 'getResponse') && $e->getResponse()) {
+                try {
+                    $body = (string) $e->getResponse()->getBody();
+                    if (stripos($body, 'aspsp') !== false || stripos($body, 'wrong aspsp') !== false || stripos($body, 'ASPSP') !== false) {
+                        $shouldRetry = true;
+                    }
+                } catch (\Throwable) {
+                    // ignore
+                }
+            } else {
+                $msg = (string) $e->getMessage();
+                if (stripos($msg, 'aspsp') !== false || stripos($msg, 'ASPSP') !== false || stripos($msg, 'Wrong ASPSP') !== false) {
+                    $shouldRetry = true;
+                }
+            }
+
+            if ($shouldRetry) {
+                try {
+                    $retryPayload = $payload;
+                    unset($retryPayload['aspsp']);
+
+                    $response = $this->http->post("{$this->baseUri}/auth", [
+                        'headers' => [
+                            'Authorization' => "Bearer {$jwt}",
+                            'Content-Type' => 'application/json',
+                            'Accept' => 'application/json',
+                        ],
+                        'json' => $retryPayload,
+                    ]);
+
+                    $data = json_decode($response->getBody()->getContents(), true);
+                } catch (\Throwable $e2) {
+                    throw $e2;
+                }
+            } else {
+                throw $e;
+            }
+        }
+
         $data['generated_state'] = $state;
 
         return $data;
