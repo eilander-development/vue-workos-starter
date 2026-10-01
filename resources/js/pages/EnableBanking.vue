@@ -193,6 +193,7 @@ const fetchTransactions = async () => {
 };
 
 const importEnabledBankingTransactions = async () => {
+    if (importingTransactions.value) return;
     if (!transactions.value.length) {
         showNotification('Fout', 'Er zijn geen transacties om te importeren.', 'destructive');
         return;
@@ -207,9 +208,9 @@ const importEnabledBankingTransactions = async () => {
         importStats.value = stats;
         importStatsOpen.value = true;
         showNotification(
-            'Succes',
-            `Import voltooid: ${stats.imported} opgeslagen, ${stats.matched} gematcht, ${stats.duplicates} duplicaten.`,
-            'success'
+            stats.blocked ? 'Import deels geblokkeerd' : 'Succes',
+            `Import voltooid: ${stats.imported} opgeslagen, ${stats.duplicates} al bekend, ${stats.blocked ?? 0} geblokkeerd (${stats.missing_identity ?? 0} zonder bankreferentie/rekening, ${stats.conflicts ?? 0} afwijkend, ${stats.invalid ?? 0} ongeldig), ${stats.pending ?? 0} nog niet geboekt.`,
+            stats.blocked ? 'destructive' : 'success'
         );
     } catch (error) {
         console.error(error);

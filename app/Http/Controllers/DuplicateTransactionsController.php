@@ -24,7 +24,7 @@ class DuplicateTransactionsController extends Controller
                     'date' => $tx->date->format('Y-m-d'),
                     'description' => $tx->description,
                     'amount' => (float) $tx->amount,
-                    'account' => $tx->account_iban,
+                    'account' => BankTransactionIdentity::ownAccount($tx->bank_payload, (float) $tx->amount, $tx->account_iban),
                     'importedAt' => $tx->created_at?->timezone('Europe/Amsterdam')->format('d-m-Y H:i:s'),
                 ])->values(),
             ])->values();

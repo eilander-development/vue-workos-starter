@@ -495,6 +495,7 @@ async function persistBudgetChange(
 }
 
 async function handleBankSync() {
+  if (isSyncing.value) return;
   isSyncing.value = true;
   try {
     const result = await syncSparenBank();
@@ -517,11 +518,13 @@ async function handleBankSync() {
       ? [
           `${stats.imported ?? 0} nieuw`,
           `${stats.duplicates ?? 0} al bekend`,
+          ...(stats.blocked ? [`${stats.blocked} geblokkeerd (${stats.missing_identity ?? 0} zonder bankreferentie/rekening, ${stats.conflicts ?? 0} met afwijkende boekingsgegevens, ${stats.invalid ?? 0} ongeldig)`] : []),
+          ...(stats.pending ? [`${stats.pending} nog niet geboekt`] : []),
           ...(stats.time_backfilled ? [`${stats.time_backfilled} tijden aangevuld`] : []),
         ].join(" · ")
       : undefined;
 
-    notify("success", "Bank gesynchroniseerd", details);
+    notify(stats?.blocked ? "error" : "success", stats?.blocked ? "Synchronisatie deels geblokkeerd" : "Bank gesynchroniseerd", details);
   } catch (error) {
     notify("error", "Synchronisatie mislukt", error instanceof Error ? error.message : undefined);
   } finally {

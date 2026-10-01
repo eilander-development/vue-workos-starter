@@ -2,25 +2,42 @@
 
 namespace App\DTOs;
 
+use App\Models\Transaction;
+use App\Support\BankTransactionIdentity;
 use App\Support\BankTransactionTime;
 
 class TransactionDTO
 {
     public ?string $id;
+
     public ?string $account_id;
+
     public float $amount;
+
     public string $currency;
+
     public ?string $description;
+
     public ?string $posted_at;
+
     public ?string $reference;
+
     public ?string $merchant;
+
     public ?string $counterpart_iban;
+
     public ?string $type;
+
     public ?string $date;
+
     public ?string $time;
+
     public ?int $categoryId;
+
     public ?int $budgetId;
+
     public ?string $sourceType;
+
     public array $raw;
 
     public function __construct(array $data)
@@ -89,6 +106,7 @@ class TransactionDTO
 
                 if (preg_match('/^IBAN:\s*([A-Z0-9]+)/iu', $trimmed, $matches)) {
                     $remittanceIban = trim($matches[1]);
+
                     continue;
                 }
 
@@ -125,11 +143,11 @@ class TransactionDTO
 
         return new self([
             'id' => $t['entry_reference'] ?? ($t['transaction_id'] ?? bin2hex(random_bytes(8))),
-            'account_id' => $t['debtor_account']['iban'] ?? null,
+            'account_id' => BankTransactionIdentity::ownAccount($t, $amount) ?: null,
             'amount' => $amount,
             'currency' => $currency,
             'description' => $description,
-            'posted_at' => BankTransactionTime::bookingDate($t, $t['transaction_date'] ?? null),
+            'posted_at' => BankTransactionTime::bookingDate($t, $t['transaction_date'] ?? null, fallbackToToday: false),
             'time' => BankTransactionTime::extractBookingTime($t),
             'reference' => $t['entry_reference'] ?? null,
             'merchant' => $merchant,
@@ -138,7 +156,7 @@ class TransactionDTO
         ]);
     }
 
-    public static function fromModel(\App\Models\Transaction $transaction): self
+    public static function fromModel(Transaction $transaction): self
     {
         return new self([
             'id' => $transaction->id,

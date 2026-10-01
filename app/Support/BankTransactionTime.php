@@ -87,7 +87,7 @@ class BankTransactionTime
      * Boekdatum van de bank: booking_date, anders de kalenderdag van booking_datetime.
      * Geen factuurdatum uit de omschrijving en geen valutadatum.
      */
-    public static function bookingDate(array $row, ?string $fallback = null): string
+    public static function bookingDate(array $row, ?string $fallback = null, bool $fallbackToToday = true): string
     {
         $raw = is_array($row['raw'] ?? null) ? $row['raw'] : $row;
 
@@ -115,7 +115,11 @@ class BankTransactionTime
             }
         }
 
-        return date('Y-m-d');
+        if (is_array($row['raw'] ?? null)) {
+            return self::bookingDate($row['raw'], $fallback, $fallbackToToday);
+        }
+
+        return $fallbackToToday ? date('Y-m-d') : '';
     }
 
     /**

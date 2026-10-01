@@ -21,8 +21,11 @@ class ImportEnabledBankingTransactionsRequest extends FormRequest
             'transactions.*.amount' => ['required', 'numeric'],
             'transactions.*.currency' => ['nullable', 'string'],
             'transactions.*.merchant' => ['nullable', 'string'],
+            'transactions.*.account_iban' => ['nullable', 'string'],
+            'transactions.*.account_id' => ['nullable', 'string'],
+            'transactions.*.is_pending' => ['nullable', 'boolean'],
+            'transactions.*.status' => ['nullable', 'string'],
             'transactions.*.raw' => ['nullable', 'array'],
         ];
     }
 }
-
