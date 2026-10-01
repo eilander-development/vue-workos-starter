@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { X, PiggyBank } from "lucide-vue-next";
 import type { MonthlyBudget, SavingsGoal, Transaction } from "../types";
 import type { PotSettlement } from "../potSettlement";
@@ -12,19 +12,29 @@ const props = defineProps<{
   goal: SavingsGoal | null;
   settlement: PotSettlement | null;
   currentMonth: MonthlyBudget;
+  initialTab?: "deposited" | "spent" | "compensated";
 }>();
 
 const { openTransactionDetail } = useTransactionDetail();
 
-const activeTab = ref<"spent" | "compensated">("spent");
+const activeTab = ref<"deposited" | "spent" | "compensated">("spent");
 const searchTerm = ref("");
+
+watch(() => [props.isOpen, props.goal?.id, props.initialTab], () => {
+  if (props.isOpen) {
+    activeTab.value = props.initialTab ?? "spent";
+    searchTerm.value = "";
+  }
+}, { immediate: true });
 
 const transactions = computed(() => {
   if (!props.settlement) return [];
   const list =
-    activeTab.value === "spent"
-      ? props.settlement.spentTransactions
-      : props.settlement.compensationTransactions;
+    activeTab.value === "deposited"
+      ? props.settlement.depositTransactions
+      : activeTab.value === "spent"
+        ? props.settlement.spentTransactions
+        : props.settlement.compensationTransactions;
 
   if (!searchTerm.value) return list;
 
@@ -97,7 +107,7 @@ function budgetItemLabel(tx: Transaction): string | null {
       <div class="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/40 space-y-3 shrink-0">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-            <span class="text-slate-400 text-[11px] block font-medium">Begroot / in pot</span>
+            <span class="text-slate-400 text-[11px] block font-medium">Begroot deze periode</span>
             <span class="text-sm font-bold text-white font-mono mt-0.5 block">
               € {{ settlement.budgeted.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
             </span>
@@ -109,8 +119,8 @@ function budgetItemLabel(tx: Transaction): string | null {
             </span>
           </div>
           <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-            <span class="text-slate-400 text-[11px] block font-medium line-through">Al gecompenseerd</span>
-            <span class="text-sm font-bold text-slate-500 line-through font-mono mt-0.5 block">
+            <span class="text-slate-400 text-[11px] block font-medium">Al gecompenseerd</span>
+            <span class="text-sm font-bold text-emerald-400 font-mono mt-0.5 block">
               € {{ settlement.compensated.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
             </span>
           </div>
@@ -123,7 +133,15 @@ function budgetItemLabel(tx: Transaction): string | null {
         </div>
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
-          <div class="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-fit">
+          <div class="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-fit">
+            <button
+              type="button"
+              class="px-3 py-1 rounded-lg text-xs font-semibold transition-all"
+              :class="activeTab === 'deposited' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
+              @click="activeTab = 'deposited'"
+            >
+              Stortingen ({{ settlement.depositTransactions.length }})
+            </button>
             <button
               type="button"
               class="px-3 py-1 rounded-lg text-xs font-semibold transition-all"
@@ -166,6 +184,12 @@ function budgetItemLabel(tx: Transaction): string | null {
           ({{ transactions.length }})
         </h4>
 
+        <p v-if="activeTab === 'deposited'" class="text-xs text-blue-300 mb-3">
+          Gestort in {{ currentMonth.monthName }} {{ currentMonth.year }}:
+          <strong>? {{ settlement.deposited.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</strong>
+          ? {{ settlement.depositTransactions.length }} stortingen
+        </p>
+
         <div
           v-if="transactions.length === 0"
           class="text-center py-10 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20 p-6"
@@ -184,7 +208,7 @@ function budgetItemLabel(tx: Transaction): string | null {
             <div class="min-w-0 space-y-0.5">
               <div class="flex items-center gap-2">
                 <TransactionDate :date="tx.date" :time="tx.time" size="sm" />
-                <span class="text-white font-medium truncate">{{ tx.description }}</span>
+                <span class="text-white font-medium break-words">{{ tx.description }}</span>
               </div>
               <p
                 v-if="activeTab === 'spent' && budgetItemLabel(tx)"

@@ -56,6 +56,7 @@ const { openTransactionDetail } = useTransactionDetail();
 
 const expandedGoalId = ref<string | null>(null);
 const potDetailGoalId = ref<string | null>(null);
+const potDetailTab = ref<"deposited" | "spent" | "compensated">("spent");
 const flowChartView = ref<"pair" | "net">("pair");
 const txModal = ref<{ bucket: CashflowBucket; title: string; subtitle?: string } | null>(null);
 
@@ -68,7 +69,8 @@ const potDetailSettlement = computed((): PotSettlement | null => {
   return computePotSettlement(potDetailGoal.value, props.currentMonth, props.transactions);
 });
 
-function openPotDetail(goal: SavingsGoal) {
+function openPotDetail(goal: SavingsGoal, tab: "deposited" | "spent" | "compensated" = "spent") {
+  potDetailTab.value = tab;
   potDetailGoalId.value = goal.id;
 }
 
@@ -227,11 +229,6 @@ function potFunding(goal: SavingsGoal) {
   return isPotGoal(goal) && props.currentMonth
     ? computePotPeriodBalance(goal, props.currentMonth, props.transactions)
     : null;
-}
-
-function potFilled(goal: SavingsGoal): boolean {
-  const funding = potFunding(goal);
-  return !!funding && funding.totalDeposits >= (goal.monthlyContribution ?? 0);
 }
 
 function latestPotDepositDate(goal: SavingsGoal): string | null {
@@ -468,7 +465,7 @@ function barHeight(totaal: number) {
 
           <div
             v-if="potFor(goal)"
-            class="mb-3 bg-amber-950/30 border border-amber-800/50 rounded-xl px-3 py-2.5 space-y-2 text-[11px] font-mono"
+            class="mb-3 bg-slate-950/30 border border-slate-700/60 rounded-xl px-3 py-2.5 space-y-2 text-[11px] font-mono"
           >
             <div
               class="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 border"
@@ -487,13 +484,22 @@ function barHeight(totaal: number) {
               />
             </div>
 
-            <div class="flex justify-between text-slate-300">
-              <span>Pot gevuld</span>
-              <span>
-                € {{ potFunding(goal)?.totalDeposits.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            <button
+              type="button"
+              class="w-full flex justify-between gap-2 text-blue-300 hover:text-blue-200 transition-colors group"
+              title="Bekijk de stortingen die dit bedrag vormen"
+              @click="openPotDetail(goal, 'deposited')"
+            >
+              <span class="group-hover:underline">Gestort deze periode</span>
+              <span class="flex items-center gap-1.5">
+                <span>? {{ euro(potFor(goal)!.deposited) }}</span>
+                <span class="text-[9px] text-slate-400">({{ potFor(goal)!.depositTransactions.length }})</span>
               </span>
+            </button>
+            <div v-if="latestPotDepositDate(goal)" class="flex items-center justify-between gap-2 text-slate-400">
+              <span>Laatste storting</span>
+              <TransactionDate :date="latestPotDepositDate(goal)!" size="sm" />
             </div>
-            <div>Gevuld op: {{ latestPotDepositDate(goal) }}</div>
             <button
               type="button"
               class="w-full flex justify-between text-rose-300 hover:text-rose-200 transition-colors group"
@@ -897,6 +903,7 @@ function barHeight(totaal: number) {
     :on-close="closePotDetail"
     :goal="potDetailGoal"
     :settlement="potDetailSettlement"
+    :initial-tab="potDetailTab"
     :current-month="currentMonth"
   />
 </template>

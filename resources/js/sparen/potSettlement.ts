@@ -175,6 +175,8 @@ export type PotSettlement = {
   budgeted: number;
   spent: number;
   funded: number;
+  deposited: number;
+  depositTransactions: Transaction[];
   available: number;
   compensated: number;
   toTransfer: number;
@@ -250,6 +252,10 @@ export function isLikelyPotCompensation(tx: Transaction, goal: SavingsGoal): boo
   return haystack.includes(keyword) && hasHint;
 }
 
+function roundMoney(amount: number): number {
+  return Math.round(amount * 100) / 100;
+}
+
 export function computePotSettlement(
   goal: SavingsGoal,
   currentMonth: MonthlyBudget,
@@ -275,18 +281,21 @@ export function computePotSettlement(
       !isSavingsCashflowTransfer(tx) &&
       !isLikelyPotCompensation(tx, goal)
   );
-  const spent = spentTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const spent = roundMoney(spentTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
 
   const compensationTransactions = monthTxs.filter((tx) =>
     isLikelyPotCompensation(tx, goal)
   );
-  const funded = Math.max(0, Number(goal.initialAmount ?? 0) + monthTxs.filter((tx) => transactionMatchesSavingsGoalDeposit(tx, goal)).reduce((sum, tx) => sum + savingsBalanceDelta(tx), 0));
-  const compensated = Math.min(spent, funded);
-  const available = Math.max(0, funded - compensated);
+  const depositTransactions = computePotPeriodBalance(goal, currentMonth, transactions).depositTransactions;
+  const deposited = roundMoney(depositTransactions.reduce((sum, tx) => sum + savingsBalanceDelta(tx), 0));
+  const funded = Math.max(0, roundMoney(Number(goal.initialAmount ?? 0) + deposited));
+  // Alleen geboekte overboekingen terug naar de betaalrekening zijn compensatie.
+  const compensated = roundMoney(compensationTransactions.reduce((sum, tx) => sum + tx.amount, 0));
+  const available = Math.max(0, roundMoney(funded - compensated));
 
   const linkedTxCount = spentTransactions.length;
-  const toTransfer = Math.max(0, spent - compensated);
-  const overBudget = Math.max(0, spent - budgeted);
+  const toTransfer = Math.max(0, roundMoney(spent - compensated));
+  const overBudget = Math.max(0, roundMoney(spent - budgeted));
 
   return {
     goal,
@@ -295,6 +304,8 @@ export function computePotSettlement(
     budgeted,
     spent,
     funded,
+    deposited,
+    depositTransactions,
     available,
     compensated,
     toTransfer,
@@ -308,13 +319,13 @@ export function computePotSettlement(
 export function potCompensationStatus(
   settlement: Pick<PotSettlement, "spent" | "compensated">
 ): { sufficient: boolean; shortfall: number; surplus: number } {
-  const shortfall = Math.max(0, settlement.spent - settlement.compensated);
+  const shortfall = Math.max(0, roundMoney(settlement.spent - settlement.compensated));
   const sufficient = settlement.spent === 0 || shortfall === 0;
 
   return {
     sufficient,
     shortfall,
-    surplus: Math.max(0, settlement.compensated - settlement.spent),
+    surplus: Math.max(0, roundMoney(settlement.compensated - settlement.spent)),
   };
 }
 
