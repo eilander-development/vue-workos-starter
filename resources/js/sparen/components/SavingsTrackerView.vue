@@ -36,6 +36,7 @@ import { computePeriodCashflow, savingsFlowByMonths, cashflowBucketTransactions,
 import CashflowTransactionsModal from "./CashflowTransactionsModal.vue";
 import TransactionDate from "./TransactionDate.vue";
 import PotSettlementModal from "./PotSettlementModal.vue";
+import { formatReportingPeriodLabel, reportingPeriodForMonth } from "../month";
 import { useTransactionDetail } from "../composables/useTransactionDetail";
 
 const props = defineProps<{
@@ -484,6 +485,9 @@ function barHeight(totaal: number) {
               />
             </div>
 
+            <p v-if="currentMonth" class="text-slate-400 font-sans text-[10px]">
+              {{ formatReportingPeriodLabel(reportingPeriodForMonth(currentMonth)) }}
+            </p>
             <button
               type="button"
               class="w-full flex justify-between gap-2 text-blue-300 hover:text-blue-200 transition-colors group"
@@ -492,7 +496,7 @@ function barHeight(totaal: number) {
             >
               <span class="group-hover:underline">Gestort deze periode</span>
               <span class="flex items-center gap-1.5">
-                <span>? {{ euro(potFor(goal)!.deposited) }}</span>
+                <span>&euro; {{ euro(potFor(goal)!.deposited) }}</span>
                 <span class="text-[9px] text-slate-400">({{ potFor(goal)!.depositTransactions.length }})</span>
               </span>
             </button>
@@ -518,14 +522,21 @@ function barHeight(totaal: number) {
                 </span>
               </span>
             </button>
-            <div class="flex justify-between text-emerald-300/90">
-              <span>Gecompenseerd</span>
-              <span>
-                €
-                {{ potFor(goal)!.compensated.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+            <button
+              type="button"
+              class="w-full flex justify-between gap-2 text-emerald-300 hover:text-emerald-200 group"
+              @click="openPotDetail(goal, 'compensated')"
+            >
+              <span class="group-hover:underline">Gecompenseerd</span>
+              <span class="flex items-center gap-1.5">
+                <span>&euro; {{ euro(potFor(goal)!.compensated) }}</span>
+                <span class="text-[9px] text-slate-400">({{ potFor(goal)!.compensationTransactions.length }})</span>
               </span>
+            </button>
+            <div class="flex justify-between gap-2 border-t border-slate-700/60 pt-2 font-semibold text-slate-200">
+              <span>Resterend na overboekingen</span>
+              <span>&euro; {{ euro(potFor(goal)!.available) }}</span>
             </div>
-            <div>Beschikbaar: € {{ potFor(goal)!.available.toFixed(2) }}</div>
             <div
               v-if="!potStatus(goal)?.sufficient"
               class="flex justify-between font-bold pt-1 border-t border-amber-800/40 text-yellow-400"
@@ -596,7 +607,7 @@ function barHeight(totaal: number) {
           <div class="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
             <span class="text-slate-400">Maandelijkse inleg:</span>
             <span class="font-mono font-semibold text-slate-200">
-              € {{ goal.monthlyContribution.toFixed(2) }} / mnd
+              € {{ euro(goal.monthlyContribution) }} / mnd
             </span>
           </div>
 

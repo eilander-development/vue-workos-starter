@@ -2,7 +2,9 @@
 import { computed, ref, watch } from "vue";
 import { X, PiggyBank } from "lucide-vue-next";
 import type { MonthlyBudget, SavingsGoal, Transaction } from "../types";
-import type { PotSettlement } from "../potSettlement";
+import { potSpendingAmount, type PotSettlement } from "../potSettlement";
+import { amountTowardBudgetItem } from "../allocations";
+import { formatReportingPeriodLabel, reportingPeriodForMonth } from "../month";
 import TransactionDate from "./TransactionDate.vue";
 import { useTransactionDetail } from "../composables/useTransactionDetail";
 
@@ -54,9 +56,15 @@ function close() {
 }
 
 function budgetItemLabel(tx: Transaction): string | null {
-  if (!props.settlement || !tx.budgetItemId) return null;
-  const item = props.settlement.budgetItems.find((b) => b.id === tx.budgetItemId);
-  return item ? `${item.group} › ${item.name}` : null;
+  if (!props.settlement) return null;
+  const items = props.settlement.budgetItems.filter(item => amountTowardBudgetItem(tx, item.id) > 0);
+  return items.length ? items.map(item => `${item.group} / ${item.name}`).join(", ") : null;
+}
+
+function listedAmount(tx: Transaction): number {
+  return activeTab.value === "spent" && props.goal
+    ? potSpendingAmount(tx, props.goal)
+    : Math.abs(tx.amount);
 }
 </script>
 
@@ -180,21 +188,21 @@ function budgetItemLabel(tx: Transaction): string | null {
 
       <div class="p-4 sm:p-5 overflow-y-auto flex-1">
         <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-          {{ activeTab === "spent" ? "Uitgaven op betaalrekening" : "Overboekingen pot → rekening" }}
+          {{ activeTab === "deposited" ? "Overboekingen rekening \u2192 pot" : activeTab === "spent" ? "Uitgaven op betaalrekening" : "Overboekingen pot \u2192 rekening" }}
           ({{ transactions.length }})
         </h4>
 
         <p v-if="activeTab === 'deposited'" class="text-xs text-blue-300 mb-3">
-          Gestort in {{ currentMonth.monthName }} {{ currentMonth.year }}:
-          <strong>? {{ settlement.deposited.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</strong>
-          ? {{ settlement.depositTransactions.length }} stortingen
+          Gestort van {{ formatReportingPeriodLabel(reportingPeriodForMonth(currentMonth)) }}:
+          <strong>&euro; {{ settlement.deposited.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</strong>
+          &middot; {{ settlement.depositTransactions.length }} stortingen
         </p>
 
         <div
           v-if="transactions.length === 0"
           class="text-center py-10 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20 p-6"
         >
-          <p class="text-sm text-slate-400">Geen mutaties in {{ currentMonth.monthName }} {{ currentMonth.year }}</p>
+          <p class="text-sm text-slate-400">Geen mutaties voor deze periode of zoekopdracht.</p>
         </div>
 
         <div v-else class="space-y-2">
@@ -210,6 +218,9 @@ function budgetItemLabel(tx: Transaction): string | null {
                 <TransactionDate :date="tx.date" :time="tx.time" size="sm" />
                 <span class="text-white font-medium break-words">{{ tx.description }}</span>
               </div>
+              <p v-if="activeTab === 'spent' && Math.abs(listedAmount(tx) - Math.abs(tx.amount)) > 0.005" class="text-[10px] text-slate-400">
+                Deel voor dit potje; totale bankbetaling &euro; {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+              </p>
               <p
                 v-if="activeTab === 'spent' && budgetItemLabel(tx)"
                 class="text-[10px] text-amber-300/80 truncate"
@@ -224,7 +235,7 @@ function budgetItemLabel(tx: Transaction): string | null {
               class="font-mono font-bold shrink-0"
               :class="activeTab === 'spent' ? 'text-rose-400' : 'text-emerald-400'"
             >
-              € {{ Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
+              € {{ listedAmount(tx).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
             </span>
           </div>
         </div>

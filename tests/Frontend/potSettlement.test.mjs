@@ -71,3 +71,36 @@ test("funding total is explained by the exact listed deposits", () => {
   assert.equal(result.deposited, 1000);
   assert.equal(result.deposited, result.depositTransactions.reduce((sum, tx) => sum - tx.amount, 0));
 });
+
+
+test("a split payment charges only the share allocated to this pot", () => {
+  const split = { ...spending, amount: -100, allocations: [
+    { budgetItemId: "groceries", amount: 60 },
+    { budgetItemId: "clothing", amount: 40 },
+  ] };
+  const result = computePotSettlement(goal, month, [split]);
+  assert.equal(result.spent, 60);
+  assert.equal(result.toTransfer, 60);
+  assert.equal(result.spentTransactions.length, 1);
+});
+
+test("a pot includes its allocated share even when another category is primary", () => {
+  const split = { ...spending, budgetItemId: "clothing", amount: -100, allocations: [
+    { budgetItemId: "groceries", amount: 60 },
+    { budgetItemId: "clothing", amount: 40 },
+  ] };
+  const result = computePotSettlement(goal, month, [split]);
+  assert.equal(result.spent, 60);
+  assert.equal(result.spentTransactions.length, 1);
+});
+
+test("multiple linked allocations count the transaction once and sum their shares", () => {
+  const multiGoal = { ...goal, categoryBudgetItemIds: ["groceries", "clothing"] };
+  const split = { ...spending, amount: -100, allocations: [
+    { budgetItemId: "groceries", amount: 60 },
+    { budgetItemId: "clothing", amount: 40 },
+  ] };
+  const result = computePotSettlement(multiGoal, month, [split]);
+  assert.equal(result.spent, 100);
+  assert.equal(result.spentTransactions.length, 1);
+});

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+function displayDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/.exec(value);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : value;
+}
+
 withDefaults(
   defineProps<{
     date: string;
@@ -20,7 +25,7 @@ withDefaults(
     title="Boekdatum"
   >
     <div :class="size === 'sm' ? 'text-[11px] text-slate-400' : 'text-slate-200'">
-      {{ date }}
+      {{ displayDate(date) }}
     </div>
     <div
       v-if="time"

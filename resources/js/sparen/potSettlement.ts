@@ -1,5 +1,6 @@
 import type { BudgetItem, MonthlyBudget, SavingsGoal, Transaction } from "./types";
 import { isTransactionInReportingMonth } from "./month";
+import { amountTowardBudgetItem } from "./allocations";
 import {
   isIngSpaarpotTransfer,
   isSavingsCashflowTransfer,
@@ -256,6 +257,10 @@ function roundMoney(amount: number): number {
   return Math.round(amount * 100) / 100;
 }
 
+export function potSpendingAmount(tx: Transaction, goal: SavingsGoal): number {
+  return roundMoney(goalBudgetItemIds(goal).reduce((sum, id) => sum + amountTowardBudgetItem(tx, id), 0));
+}
+
 export function computePotSettlement(
   goal: SavingsGoal,
   currentMonth: MonthlyBudget,
@@ -275,13 +280,12 @@ export function computePotSettlement(
   // Alleen echte uitgaven op de gekoppelde rubriek(en), geen spaarstortingen.
   const spentTransactions = monthTxs.filter(
     (tx) =>
-      !!tx.budgetItemId &&
-      linkedIds.has(tx.budgetItemId) &&
+      potSpendingAmount(tx, goal) > 0 &&
       tx.type === "Uitgave" &&
       !isSavingsCashflowTransfer(tx) &&
       !isLikelyPotCompensation(tx, goal)
   );
-  const spent = roundMoney(spentTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  const spent = roundMoney(spentTransactions.reduce((sum, tx) => sum + potSpendingAmount(tx, goal), 0));
 
   const compensationTransactions = monthTxs.filter((tx) =>
     isLikelyPotCompensation(tx, goal)
