@@ -32,6 +32,7 @@ import type {
   SavingsGoal,
   TransactionAllocation,
 } from "../types";
+import DuplicateTransactionsModal from "./DuplicateTransactionsModal.vue";
 import LinkTransactionModal from "./LinkTransactionModal.vue";
 import TransactionDate from "./TransactionDate.vue";
 import { isLinkExcludedTransaction, isUnlinkedTransaction, matchingUnlinkedTransactions } from "../matchRule";
@@ -45,6 +46,7 @@ const props = defineProps<{
   onAddTransaction: () => void;
   onOpenAutoProcess: () => void;
   onDeleteTransaction: (id: string) => void;
+  onDuplicateDeleted: (id: string) => void;
   onLinkTransaction: (
     txId: string,
     categoryGroup: BudgetCategoryGroup,
@@ -82,6 +84,7 @@ const props = defineProps<{
 const { openTransactionDetail } = useTransactionDetail();
 
 const searchTerm = ref("");
+const showDuplicates = ref(false);
 const filterType = ref<"ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen">(
   props.initialFilter ?? "ALL"
 );
@@ -442,6 +445,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
 
 <template>
   <div id="transactions-view" class="space-y-6">
+    <DuplicateTransactionsModal v-if="showDuplicates" @close="showDuplicates = false" @deleted="onDuplicateDeleted" />
     <div
       class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
     >
@@ -461,6 +465,9 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
         </p>
       </div>
       <div class="flex items-center gap-3">
+        <button type="button" class="border border-amber-700 text-amber-300 px-3.5 py-2 rounded-xl text-xs font-semibold" @click="showDuplicates = true">
+          Dubbele transacties
+        </button>
         <button
           v-if="unlinkedCount > 0"
           type="button"

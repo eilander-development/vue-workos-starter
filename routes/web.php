@@ -30,6 +30,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/instellingen/{section}', [SparenController::class, 'app'])
         ->whereIn('section', ['profiel', 'uiterlijk', 'data', 'uitloggen'])
         ->name('sparen.instellingen.section');
+    Route::get('/api/sparen/duplicate-transactions', [\App\Http\Controllers\DuplicateTransactionsController::class, 'index']);
+    Route::delete('/api/sparen/duplicate-transactions', [\App\Http\Controllers\DuplicateTransactionsController::class, 'destroy']);
     Route::get('/api/sparen/state', [SparenController::class, 'state'])->name('sparen.state');
     Route::put('/api/sparen/state', [SparenController::class, 'persist'])->name('sparen.persist');
     Route::put('/api/sparen/budget-items/{itemId}', [SparenController::class, 'persistBudgetItem'])->name('sparen.budget_item.persist');

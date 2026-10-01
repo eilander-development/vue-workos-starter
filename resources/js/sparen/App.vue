@@ -566,15 +566,6 @@ function handleDeleteTransaction(txId: string) {
     async () => {
       await deleteTransactionRecord(txId);
       transactions.value = transactions.value.filter((t) => t.id !== txId);
-      bankAccounts.value = bankAccounts.value.map((acc) =>
-        acc.iban === tx.accountIban || acc.type === "checking"
-          ? {
-              ...acc,
-              balance: acc.balance - tx.amount,
-              availableBalance: acc.availableBalance - tx.amount,
-            }
-          : acc
-      );
     },
     {
       title: "Transactie verwijderd",
@@ -1519,6 +1510,7 @@ function closeSavingsGoalModal() {
           :on-add-transaction="() => (isAddTxModalOpen = true)"
           :on-open-auto-process="() => (isAutoProcessModalOpen = true)"
           :on-delete-transaction="handleDeleteTransaction"
+          :on-duplicate-deleted="(id: string) => { transactions = transactions.filter(tx => tx.id !== id); }"
           :on-link-transaction="handleLinkTransaction"
           :on-assign-savings-goal="handleAssignSavingsGoal"
           :on-open-savings-goal="handleOpenSavingsGoalFromTransaction"

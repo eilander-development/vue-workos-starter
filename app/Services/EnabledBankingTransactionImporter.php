@@ -2,9 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Budget;
-use App\Models\ImportRule;
 use App\Models\Transaction;
+use App\Support\BankTransactionIdentity;
 use App\Support\BankTransactionTime;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -41,6 +40,16 @@ class EnabledBankingTransactionImporter
             }
 
             $existing = Transaction::query()->where('source_hash', $hash)->first();
+            // Older imports may have a description-based hash despite carrying a bank reference.
+            $reference = BankTransactionIdentity::reference($row);
+            $account = BankTransactionIdentity::account($row['account_iban'] ?? $row['account_id'] ?? null);
+            if (! $existing && $reference && $account !== '' && Schema::hasColumn('transactions', 'bank_payload')) {
+                $existing = Transaction::query()->where('source_type', 'api')
+                    ->whereDate('date', date('Y-m-d', strtotime((string) $date)))
+                    ->where('amount', $amount)->get()
+                    ->first(fn ($tx) => BankTransactionIdentity::account($tx->account_iban) === $account
+                        && BankTransactionIdentity::reference($tx->bank_payload) === $reference);
+            }
             if ($existing) {
                 $stats['duplicates']++;
                 $dirty = false;
@@ -56,6 +65,7 @@ class EnabledBankingTransactionImporter
                 if ($dirty) {
                     $existing->save();
                 }
+
                 continue;
             }
 
@@ -132,13 +142,10 @@ class EnabledBankingTransactionImporter
 
     private function sourceHash(array $row, mixed $date, float $amount, string $description, mixed $iban): string
     {
-        $raw = is_array($row['raw'] ?? null) ? $row['raw'] : [];
-        $bankId = $raw['entry_reference']
-            ?? $raw['transaction_id']
-            ?? null;
-
+        $bankId = BankTransactionIdentity::reference($row);
+        $account = BankTransactionIdentity::account($row['account_iban'] ?? $row['account_id'] ?? null);
         $parts = $bankId
-            ? ['ref', (string) $bankId]
+            ? ['ref', $account, $bankId, (string) $date, number_format($amount, 2, '.', '')]
             : [(string) $date, number_format($amount, 2, '.', ''), $description, (string) $iban];
 
         return hash('sha256', implode('|', $parts));

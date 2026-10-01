@@ -22,7 +22,7 @@ async function sparenRequest(method: string, path: string, body?: unknown) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.error || "Kon wijziging niet opslaan");
+    throw new Error(data.error || data.message || "Kon wijziging niet opslaan");
   }
 
   return data;
@@ -175,4 +175,12 @@ export async function syncSparenBank() {
   }
 
   return data;
+}
+
+export async function loadDuplicateTransactions() {
+  return sparenRequest("GET", "/api/sparen/duplicate-transactions");
+}
+
+export async function removeDuplicateTransaction(keepId: number, removeId: number) {
+  return sparenRequest("DELETE", "/api/sparen/duplicate-transactions", { keepId, removeId });
 }
