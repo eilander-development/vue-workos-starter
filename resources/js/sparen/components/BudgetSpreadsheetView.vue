@@ -35,6 +35,7 @@ import { computePotSettlement, goalBudgetItemIds, hasPotEnvelope, potCompensatio
 import {
   sumBudgetedAmount,
   sumBudgetedPaid,
+  sumAllPaid,
   sumBudgetedRemaining,
   sumBudgetedOver,
   hasBudget,
@@ -346,12 +347,16 @@ function groupItems(grp: CategoryGroupDef) {
   return props.currentMonth.items.filter((i) => i.group === grp.groupKey);
 }
 
+function displayedPaid(item: BudgetItem): number {
+  return item.type === "inkomsten" ? item.paidOrReceived : withinBudgetPaid(item);
+}
+
 function groupTotals(grp: CategoryGroupDef) {
   const items = groupItems(grp);
   const totalBudget = sumBudgetedAmount(items);
-  const totalPaidOrReceived = sumBudgetedPaid(items);
+  const totalPaidOrReceived = grp.type === "inkomsten" ? sumAllPaid(items) : sumBudgetedPaid(items);
   const totalPaymentCount = items.reduce(
-    (s, i) => s + (hasBudget(i) ? paymentCount(i) : 0),
+    (s, i) => s + (grp.type === "inkomsten" || hasBudget(i) ? paymentCount(i) : 0),
     0
   );
   const incomeSurplus = grp.type === "inkomsten" ? sumBudgetedOver(items) : 0;
@@ -883,12 +888,12 @@ function cardId(groupKey: string) {
                         <div class="flex flex-col items-end gap-0.5">
                           <div class="flex items-baseline justify-end gap-1.5 whitespace-nowrap">
                             <button
-                              v-if="onOpenItemTransactions && hasBudget(item)"
+                              v-if="onOpenItemTransactions && (grp.type === 'inkomsten' || hasBudget(item))"
                               type="button"
                               class="hover:underline font-mono transition-colors"
                               :class="
-                                withinBudgetPaid(item) > 0
-                                  ? item.paidOrReceived > item.actual
+                                displayedPaid(item) > 0
+                                  ? grp.type !== 'inkomsten' && item.paidOrReceived > item.actual
                                     ? 'text-rose-400 hover:text-rose-300'
                                     : 'text-emerald-400 hover:text-emerald-300'
                                   : 'text-slate-400 hover:text-indigo-300'
@@ -898,13 +903,13 @@ function cardId(groupKey: string) {
                             >
                               €
                               {{
-                                withinBudgetPaid(item).toLocaleString("nl-NL", {
+                                displayedPaid(item).toLocaleString("nl-NL", {
                                   minimumFractionDigits: 2,
                                 })
                               }}
                             </button>
                             <span
-                              v-else-if="!hasBudget(item)"
+                              v-else-if="grp.type !== 'inkomsten' && !hasBudget(item)"
                               class="text-slate-500"
                               title="Geen begroting deze maand — telt niet mee in totaal"
                             >
@@ -913,8 +918,8 @@ function cardId(groupKey: string) {
                             <span
                               v-else
                               :class="
-                                withinBudgetPaid(item) > 0
-                                  ? item.paidOrReceived > item.actual
+                                displayedPaid(item) > 0
+                                  ? grp.type !== 'inkomsten' && item.paidOrReceived > item.actual
                                     ? 'text-rose-400'
                                     : 'text-emerald-400'
                                   : 'text-slate-400'
@@ -922,7 +927,7 @@ function cardId(groupKey: string) {
                             >
                               €
                               {{
-                                withinBudgetPaid(item).toLocaleString("nl-NL", {
+                                displayedPaid(item).toLocaleString("nl-NL", {
                                   minimumFractionDigits: 2,
                                 })
                               }}
@@ -931,21 +936,15 @@ function cardId(groupKey: string) {
                           <button
                             v-if="hasPotEnvelope(item) && (item.shadowSpent ?? 0) > 0"
                             type="button"
-                            class="inline-flex items-center gap-1 text-[10px] font-sans font-semibold rounded px-1.5 py-0.5 text-white hover:brightness-110"
-                            :class="shadowOverspend(item) > 0 ? 'bg-rose-600' : 'bg-emerald-600'"
-                            title="Bekijk potje"
+                            class="flex flex-col items-end gap-0.5 text-[10px] font-sans hover:underline"
+                            title="Bekijk de uitgaven van dit potje"
                             @click.stop="openPotDetail(item)"
                           >
-                            +€
-                            {{
-                              item.shadowSpent!.toLocaleString("nl-NL", {
-                                minimumFractionDigits: 2,
-                              })
-                            }}
-                            <AlertTriangle
-                              v-if="shadowOverspend(item) > 0"
-                              class="w-3 h-3"
-                            />
+                            <span class="text-slate-400">Uitgegeven: &euro; {{ euro(item.shadowSpent!) }}</span>
+                            <span v-if="shadowOverspend(item) > 0" class="inline-flex items-center gap-1 rounded bg-rose-600 px-1.5 py-0.5 font-semibold text-white">
+                              +&euro; {{ euro(shadowOverspend(item)) }} boven budget
+                              <AlertTriangle class="w-3 h-3" />
+                            </span>
                           </button>
                           <span
                             v-if="budgetOverspend(item) > 0"

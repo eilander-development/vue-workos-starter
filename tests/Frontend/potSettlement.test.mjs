@@ -9,7 +9,7 @@ const bundled = buildSync({
   platform: "node",
   format: "esm",
 });
-const { computePotSettlement, potCompensationStatus } = await import(
+const { computePotSettlement, potCompensationStatus, shadowOverspend } = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
 );
 const goal = { id: "groceries", name: "spaarrekening H13134210", kind: "pot", initialAmount: 0, monthlyContribution: 500, categoryBudgetItemId: "groceries" };
@@ -103,4 +103,10 @@ test("multiple linked allocations count the transaction once and sum their share
   const result = computePotSettlement(multiGoal, month, [split]);
   assert.equal(result.spent, 100);
   assert.equal(result.spentTransactions.length, 1);
+});
+
+
+test("pot overspend shows only the amount above the budget, rounded to cents", () => {
+  assert.equal(shadowOverspend({ actual: 500, shadowSpent: 598.70 }), 98.70);
+  assert.equal(shadowOverspend({ actual: 500, shadowSpent: 400 }), 0);
 });

@@ -224,7 +224,7 @@ export function shadowOverspend(item: Pick<BudgetItem, "actual" | "shadowSpent">
   if (item.shadowSpent == null) {
     return 0;
   }
-  return Math.max(0, item.shadowSpent - (item.actual ?? 0));
+  return Math.max(0, roundMoney(item.shadowSpent - (item.actual ?? 0)));
 }
 
 /** Overboekingen pot → rekening: "Van Oranje spaarrekening …" op de betaalrekening. */
