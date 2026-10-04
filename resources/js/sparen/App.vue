@@ -22,6 +22,9 @@ import {
   INITIAL_SAVINGS_GOALS,
   DEFAULT_CATEGORY_DEFINITIONS,
 } from "./data/mockBudgetData";
+import SyncReportModal from "./components/SyncReportModal.vue";
+import type { SyncReport } from "./syncReport";
+import { loadSyncReport } from "./api";
 import Sidebar from "./components/Sidebar.vue";
 import Header from "./components/Header.vue";
 import BottomNav from "./components/BottomNav.vue";
@@ -494,6 +497,12 @@ async function persistBudgetChange(
   }
 }
 
+const lastSyncReport = ref<SyncReport | null>(null);
+const showSyncReport = ref(false);
+onMounted(async () => {
+  try { lastSyncReport.value = (await loadSyncReport()).report; } catch { /* A new sync can still provide a report. */ }
+});
+
 async function handleBankSync() {
   if (isSyncing.value) return;
   isSyncing.value = true;
@@ -514,6 +523,10 @@ async function handleBankSync() {
     }
 
     const stats = result?.imported;
+    if (stats) {
+      lastSyncReport.value = stats;
+      showSyncReport.value = Boolean(stats.blocked);
+    }
     const details = stats
       ? [
           `${stats.imported ?? 0} nieuw`,
@@ -1436,6 +1449,11 @@ function closeSavingsGoalModal() {
         class="flex-1 px-3 md:px-4 py-3 md:py-4 pb-24 md:pb-6 w-full space-y-5"
         :data-page="activeTab"
       >
+        <div v-if="lastSyncReport" class="mb-4 flex flex-wrap justify-between items-center gap-3 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-xs">
+          <span class="text-slate-300">Laatste synchronisatie: {{ lastSyncReport.blocked ?? 0 }} geblokkeerd, {{ lastSyncReport.pending ?? 0 }} nog niet geboekt</span>
+          <button type="button" class="text-indigo-300 hover:text-white font-semibold" @click="showSyncReport = true">Bekijk transacties en redenen</button>
+        </div>
+
         <PotCompensationBanner
           :needs="potCompensationNeeds"
           :month-name="currentMonth.monthName"
@@ -1696,6 +1714,7 @@ function closeSavingsGoalModal() {
       :on-close="closeTransactionDetail"
     />
 
+    <SyncReportModal v-if="showSyncReport && lastSyncReport" :report="lastSyncReport" @close="showSyncReport = false" />
     <ToastStack :toasts="toasts" @dismiss="dismiss" />
   </div>
 </template>

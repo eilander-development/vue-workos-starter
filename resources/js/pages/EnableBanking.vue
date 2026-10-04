@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SyncReportModal from "../sparen/components/SyncReportModal.vue";
+import type { SyncReport } from "../sparen/syncReport";
 import AppLayout from '@/layouts/AppLayout.vue';
 import axios from 'axios';
 import { home, enabled_banking } from '@/routes';
@@ -52,7 +54,8 @@ const loadingTransactions = ref(false);
 const importingTransactions = ref(false);
 const disconnectConfirmOpen = ref(false);
 const importStatsOpen = ref(false);
-const importStats = ref<{ total: number; imported: number; duplicates: number; matched: number; unmatched: number } | null>(null);
+const importDetailsOpen = ref(false);
+const importStats = ref<SyncReport & { total: number; matched: number; unmatched: number } | null>(null);
 const connecting = ref(false);
 const { showNotification } = useNotification();
 
@@ -206,7 +209,8 @@ const importEnabledBankingTransactions = async () => {
         });
         const stats = response.data.stats;
         importStats.value = stats;
-        importStatsOpen.value = true;
+        importDetailsOpen.value = Boolean(stats.issues?.length);
+        importStatsOpen.value = !importDetailsOpen.value;
         showNotification(
             stats.blocked ? 'Import deels geblokkeerd' : 'Succes',
             `Import voltooid: ${stats.imported} opgeslagen, ${stats.duplicates} al bekend, ${stats.blocked ?? 0} geblokkeerd (${stats.missing_identity ?? 0} zonder bankreferentie/rekening, ${stats.conflicts ?? 0} afwijkend, ${stats.invalid ?? 0} ongeldig), ${stats.pending ?? 0} nog niet geboekt.`,
@@ -489,6 +493,7 @@ onMounted(() => {
                 </div>
             </div>
             </div>
+            <SyncReportModal v-if="importDetailsOpen && importStats" :report="importStats" @close="importDetailsOpen = false" />
             <Dialog :open="importStatsOpen" @update:open="(value) => importStatsOpen = value">
                 <DialogContent class="sm:max-w-md">
                     <DialogHeader class="space-y-2">
