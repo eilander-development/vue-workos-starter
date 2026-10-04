@@ -184,3 +184,7 @@ export async function loadDuplicateTransactions() {
 export async function removeDuplicateTransaction(keepId: number, removeId: number) {
   return sparenRequest("DELETE", "/api/sparen/duplicate-transactions", { keepId, removeId });
 }
+
+export async function loadSyncReport() {
+  return sparenRequest("GET", "/api/sparen/sync-report");
+}

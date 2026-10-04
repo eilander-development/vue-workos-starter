@@ -20,7 +20,7 @@ class EnabledBankingTransactionImporter
     {
         $hasSourceTypeColumn = Schema::hasColumn('transactions', 'source_type');
         $hasKeyColumn = Schema::hasColumn('transactions', 'key');
-        $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0, 'with_time' => 0, 'time_backfilled' => 0, 'blocked' => 0, 'missing_identity' => 0, 'conflicts' => 0, 'pending' => 0, 'invalid' => 0];
+        $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0, 'with_time' => 0, 'time_backfilled' => 0, 'blocked' => 0, 'missing_identity' => 0, 'conflicts' => 0, 'pending' => 0, 'invalid' => 0, 'issues' => []];
         // Index legacy rows too: their source hashes may predate canonical bank identities.
         $known = [];
         foreach (Transaction::query()->where('source_type', 'api')->get() as $tx) {
@@ -37,6 +37,7 @@ class EnabledBankingTransactionImporter
             if ($date === '' || ! is_numeric($row['amount'] ?? null) || ! is_finite((float) $row['amount'])) {
                 $stats['blocked']++;
                 $stats['invalid']++;
+                $stats['issues'][] = $this->issue($row, 'invalid');
 
                 continue;
             }
@@ -52,11 +53,13 @@ class EnabledBankingTransactionImporter
             if (! $reference || $account === '') {
                 $stats['blocked']++;
                 $stats['missing_identity']++;
+                $stats['issues'][] = $this->issue($row, 'missing_identity');
 
                 continue;
             }
             if ($this->isPending($row)) {
                 $stats['pending']++;
+                $stats['issues'][] = $this->issue($row, 'pending');
 
                 continue;
             }
@@ -71,6 +74,7 @@ class EnabledBankingTransactionImporter
             if (collect($candidates)->contains(fn ($tx) => ! $this->sameBooking($tx, $date, $amount))) {
                 $stats['blocked']++;
                 $stats['conflicts']++;
+                $stats['issues'][] = $this->issue($row, 'conflict', $candidates);
 
                 continue;
             }
@@ -147,6 +151,7 @@ class EnabledBankingTransactionImporter
                 } else {
                     $stats['blocked']++;
                     $stats['conflicts']++;
+                    $stats['issues'][] = $this->issue($row, 'conflict', [$created]);
                 }
 
                 continue;
@@ -161,6 +166,53 @@ class EnabledBankingTransactionImporter
         }
 
         return $stats;
+    }
+
+    private function issue(array $row, string $code, array $existing = []): array
+    {
+        $amount = is_numeric($row['amount'] ?? null) && is_finite((float) $row['amount']) ? (float) $row['amount'] : null;
+        $date = BankTransactionTime::bookingDate($row, fallbackToToday: false) ?: null;
+        $reference = BankTransactionIdentity::reference($row);
+        $account = BankTransactionIdentity::ownAccount($row, $amount ?? 0, $row['account_iban'] ?? null);
+        $missing = [];
+        if (! $reference) {
+            $missing[] = 'bankreferentie';
+        }
+        if ($account === '') {
+            $missing[] = 'eigen rekeningnummer';
+        }
+        $invalid = [];
+        if (! $date) {
+            $invalid[] = 'boekdatum';
+        }
+        if ($amount === null) {
+            $invalid[] = 'bedrag';
+        }
+
+        return [
+            'code' => $code,
+            'reason' => match ($code) {
+                'conflict' => 'Dezelfde bankreferentie en rekening, maar een andere boekdatum of een ander bedrag. De bestaande boeking is niet gewijzigd.',
+                'missing_identity' => 'Ontbreekt: '.implode(', ', $missing).'. Niet opgeslagen om dubbele boekingen te voorkomen.',
+                'invalid' => 'Ontbrekend of ongeldig: '.implode(', ', $invalid).'. Niet opgeslagen.',
+                'pending' => 'De bank heeft deze transactie nog niet definitief geboekt. Wordt bij een volgende synchronisatie opnieuw gecontroleerd.',
+            },
+            'date' => $date,
+            'amount' => $amount,
+            'description' => (string) ($row['description'] ?? $row['merchant'] ?? 'Banktransactie'),
+            'reference' => $reference,
+            'account' => $account ?: null,
+            'existing' => array_map(fn ($tx) => [
+                'id' => $tx->key ?: 'tx-'.$tx->id,
+                'date' => $tx->date?->format('Y-m-d'),
+                'amount' => (float) $tx->amount,
+                'description' => $tx->description,
+                'differences' => array_values(array_filter([
+                    $tx->date?->format('Y-m-d') !== $date ? 'boekdatum' : null,
+                    number_format((float) $tx->amount, 2, '.', '') !== number_format($amount ?? 0, 2, '.', '') ? 'bedrag' : null,
+                ])),
+            ], $existing),
+        ];
     }
 
     private function normalizeDescription(string $description): string

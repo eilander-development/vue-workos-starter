@@ -45,6 +45,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/api/sparen/categories/{categoryId}', [SparenController::class, 'destroyCategoryRecord'])->name('sparen.category.destroy');
     Route::put('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'persistSavingsGoal'])->name('sparen.savings_goal.persist');
     Route::delete('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'destroySavingsGoal'])->name('sparen.savings_goal.destroy');
+    Route::get('/api/sparen/sync-report', [SparenController::class, 'syncReport']);
     Route::post('/api/sparen/sync-bank', [SparenController::class, 'syncBank'])->name('sparen.sync_bank');
     Route::post('/api/sparen/backup/export', [DataBackupController::class, 'export'])->name('sparen.backup.export');
     Route::post('/api/sparen/backup/import', [DataBackupController::class, 'import'])->name('sparen.backup.import');

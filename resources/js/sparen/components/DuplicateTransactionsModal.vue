@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import { loadDuplicateTransactions, removeDuplicateTransaction } from "../api";
 
-type Row = { id: number; key: string; date: string; description: string; amount: number; account: string; importedAt: string | null };
+type Row = { id: number; key: string; date: string; description: string; amount: number; account: string; importedAt: string | null; category: string | null; budget: string | null };
 type Group = { reference: string; rows: Row[] };
 const emit = defineEmits<{ close: []; deleted: [key: string] }>();
 const groups = ref<Group[]>([]);
@@ -57,7 +57,7 @@ function euro(amount: number) {
         <div>
           <h2 id="duplicates-title" class="text-lg font-bold text-white">Dubbele transacties</h2>
           <p class="text-xs text-slate-400 mt-1">Alle periodes &middot; dezelfde bankreferentie, rekening, datum en bedrag.</p>
-          <p class="text-xs text-slate-400 mt-1">Kies welke rij je bewaart. Controleer de koppelingen via Transacties voordat je een rij verwijdert.</p>
+          <p class="text-xs text-slate-400 mt-1">Bewaar de rij met de juiste koppeling. Een ontbrekende koppeling op de bewaarde rij blokkeert het verwijderen.</p>
         </div>
         <button type="button" :disabled="saving" class="text-sm hover:text-white disabled:opacity-50" @click="emit('close')">Sluiten</button>
       </div>
@@ -77,6 +77,7 @@ function euro(amount: number) {
             </label>
             <div class="flex-1 min-w-40">
               <p class="text-white">{{ row.description }}</p>
+              <p class="text-indigo-300 mt-1">{{ row.category || 'Geen categorie' }} / {{ row.budget || 'Geen begrotingspost' }}</p>
               <p class="text-slate-400 mt-1">Rij #{{ row.id }} &middot; ge&iuml;mporteerd {{ row.importedAt || 'onbekend' }}</p>
             </div>
             <span class="font-mono">{{ euro(row.amount) }}</span>

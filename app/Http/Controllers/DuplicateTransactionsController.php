@@ -12,10 +12,11 @@ class DuplicateTransactionsController extends Controller
 {
     public function index(): JsonResponse
     {
-        $groups = Transaction::query()->where('source_type', 'api')->orderBy('id')->get()
+        $groups = Transaction::query()->where('source_type', 'api')->with(['category', 'budget'])->orderBy('id')->get()
             ->filter(fn ($tx) => BankTransactionIdentity::key($tx) !== null)
             ->groupBy(fn ($tx) => BankTransactionIdentity::key($tx))
             ->filter(fn ($rows) => $rows->count() > 1)
+            ->map(fn ($rows) => $rows->sortByDesc(fn ($tx) => (int) (bool) $tx->budget_id))
             ->map(fn ($rows) => [
                 'reference' => BankTransactionIdentity::reference($rows->first()->bank_payload),
                 'rows' => $rows->map(fn ($tx) => [
@@ -24,6 +25,8 @@ class DuplicateTransactionsController extends Controller
                     'date' => $tx->date->format('Y-m-d'),
                     'description' => $tx->description,
                     'amount' => (float) $tx->amount,
+                    'category' => $tx->category?->name,
+                    'budget' => $tx->budget?->name,
                     'account' => BankTransactionIdentity::ownAccount($tx->bank_payload, (float) $tx->amount, $tx->account_iban),
                     'importedAt' => $tx->created_at?->timezone('Europe/Amsterdam')->format('d-m-Y H:i:s'),
                 ])->values(),
@@ -47,6 +50,10 @@ class DuplicateTransactionsController extends Controller
             abort_unless($keep && $remove, 409, 'De transacties zijn gewijzigd. Vernieuw het overzicht.');
             $identity = BankTransactionIdentity::key($keep);
             abort_unless($identity !== null && $identity === BankTransactionIdentity::key($remove), 422, 'Deze rijen zijn geen bevestigde dubbele banktransactie.');
+            foreach (['category_id', 'budget_id', 'rule_id', 'savings_goal_key', 'allocations', 'link_excluded'] as $field) {
+                abort_if(! empty($remove->$field) && empty($keep->$field), 422,
+                    'De te verwijderen rij bevat een koppeling die de bewaarde rij mist. Kies de gekoppelde rij om te bewaren.');
+            }
             $deletedKey = $remove->key ?: 'tx-'.$remove->id;
             $remove->delete();
 

@@ -202,3 +202,60 @@ test('bank normalization selects the receiving account for incoming money', func
     $result = app(EnabledBankingTransactionImporter::class)->import([$undated]);
     expect($result['invalid'])->toBe(1)->and(Transaction::count())->toBe(0);
 });
+
+test('legacy incoming payment stored under sender account matches its categorized original', function () {
+    $this->actingAs(User::factory()->create());
+    $payload = ['raw' => ['entry_reference' => 'legacy-incoming', 'credit_debit_indicator' => 'CRDT',
+        'creditor_account' => ['iban' => 'NL00TEST1234567890'],
+        'debtor_account' => ['iban' => 'NL00TEST9999999999']]];
+    $original = duplicateBankRow(['amount' => 1.50, 'bank_payload' => $payload]);
+    $copy = duplicateBankRow(['amount' => 1.50, 'account_iban' => 'NL00TEST9999999999', 'bank_payload' => $payload]);
+    expect(BankTransactionIdentity::key($copy))->toBe(BankTransactionIdentity::key($original));
+    $this->getJson('/api/sparen/duplicate-transactions')->assertOk()->assertJsonCount(1, 'groups');
+    $result = app(EnabledBankingTransactionImporter::class)->import([[
+        'booking_date' => '2026-09-24', 'amount' => 1.50, 'account_iban' => 'NL00TEST1234567890',
+        'description' => 'Payment', 'raw' => $payload,
+    ]]);
+    expect($result['duplicates'])->toBe(1)->and(Transaction::count())->toBe(2);
+});
+
+test('duplicate removal cannot discard an existing savings assignment', function () {
+    $this->actingAs(User::factory()->create());
+    $linked = duplicateBankRow(['savings_goal_key' => 'previous-assignment']);
+    $unlinked = duplicateBankRow();
+    $this->deleteJson('/api/sparen/duplicate-transactions', ['keepId' => $unlinked->id, 'removeId' => $linked->id])->assertUnprocessable();
+    expect(Transaction::count())->toBe(2);
+    $this->deleteJson('/api/sparen/duplicate-transactions', ['keepId' => $linked->id, 'removeId' => $unlinked->id])->assertOk();
+    expect(Transaction::first()->savings_goal_key)->toBe('previous-assignment');
+});
+
+test('sync issues explain blocked rows with exact existing and incoming values', function () {
+    $importer = app(EnabledBankingTransactionImporter::class);
+    $importer->import([strictImportRow()]);
+    $result = $importer->import([
+        strictImportRow(['booking_date' => '2026-09-25', 'amount' => -501]),
+        strictImportRow(['raw' => []]),
+        strictImportRow(['amount' => 'invalid']),
+        strictImportRow(['status' => 'PDNG']),
+    ]);
+    expect($result['issues'])->toHaveCount(4);
+    $issue = $result['issues'][0];
+    expect($issue['code'])->toBe('conflict')
+        ->and($issue['date'])->toBe('2026-09-25')
+        ->and($issue['amount'])->toBe(-501.0)
+        ->and($issue['existing'][0]['date'])->toBe('2026-09-24')
+        ->and($issue['existing'][0]['amount'])->toBe(-500.0)
+        ->and($issue['existing'][0]['differences'])->toBe(['boekdatum', 'bedrag'])
+        ->and($result['issues'][1]['reason'])->toContain('bankreferentie')
+        ->and($result['issues'][2]['reason'])->toContain('bedrag')
+        ->and($result['issues'][3]['code'])->toBe('pending')
+        ->and(array_key_exists('raw', $issue))->toBeFalse();
+});
+
+test('last sync report is only returned within the authenticated session', function () {
+    $this->getJson('/api/sparen/sync-report')->assertUnauthorized();
+    $this->actingAs(User::factory()->create());
+    $this->getJson('/api/sparen/sync-report')->assertOk()->assertJsonPath('report', null);
+    $this->withSession(['sparen.sync_report' => ['blocked' => 1, 'issues' => [['code' => 'conflict']]]])
+        ->getJson('/api/sparen/sync-report')->assertOk()->assertJsonPath('report.issues.0.code', 'conflict');
+});

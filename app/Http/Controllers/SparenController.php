@@ -223,6 +223,11 @@ class SparenController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function syncReport(): JsonResponse
+    {
+        return response()->json(['report' => session('sparen.sync_report')]);
+    }
+
     public function syncBank(): JsonResponse
     {
         $sessionId = $this->sessions->sessionId();
@@ -297,7 +302,9 @@ class SparenController extends Controller
 
                 $stats = $this->importer->import($transactions);
                 foreach ($stats as $key => $value) {
-                    $imported[$key] = ($imported[$key] ?? 0) + $value;
+                    $imported[$key] = $key === 'issues'
+                        ? array_merge($imported[$key] ?? [], $value)
+                        : ($imported[$key] ?? 0) + $value;
                 }
             }
         } catch (\Throwable $e) {
@@ -313,6 +320,9 @@ class SparenController extends Controller
                 'error' => $this->bankErrorMessage($e),
             ], 502);
         }
+
+        $imported['syncedAt'] = now()->toIso8601String();
+        session(['sparen.sync_report' => $imported]);
 
         return response()->json([
             'needsConnect' => false,

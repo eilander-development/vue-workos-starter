@@ -34,6 +34,20 @@ class BankTransactionIdentity
 
     public static function ownAccount(?array $payload, float $amount, ?string $explicit = null): string
     {
+        // Repair the historical incoming-payment mapping only when the bank
+        // payload proves that the stored account is the opposite party.
+        $raw = $payload ?? [];
+        while (is_array($raw['raw'] ?? null)) {
+            $raw = $raw['raw'];
+        }
+        $own = self::account(data_get($raw, $amount >= 0 ? 'creditor_account.iban' : 'debtor_account.iban'));
+        $other = self::account(data_get($raw, $amount >= 0 ? 'debtor_account.iban' : 'creditor_account.iban'));
+        $stored = self::account($explicit ?: ($payload['account_iban'] ?? null));
+        $direction = strtoupper((string) ($raw['credit_debit_indicator'] ?? ''));
+        if ($own !== '' && $other !== '' && $own !== $other && $stored === $other
+            && $direction === ($amount >= 0 ? 'CRDT' : 'DBIT')) {
+            return $own;
+        }
         $account = self::account($explicit);
         if ($account !== '') {
             return $account;
