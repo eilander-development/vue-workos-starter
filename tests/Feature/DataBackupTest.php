@@ -5,6 +5,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\DataBackupService;
 use App\Support\BackupZip;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -220,6 +221,12 @@ test('import op één gedeelde database veegt catalogus niet leeg', function () 
     $zipPath = makeBackupZip();
     $sharedPath = sys_get_temp_dir().'/finance-shared-'.uniqid('', true).'.sqlite';
     File::put($sharedPath, '');
+
+    foreach (['ledger', 'catalog'] as $connection) {
+        DB::connection($connection)->rollBack();
+    }
+    RefreshDatabaseState::$inMemoryConnections = [];
+    RefreshDatabaseState::$migrated = false;
 
     config([
         'database.connections.ledger.driver' => 'sqlite',

@@ -13,7 +13,7 @@ it('schaalt een InShared-verdeling naar het incassobedrag', function () {
         ->and($scaled[0]['amount'])->toBe(41.29)
         ->and($scaled[1]['budgetItemId'])->toBe('verv-2')
         ->and($scaled[1]['amount'])->toBe(113.57)
-        ->and($scaled[0]['amount'] + $scaled[1]['amount'])->toBe(154.86);
+        ->and(round($scaled[0]['amount'] + $scaled[1]['amount'], 2))->toBe(154.86);
 });
 
 it('negeert een enkele post als verdeling', function () {
