@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed, ref, watch } from "vue";
 import { X, Check, Repeat, Trash2, ListPlus } from "lucide-vue-next";
 import type {
@@ -198,7 +199,7 @@ function handleMonthAmountChange(monthId: string, val: number) {
 
 function buildFinalPayload() {
   const item = props.item!;
-  let finalAmounts: Record<string, number> = { ...monthlyValues.value };
+  const finalAmounts: Record<string, number> = { ...monthlyValues.value };
   let finalEntries: Record<string, BudgetMonthEntry[]> | undefined;
 
   if (frequencyMode.value === "monthly_lines") {
@@ -286,9 +287,9 @@ const frequencyOptions = [
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen && item"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+    :on-close="onClose" :dismissible="!deleting" :close-on-backdrop="false"
   >
     <div
       class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
@@ -508,5 +509,5 @@ const frequencyOptions = [
       :on-cancel="() => { if (!deleting) confirmDelete = false; }"
       :on-confirm="handleConfirmDelete"
     />
-  </div>
+  </ModalShell>
 </template>

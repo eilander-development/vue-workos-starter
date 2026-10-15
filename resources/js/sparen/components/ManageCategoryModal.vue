@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { ref, watch } from "vue";
 import { X, Check, Trash2, Tag, TrendingUp, ArrowDownCircle, PiggyBank } from "lucide-vue-next";
 import type { CategoryDefinition, BudgetType } from "../types";
@@ -69,9 +70,9 @@ function handleDelete() {
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+    :on-close="onClose" :close-on-backdrop="false"
   >
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col">
       <div class="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-850">
@@ -232,5 +233,5 @@ function handleDelete() {
         </div>
       </form>
     </div>
-  </div>
+  </ModalShell>
 </template>

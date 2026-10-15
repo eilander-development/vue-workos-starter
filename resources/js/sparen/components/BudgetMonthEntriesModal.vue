@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed, ref, watch } from "vue";
 import { X, Check, Plus, Trash2 } from "lucide-vue-next";
 import type { BudgetMonthEntry, MonthlyBudget } from "../types";
@@ -125,9 +126,9 @@ function handleSubmit() {
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen"
-    class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+    :on-close="onClose" :close-on-backdrop="false"
   >
     <div
       class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
@@ -261,5 +262,5 @@ function handleSubmit() {
         </div>
       </form>
     </div>
-  </div>
+  </ModalShell>
 </template>

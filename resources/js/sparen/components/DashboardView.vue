@@ -2,7 +2,6 @@
 import { computed, ref, type Component } from "vue";
 import {
   TrendingUp,
-  TrendingDown,
   Wallet,
   PiggyBank,
   CheckCircle,
@@ -20,15 +19,14 @@ import {
 import type { MonthlyBudget, Transaction, BankAccount, ActiveTab, BudgetItem, SavingsGoal } from "../types";
 import TransactionDate from "./TransactionDate.vue";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
+import ExpenseBreakdownModal from "./ExpenseBreakdownModal.vue";
+import ExpenseSummaryCard from "./ExpenseSummaryCard.vue";
 import CashflowTransactionsModal from "./CashflowTransactionsModal.vue";
 import { defaultReportingMonth, formatReportingPeriodShort, reportingPeriodForMonth } from "../month";
 import {
   buildBalanceModalBreakdown,
-  buildBudgetExpenseModalBreakdown,
   buildBudgetIncomeModalBreakdown,
-  buildDeferredPaymentModalBreakdown,
   buildNettoModalBreakdown,
-  computeDeferredPaymentKpi,
   computeMonthKpi,
   kpiFromMonthlyBudget,
   isActiveReportingMonth,
@@ -60,6 +58,7 @@ const props = defineProps<{
   savingsGoals?: SavingsGoal[];
   onNavigateTab: (tab: ActiveTab) => void;
   onOpenUnlinked?: () => void;
+  onOpenItemTransactions?: (item: BudgetItem) => void;
 }>();
 
 const { openTransactionDetail } = useTransactionDetail();
@@ -141,11 +140,7 @@ const totalIncomeBudget = computed(() => monthKpi.value.totalIncomeBudget);
 const totalIncomeReceived = computed(() => monthKpi.value.totalIncomeReceived);
 const totalIncomeRemaining = computed(() => monthKpi.value.totalIncomeRemaining);
 const totalIncomeOver = computed(() => monthKpi.value.totalIncomeOver);
-const totalExpenseBudget = computed(() => monthKpi.value.totalExpenseBudget);
-const totalExpensePaid = computed(() => monthKpi.value.totalExpensePaid);
-const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
 const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
-const deferredPaymentKpi = computed(() => computeDeferredPaymentKpi(expenseItems.value));
 const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemaining);
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
 const expectedEndAfterCompensation = computed(
@@ -390,9 +385,13 @@ const chartMax = computed(() => {
   return Math.max(1, ...vals);
 });
 
+function openItemFromKpi(item: BudgetItem): void {
+  props.onOpenItemTransactions?.(item);
+}
+
 const kpiBreakdown = computed(() => {
   const key = kpiKey.value;
-  if (!key) return null;
+  if (!key || key === "expense" || key === "deferred") return null;
   const kpi = monthKpi.value;
 
   if (key === "balance") {
@@ -404,13 +403,11 @@ const kpiBreakdown = computed(() => {
     );
   }
   if (key === "income") {
-    return buildBudgetIncomeModalBreakdown(incomeItems.value, kpi);
-  }
-  if (key === "expense") {
-    return buildBudgetExpenseModalBreakdown(expenseItems.value, kpi);
-  }
-  if (key === "deferred") {
-    return buildDeferredPaymentModalBreakdown(expenseItems.value);
+    return buildBudgetIncomeModalBreakdown(
+      incomeItems.value,
+      kpi,
+      props.onOpenItemTransactions ? openItemFromKpi : undefined
+    );
   }
   if (key === "cashflow") {
     const flow = periodCashflow.value;
@@ -420,12 +417,17 @@ const kpiBreakdown = computed(() => {
       { id: "sav", label: "− Naar spaar − van spaar", amount: -flow.netSavings, tone: "minus" },
       { id: "net", label: "= Netto van de rekening", amount: flow.netFromAccount, tone: "result" },
     ]);
+    const openCashflowSource: Record<string, () => void> = {
+      inc: () => openCashflowBucket("received", "Echt ontvangen", "Bijschrijvingen, zonder spaaropnames"),
+      exp: () => openCashflowBucket("spent", "Echt uitgegeven", "Uitgaven vanaf de betaalrekening, zonder spaarstortingen"),
+      sav: () => openCashflowBucket("netSavings", "Netto sparen", "Stortingen naar spaarrekeningen minus opnames"),
+    };
     return {
       title: "Cashflow-check",
       formula: "Ontvangen − uitgeven − netto sparen",
-      subtitle: "Elke euro op de betaalrekening deze rapportageperiode",
+      subtitle: "Klik op ontvangen, uitgegeven of sparen voor de banktransacties van deze rapportageperiode.",
       columns,
-      rows,
+      rows: rows.map((row) => ({ ...row, onClick: openCashflowSource[row.id] })),
       totalValue: flow.netFromAccount,
       totalLabel: "Netto van de rekening",
       totalColorClass: flow.netFromAccount >= 0 ? "text-emerald-400" : "text-rose-400",
@@ -624,103 +626,17 @@ function catStats(cat: CatDef) {
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
 
-      <button
-        type="button"
-        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all h-full flex flex-col"
-        @click="kpiKey = 'expense'"
-      >
-        <div class="flex items-center justify-between text-slate-400 mb-3">
-          <span class="text-xs font-semibold uppercase tracking-wider">
-            Uitgaven ({{ currentMonth.monthName }})
-          </span>
-          <div
-            class="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400"
-          >
-            <TrendingDown class="w-4 h-4" />
-          </div>
-        </div>
-        <div class="text-2xl font-black text-rose-400 font-mono tracking-tight">
-          € {{ totalExpenseBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-        </div>
-        <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Betaald</span>
-            <span class="font-medium text-rose-300">
-              € {{ totalExpensePaid.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-            </span>
-          </div>
-          <div class="flex items-center justify-between text-amber-400">
-            <span class="text-slate-400">Nog te betalen</span>
-            <span class="font-medium">
-              € {{ totalExpenseRemaining.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-            </span>
-          </div>
-          <div
-            v-if="totalToCompensate > 0"
-            class="flex items-center justify-between text-amber-300"
-          >
-            <span class="text-slate-400">Nog te compenseren</span>
-            <span class="font-medium">
-              € {{ totalToCompensate.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-            </span>
-          </div>
-          <div
-            v-if="totalExpenseOver > 0"
-            class="mt-2 pt-1.5 border-t border-slate-800/70"
-          >
-            <div class="flex items-center justify-between">
-              <span class="text-slate-400">Overschrijding</span>
-              <span class="font-medium text-rose-400">
-                € {{ totalExpenseOver.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
-              </span>
-            </div>
-          </div>
-        </div>
-        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
-      </button>
+      <ExpenseSummaryCard
+        :expense-items="expenseItems"
+        :kpi="monthKpi"
+        :to-compensate="totalToCompensate"
+        @open-expenses="kpiKey = 'expense'"
+        @open-deferred="kpiKey = 'deferred'"
+      />
 
       <button
         type="button"
-        class="text-left bg-slate-900 border border-rose-900/60 hover:border-rose-500/70 p-5 rounded-2xl shadow-sm transition-all h-full flex flex-col"
-        @click="kpiKey = 'deferred'"
-      >
-        <div class="flex items-center justify-between text-slate-400 mb-3">
-          <span class="text-xs font-semibold uppercase tracking-wider">Vooruit uitgegeven</span>
-          <Clock class="w-5 h-5 text-rose-400" />
-        </div>
-        <div
-          class="text-2xl font-black font-mono tracking-tight"
-          :class="deferredPaymentKpi.remaining > 0 ? 'text-rose-400' : 'text-emerald-400'"
-        >
-          € {{ euro(deferredPaymentKpi.remaining) }}
-        </div>
-        <div class="mt-3 space-y-1 text-xs pt-3 border-t border-slate-800/80 font-mono">
-          <div class="flex items-center justify-between text-slate-300">
-            <span class="text-slate-400">Deze maand</span>
-            <span>€ {{ euro(deferredPaymentKpi.budget) }}</span>
-          </div>
-          <div class="flex items-center justify-between text-emerald-400">
-            <span class="text-slate-400">Afgelost</span>
-            <span>€ {{ euro(deferredPaymentKpi.paid) }}</span>
-          </div>
-          <div
-            v-if="deferredPaymentKpi.over > 0"
-            class="flex items-center justify-between text-rose-300"
-          >
-            <span class="text-slate-400">Extra afgelost</span>
-            <span>+€ {{ euro(deferredPaymentKpi.over) }}</span>
-          </div>
-          <div class="flex items-center justify-between text-rose-400">
-            <span class="text-slate-400">Nog open</span>
-            <span>€ {{ euro(deferredPaymentKpi.remaining) }}</span>
-          </div>
-        </div>
-        <p class="mt-auto pt-2 text-[10px] text-slate-500">Klarna + creditcard · klik voor detail</p>
-      </button>
-
-      <button
-        type="button"
-        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all h-full flex flex-col"
+        class="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-5 rounded-2xl shadow-sm transition-all h-full flex flex-col md:col-span-2 xl:col-span-1"
         @click="kpiKey = 'netto'"
       >
         <div class="flex items-center justify-between text-slate-400 mb-3">
@@ -1426,6 +1342,15 @@ function catStats(cat: CatDef) {
         </table>
       </div>
     </div>
+
+    <ExpenseBreakdownModal
+      v-if="kpiKey === 'expense' || kpiKey === 'deferred'"
+      :is-open="true"
+      :expense-items="expenseItems"
+      :initial-view="kpiKey === 'deferred' ? 'deferred' : 'all'"
+      :on-open-item="onOpenItemTransactions ? openItemFromKpi : undefined"
+      :on-close="() => (kpiKey = null)"
+    />
 
     <KpiBreakdownModal
       :is-open="Boolean(kpiBreakdown)"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onUnmounted, watch } from "vue";
+import ModalShell from "./ModalShell.vue";
+import { computed } from "vue";
 import { X, Receipt } from "lucide-vue-next";
 import type { BudgetItem, Rule, SavingsGoal, Transaction } from "../types";
 import TransactionDate from "./TransactionDate.vue";
@@ -21,7 +22,6 @@ const props = withDefaults(
   }
 );
 
-const isOpen = computed(() => props.transaction !== null);
 
 const euro = (n: number) =>
   n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -98,35 +98,12 @@ function stringField(record: Record<string, unknown> | null, keys: string[]): st
   return null;
 }
 
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape" && isOpen.value) {
-    event.stopPropagation();
-    props.onClose();
-  }
-}
-
-watch(
-  isOpen,
-  (open) => {
-    if (open) {
-      window.addEventListener("keydown", onKeydown, true);
-    } else {
-      window.removeEventListener("keydown", onKeydown, true);
-    }
-  },
-  { immediate: true }
-);
-
-onUnmounted(() => {
-  window.removeEventListener("keydown", onKeydown, true);
-});
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="transaction"
-    class="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm"
-    @click="onClose"
+    :on-close="onClose"
   >
     <div
       class="bg-slate-900 border border-slate-800 w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col"
@@ -300,5 +277,5 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed, ref } from "vue";
 import type { SyncReport } from "../syncReport";
 const props = defineProps<{ report: SyncReport }>();
@@ -20,7 +21,7 @@ function euro(value: number | null) {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="sync-report-title">
+  <ModalShell role="dialog" aria-modal="true" aria-labelledby="sync-report-title" :on-close="() => emit('close')" :close-on-backdrop="false">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col text-slate-200">
       <div class="p-5 border-b border-slate-800 flex justify-between items-start gap-4">
         <div>
@@ -66,5 +67,5 @@ function euro(value: number | null) {
         </section>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>

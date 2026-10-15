@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed, ref, watch } from "vue";
 import { X, PiggyBank } from "lucide-vue-next";
 import type { MonthlyBudget, SavingsGoal, Transaction } from "../types";
@@ -69,9 +70,9 @@ function listedAmount(tx: Transaction): number {
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen && goal && settlement"
-    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+    :on-close="close" :close-on-backdrop="false"
   >
     <div
       class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
@@ -251,5 +252,5 @@ function listedAmount(tx: Transaction): number {
         </button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>

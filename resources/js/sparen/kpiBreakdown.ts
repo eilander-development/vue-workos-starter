@@ -176,6 +176,7 @@ export function budgetItemRows(
     const over = budgetOverspend(item);
     return {
       id: item.id,
+      budgetItem: item,
       cells: {
         name: item.name,
         group: item.group,

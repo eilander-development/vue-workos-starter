@@ -14,7 +14,18 @@ import {
 } from "lucide-vue-next";
 import type { MonthlyBudget, BudgetItem, BudgetCategoryGroup, Transaction, CategoryDefinition, SavingsGoal } from "../types";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
-import { budgetItemRows, sumBudgetedAmount, sumBudgetedPaid, sumBudgetedRemaining, sumBudgetedOver } from "../kpiBreakdown";
+import ExpenseBreakdownModal from "./ExpenseBreakdownModal.vue";
+import ExpenseTypeBadge from "./ExpenseTypeBadge.vue";
+import ExpenseBudgetSplit from "./ExpenseBudgetSplit.vue";
+import {
+  budgetItemRows,
+  sumBudgetedAmount,
+  sumBudgetedPaid,
+  sumBudgetedRemaining,
+  sumBudgetedOver,
+  sumFixedBudgetedAmount,
+  sumMonthEntryBudgetedAmount,
+} from "../kpiBreakdown";
 import {
   computePotSettlement,
   hasPotEnvelope,
@@ -59,6 +70,8 @@ const filteredItems = computed(() =>
 );
 
 const totalExpenseBudget = computed(() => sumBudgetedAmount(expenseItems.value));
+const fixedExpenseBudget = computed(() => sumFixedBudgetedAmount(expenseItems.value));
+const monthExpenseBudget = computed(() => sumMonthEntryBudgetedAmount(expenseItems.value));
 const totalExpensePaid = computed(() => sumBudgetedPaid(expenseItems.value));
 const totalExpenseRemaining = computed(() => sumBudgetedRemaining(expenseItems.value));
 const totalExpenseOverpaid = computed(() => sumBudgetedOver(expenseItems.value));
@@ -117,12 +130,13 @@ const kpiMeta = computed(
     }) as const
 );
 
+function openItemFromKpi(item: BudgetItem): void {
+  props.onOpenItemTransactions?.(item);
+}
+
 const kpiBreakdown = computed(() =>
-  kpiKey.value
-    ? budgetItemRows(expenseItems.value, kpiKey.value, (item) => {
-        kpiKey.value = null;
-        props.onOpenItemTransactions?.(item);
-      })
+  kpiKey.value === "paid" || kpiKey.value === "remaining"
+    ? budgetItemRows(expenseItems.value, kpiKey.value, props.onOpenItemTransactions ? openItemFromKpi : undefined)
     : null
 );
 
@@ -261,6 +275,11 @@ function closePotDetail() {
         <div class="text-xl font-bold text-white font-mono mt-1">
           € {{ totalExpenseBudget.toLocaleString("nl-NL", { minimumFractionDigits: 2 }) }}
         </div>
+        <ExpenseBudgetSplit
+          class="mt-3"
+          :fixed-amount="fixedExpenseBudget"
+          :month-amount="monthExpenseBudget"
+        />
         <span class="text-[11px] text-slate-500 mt-0.5 block">
           {{ expenseItems.length }} begrotingsposten · klik voor detail
         </span>
@@ -358,9 +377,12 @@ function closePotDetail() {
         class="bg-[#101726] border border-slate-800/90 hover:border-slate-700/80 p-5 rounded-2xl shadow-sm transition-all flex flex-col justify-between"
       >
         <div>
-          <div class="flex items-start justify-between mb-4">
-            <div>
-              <h4 class="font-bold text-white text-base">{{ item.name }}</h4>
+          <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h4 class="font-bold text-white text-base">{{ item.name }}</h4>
+                <ExpenseTypeBadge :item="item" />
+              </div>
               <div class="mt-1 flex items-center gap-1.5">
                 <span class="text-xs text-slate-400">{{ item.group }}</span>
                 <button
@@ -580,6 +602,15 @@ function closePotDetail() {
         </div>
       </div>
     </div>
+
+    <ExpenseBreakdownModal
+      v-if="kpiKey === 'budget' || kpiKey === 'over'"
+      :is-open="true"
+      :expense-items="expenseItems"
+      :initial-view="kpiKey === 'over' ? 'over' : 'all'"
+      :on-open-item="onOpenItemTransactions ? openItemFromKpi : undefined"
+      :on-close="() => (kpiKey = null)"
+    />
 
     <KpiBreakdownModal
       :is-open="Boolean(kpiKey && kpiBreakdown)"

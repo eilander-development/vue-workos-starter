@@ -66,10 +66,7 @@ const kpiMeta = computed(
 
 const kpiBreakdown = computed(() =>
   kpiKey.value
-    ? budgetItemRows(incomeItems.value, kpiKey.value, (item) => {
-        kpiKey.value = null;
-        props.onOpenItemTransactions?.(item);
-      })
+    ? budgetItemRows(incomeItems.value, kpiKey.value, props.onOpenItemTransactions)
     : null
 );
 

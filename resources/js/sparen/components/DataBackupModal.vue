@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { Archive, Check, LoaderCircle, X } from "lucide-vue-next";
 
 export type BackupStep = {
@@ -23,9 +24,9 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen"
-    class="fixed inset-0 z-[85] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+    :on-close="() => emit('close')" :dismissible="Boolean(done || error)" :close-on-backdrop="false"
   >
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
       <div class="px-5 py-4 border-b border-slate-800 flex items-start justify-between gap-3">
@@ -84,5 +85,5 @@ const emit = defineEmits<{
         <p v-else-if="done && doneLabel" class="text-xs text-emerald-400">{{ doneLabel }}</p>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>

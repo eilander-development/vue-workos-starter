@@ -1,4 +1,6 @@
 <script lang="ts">
+import type { BudgetItem } from "../types";
+
 export type KpiBreakdownColumn = {
   key: string;
   label: string;
@@ -12,6 +14,7 @@ export type KpiBreakdownRow = {
   id: string;
   cells: Record<string, string | number>;
   onClick?: () => void;
+  budgetItem?: BudgetItem;
 };
 
 export type KpiBreakdownProps = {
@@ -23,15 +26,19 @@ export type KpiBreakdownProps = {
   rows: KpiBreakdownRow[];
   totalLabel?: string;
   totalValue: number;
+  totals?: Record<string, number>;
   totalColorClass?: string;
   emptyMessage?: string;
+  wide?: boolean;
 };
 </script>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import { Table2, X } from "lucide-vue-next";
+import ModalShell from "./ModalShell.vue";
+import { computed, useId } from "vue";
+import { ChevronRight, Table2, X } from "lucide-vue-next";
 import type { KpiBreakdownColumn, KpiBreakdownRow } from "./KpiBreakdownModal.vue";
+import ExpenseTypeBadge from "./ExpenseTypeBadge.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -43,16 +50,21 @@ const props = withDefaults(
     rows: KpiBreakdownRow[];
     totalLabel?: string;
     totalValue: number;
+    totals?: Record<string, number>;
     totalColorClass?: string;
     emptyMessage?: string;
+    wide?: boolean;
     onClose: () => void;
   }>(),
   {
     totalLabel: "Totaal",
     totalColorClass: "text-white",
     emptyMessage: "Geen rijen voor dit getal.",
+    wide: false,
   }
 );
+
+const titleId = useId();
 
 function euro(value: number): string {
   return value.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -68,6 +80,7 @@ function isSectionRow(row: KpiBreakdownRow): boolean {
 }
 
 const dataRowCount = computed(() => props.rows.filter((row) => !isSectionRow(row)).length);
+const hasRowDetails = computed(() => props.rows.some((row) => !isSectionRow(row) && row.onClick));
 
 function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBreakdownRow): string {
   return (
@@ -75,17 +88,25 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
     (column.emphasize ? "text-white font-semibold" : "text-slate-300")
   );
 }
+
+function totalCellColor(column: KpiBreakdownColumn): string {
+  const totals = props.totals ?? {};
+  return column.colorClass?.(totals[column.key], { id: "total", cells: totals }) || props.totalColorClass;
+}
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen"
     id="kpi-breakdown-overlay"
-    class="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm"
-    @click="onClose"
+    :on-close="onClose"
   >
     <div
-      class="bg-slate-900 border border-slate-800 w-full sm:max-w-3xl sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="titleId"
+      class="bg-slate-900 border border-slate-800 w-full min-w-0 sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+      :class="wide ? 'sm:max-w-5xl' : 'sm:max-w-3xl'"
       @click.stop
     >
       <div class="px-5 py-4 border-b border-slate-800 flex items-start justify-between gap-3 shrink-0">
@@ -94,13 +115,14 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
             <Table2 class="w-4 h-4" />
           </div>
           <div class="min-w-0">
-            <h3 class="font-bold text-white text-base">{{ title }}</h3>
+            <h3 :id="titleId" class="font-bold text-white text-base">{{ title }}</h3>
             <p class="text-xs text-slate-400 mt-1 leading-relaxed">{{ formula }}</p>
             <p v-if="subtitle" class="text-[11px] text-slate-500 mt-1">{{ subtitle }}</p>
           </div>
         </div>
         <button
           type="button"
+          aria-label="Details sluiten"
           class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
           @click="onClose"
         >
@@ -108,7 +130,32 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
         </button>
       </div>
 
-      <div class="overflow-auto flex-1">
+      <div class="min-h-0 overflow-auto flex-1">
+        <div class="sticky left-0 border-b border-slate-800 px-4 py-4">
+          <slot name="summary">
+            <div
+              class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-current/25 bg-current/5 p-4"
+              :class="totalColorClass"
+            >
+              <div class="min-w-0">
+                <p class="flex items-center gap-2 text-xs font-semibold text-slate-200">
+                  <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-current" :class="totalColorClass" aria-hidden="true"></span>
+                  {{ totalLabel === 'Totaal' ? title : totalLabel }}
+                </p>
+                <p class="mt-1.5 text-[11px] text-slate-400">
+                  {{ dataRowCount }} onderliggende {{ dataRowCount === 1 ? 'post' : 'posten' }}
+                </p>
+              </div>
+              <p class="whitespace-nowrap font-mono text-2xl font-bold tabular-nums">
+                € {{ euro(totalValue) }}
+              </p>
+            </div>
+          </slot>
+          <div v-if="rows.length > 0" class="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <h4 class="text-xs font-semibold text-slate-300">Onderbouwing</h4>
+            <p v-if="hasRowDetails" class="text-[11px] text-slate-400">Selecteer een post voor details</p>
+          </div>
+        </div>
         <div v-if="rows.length === 0" class="px-5 py-10 text-center text-sm text-slate-400">
           {{ emptyMessage }}
         </div>
@@ -129,6 +176,8 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
             <tr
               v-for="row in rows"
               :key="row.id"
+              :tabindex="row.onClick ? 0 : undefined"
+              class="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
               :class="
                 isSectionRow(row)
                   ? 'bg-slate-800/40'
@@ -137,6 +186,8 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
                     : 'hover:bg-slate-800/30'
               "
               @click="row.onClick?.()"
+              @keydown.enter="row.onClick?.()"
+              @keydown.space.prevent="row.onClick?.()"
             >
               <template v-if="isSectionRow(row)">
                 <td
@@ -148,29 +199,54 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
               </template>
               <template v-else>
                 <td
-                  v-for="column in columns"
+                  v-for="(column, columnIndex) in columns"
                   :key="column.key"
                   class="py-2.5 px-4"
                   :class="[
                     column.align === 'right' ? 'text-right' : 'text-left',
-                    column.mono || typeof row.cells[column.key] === 'number' ? 'font-mono' : '',
+                    column.mono || typeof row.cells[column.key] === 'number' ? 'font-mono tabular-nums whitespace-nowrap' : '',
                     cellColor(column, row.cells[column.key], row),
                   ]"
                 >
-                  {{ formatCell(row.cells[column.key]) }}
+                  <div v-if="columnIndex === 0" class="flex items-center gap-2">
+                    <div class="min-w-0 flex-1 space-y-1">
+                      <div>{{ formatCell(row.cells[column.key]) }}</div>
+                      <ExpenseTypeBadge v-if="column.key === 'name' && row.budgetItem?.type === 'uitgaven'" :item="row.budgetItem" />
+                    </div>
+                    <ChevronRight v-if="row.onClick" class="h-3.5 w-3.5 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200 group-focus-visible:text-slate-200" aria-hidden="true" />
+                  </div>
+                  <template v-else>{{ formatCell(row.cells[column.key]) }}</template>
                 </td>
               </template>
             </tr>
           </tbody>
           <tfoot class="border-t border-slate-700 bg-slate-950/80 sticky bottom-0">
-            <tr>
+            <tr v-if="totals">
+              <td
+                v-for="(column, index) in columns"
+                :key="column.key"
+                class="py-3 px-4 text-xs font-semibold"
+                :class="[
+                  column.align === 'right' ? 'text-right' : 'text-left',
+                  totals[column.key] !== undefined ? ['font-mono tabular-nums whitespace-nowrap', totalCellColor(column)] : 'text-slate-300',
+                ]"
+              >
+                <template v-if="index === 0">
+                  {{ totalLabel }} ({{ dataRowCount }} {{ dataRowCount === 1 ? "regel" : "regels" }})
+                </template>
+                <template v-else-if="totals[column.key] !== undefined">
+                  € {{ euro(totals[column.key]) }}
+                </template>
+              </td>
+            </tr>
+            <tr v-else>
               <td
                 :colspan="Math.max(1, columns.length - 1)"
                 class="py-3 px-4 text-xs font-semibold text-slate-300"
               >
                 {{ totalLabel }} ({{ dataRowCount }} {{ dataRowCount === 1 ? "regel" : "regels" }})
               </td>
-              <td class="py-3 px-4 text-right font-mono font-bold text-sm" :class="totalColorClass">
+              <td class="py-3 px-4 text-right font-mono font-bold text-sm tabular-nums whitespace-nowrap" :class="totalColorClass">
                 € {{ euro(totalValue) }}
               </td>
             </tr>
@@ -188,5 +264,5 @@ function cellColor(column: KpiBreakdownColumn, raw: string | number, row: KpiBre
         </button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>

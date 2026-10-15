@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed, ref, watch } from "vue";
 import {
   X,
@@ -185,9 +186,9 @@ function pickBankSuggestion(value: string) {
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in"
+    :on-close="onClose" :close-on-backdrop="false"
   >
     <div
       class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
@@ -498,5 +499,5 @@ function pickBankSuggestion(value: string) {
         </div>
       </form>
     </div>
-  </div>
+  </ModalShell>
 </template>

@@ -1,8 +1,11 @@
 import { defaultReportingMonth, MONTH_ID_TO_NUMBER } from "./month";
 import type { BudgetItem, MonthlyBudget, Transaction } from "./types";
 import type { KpiBreakdownColumn, KpiBreakdownRow } from "./components/KpiBreakdownModal.vue";
+import { roundMoney } from "./allocations";
 import {
   budgetItemRows,
+  budgetOpenAmount,
+  budgetOverspend,
   formulaRows,
   hasBudget,
   isFixedBudgetItem,
@@ -60,19 +63,7 @@ export function buildDeferredPaymentModalBreakdown(
   expenseItems: BudgetItem[],
   onOpenItem?: (item: BudgetItem) => void
 ): KpiModalBreakdown {
-  const deferred = computeDeferredPaymentKpi(expenseItems);
-  const { columns, rows } = budgetItemRows(deferred.items, "budget", onOpenItem);
-
-  return {
-    title: "Vooruit uitgegeven",
-    formula: "Nog open = deze maand af te lossen - al afgelost (minimaal EUR 0 per post).",
-    subtitle: "Klarna en creditcard: eerder uitgegeven geld dat nog van de betaalrekening afgaat. Dit zit al in Totaal Uitgaven.",
-    columns,
-    rows,
-    totalValue: deferred.remaining,
-    totalLabel: "Nog open",
-    totalColorClass: deferred.remaining > 0 ? "text-rose-400" : "text-emerald-400",
-  };
+  return buildExpenseModalBreakdown(expenseItems, "deferred", onOpenItem);
 }
 
 /** Sommeer inkomsten/uitgaven/sparen direct uit bankmutaties (volledig cashflow-beeld). */
@@ -151,7 +142,93 @@ export type KpiModalBreakdown = {
   totalValue: number;
   totalLabel?: string;
   totalColorClass?: string;
+  totals?: Record<string, number>;
+  emptyMessage?: string;
 };
+
+export type ExpenseDetailView = "all" | "deferred" | "over";
+
+export function buildExpenseModalBreakdown(
+  expenseItems: BudgetItem[],
+  view: ExpenseDetailView,
+  onOpenItem?: (item: BudgetItem) => void
+): KpiModalBreakdown {
+  const items = view === "deferred"
+    ? computeDeferredPaymentKpi(expenseItems).items
+    : expenseItems.filter((item) => view === "over"
+      ? budgetOverspend(item) > 0
+      : hasBudget(item) || item.paidOrReceived > 0);
+
+  const columns: KpiBreakdownColumn[] = [
+    { key: "name", label: "Post", emphasize: true },
+    { key: "group", label: "Rubriek" },
+    { key: "budget", label: "Begroot", align: "right" },
+    { key: "paid", label: "Bank", align: "right" },
+    {
+      key: "remaining",
+      label: "Nog open",
+      align: "right",
+      colorClass: (value) => Number(value) > 0 ? "text-amber-300" : undefined,
+    },
+    {
+      key: "over",
+      label: "Overschrijding",
+      align: "right",
+      colorClass: (value) => Number(value) > 0 ? "text-rose-400 font-semibold" : "text-slate-500",
+    },
+  ];
+
+  const rows: KpiBreakdownRow[] = items.map((item) => ({
+    id: item.id,
+    budgetItem: item,
+    cells: {
+      name: item.name,
+      group: item.group,
+      budget: item.actual,
+      paid: item.paidOrReceived,
+      remaining: budgetOpenAmount(item),
+      over: budgetOverspend(item),
+    },
+    onClick: onOpenItem ? () => onOpenItem(item) : undefined,
+  }));
+
+  const totals: Record<string, number> = {};
+  for (const key of ["budget", "paid", "remaining", "over"]) {
+    totals[key] = roundMoney(rows.reduce((sum, row) => sum + Number(row.cells[key]), 0));
+  }
+
+  const descriptions = {
+    all: {
+      title: "Totaal uitgaven",
+      formula: "Begroot = vast + los deze maand. Bank toont alle betalingen, ook boven of zonder begroting.",
+      subtitle: `${items.filter(isFixedBudgetItem).length} vast · ${items.filter(isMonthEntryBudgetItem).length} los deze maand · ${items.filter((item) => !hasBudget(item)).length} niet begroot`,
+      totalValue: totals.budget,
+      totalLabel: "Begroot",
+      totalColorClass: "text-rose-400",
+      emptyMessage: "Geen begrote of betaalde uitgaven in deze maand.",
+    },
+    deferred: {
+      title: "Vooruit uitgegeven",
+      formula: "Nog open = deze maand af te lossen − al afgelost (minimaal € 0 per post).",
+      subtitle: "Klarna en creditcard: eerder uitgegeven geld dat nog van de betaalrekening afgaat. Dit zit al in Totaal uitgaven.",
+      totalValue: totals.remaining,
+      totalLabel: "Nog open",
+      totalColorClass: totals.remaining > 0 ? "text-rose-400" : "text-emerald-400",
+      emptyMessage: "Geen Klarna- of creditcardposten in deze maand.",
+    },
+    over: {
+      title: "Overschrijdingen",
+      formula: "Overschrijding = bank − begroot (minimaal € 0 per post).",
+      subtitle: "Inclusief uitgaven op posten zonder begroting.",
+      totalValue: totals.over,
+      totalLabel: "Overschrijding",
+      totalColorClass: "text-rose-400",
+      emptyMessage: "Geen uitgaven boven of buiten de begroting in deze maand.",
+    },
+  };
+
+  return { ...descriptions[view], columns, rows, totals };
+}
 
 export function computeMonthKpi(input: MonthKpiInput): MonthKpiSnapshot {
   const { incomeItems, expenseItems, savingsItems, bankBalance } = input;
@@ -530,24 +607,10 @@ export function buildBudgetIncomeModalBreakdown(
 
 export function buildBudgetExpenseModalBreakdown(
   expenseItems: BudgetItem[],
-  kpi: MonthKpiSnapshot,
+  _kpi: MonthKpiSnapshot,
   onOpenItem?: (item: BudgetItem) => void
 ): KpiModalBreakdown {
-  const budgetedItems = expenseItems.filter(hasBudget);
-  const ruleCount = expenseItems.filter(isMonthEntryBudgetItem).length;
-  const { columns, rows } = budgetItemRows(budgetedItems, "budget", onOpenItem);
-  return {
-    title: "Totaal Uitgaven",
-    formula: "Som van alle begrote uitgaven (vast + regels per maand)",
-    subtitle:
-      ruleCount > 0
-        ? `${budgetedItems.length} posten · waarvan ${ruleCount} met regels per maand: € ${euro(kpi.totalExpenseRulesBudget)}`
-        : `${budgetedItems.length} begrotingsposten`,
-    columns,
-    rows,
-    totalValue: kpi.totalExpenseBudget,
-    totalColorClass: "text-rose-400",
-  };
+  return buildExpenseModalBreakdown(expenseItems, "all", onOpenItem);
 }
 
 export function buildBudgetSavingsModalBreakdown(

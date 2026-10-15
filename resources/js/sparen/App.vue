@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import type {
-  ActiveTab,
   MonthlyBudget,
   Transaction,
   Rule,
@@ -408,6 +407,12 @@ const currentMonth = computed(
     monthlyBudgets.value[0]
 );
 
+const itemTransactionsBudgetItem = computed(() => {
+  const selected = itemTransactionsModalItem.value;
+  if (!selected) return null;
+  return currentMonth.value?.items.find((item) => item.id === selected.id) ?? null;
+});
+
 const currentReportingPeriodLabel = computed(() => {
   if (!currentMonth.value) {
     return "";
@@ -431,7 +436,6 @@ const potDetailSettlement = computed(() => {
 });
 
 function openPotDetail(goal: SavingsGoal) {
-  itemTransactionsModalItem.value = null;
   potDetailGoal.value = goal;
 }
 
@@ -1467,6 +1471,7 @@ function closeSavingsGoalModal() {
           :savings-goals="savingsGoals"
           :on-navigate-tab="setActiveTab"
           :on-open-unlinked="openUnlinkedInbox"
+          :on-open-item-transactions="(item) => (itemTransactionsModalItem = item)"
         />
 
         <BudgetSpreadsheetView
@@ -1681,9 +1686,9 @@ function closeSavingsGoalModal() {
     />
 
     <ItemTransactionsModal
-      :is-open="!!itemTransactionsModalItem"
+      :is-open="!!itemTransactionsBudgetItem"
       :on-close="() => (itemTransactionsModalItem = null)"
-      :budget-item="itemTransactionsModalItem"
+      :budget-item="itemTransactionsBudgetItem"
       :current-month="currentMonth"
       :all-months="monthlyBudgets"
       :transactions="transactions"

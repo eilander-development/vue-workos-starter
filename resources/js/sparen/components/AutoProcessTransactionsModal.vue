@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed, ref, watch } from "vue";
 import {
   X,
@@ -375,10 +376,10 @@ function handleSave() {
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen"
     id="auto-process-transactions-modal-overlay"
-    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in"
+    :on-close="onClose" :close-on-backdrop="false"
   >
     <div
       class="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
@@ -729,5 +730,5 @@ function handleSave() {
         </button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>

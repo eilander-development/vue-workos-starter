@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed } from "vue";
 import { AlertTriangle, X } from "lucide-vue-next";
 
@@ -46,9 +47,9 @@ function confirm() {
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen"
-    class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+    :on-close="() => emit('cancel')" :dismissible="!busy" :close-on-backdrop="false"
   >
     <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
       <div class="px-5 py-4 border-b border-slate-800 flex items-start justify-between gap-3">
@@ -149,5 +150,5 @@ function confirm() {
         </button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>

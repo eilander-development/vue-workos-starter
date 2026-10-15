@@ -111,6 +111,9 @@ export default defineConfig(({ mode }) => {
             port: devServer.port,
             strictPort: true,
             origin: devServer.origin,
+            cors: {
+                origin: env.APP_URL ? new URL(env.APP_URL).origin : devServer.origin,
+            },
             https: devServer.https,
             hmr: devServer.hmr,
         },

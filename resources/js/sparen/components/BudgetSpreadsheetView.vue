@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed, ref, type Component } from "vue";
 import {
   Edit2,
@@ -31,7 +32,7 @@ import type {
 } from "../types";
 import { isTransactionInReportingMonth, defaultReportingMonth } from "../month";
 import { isLinkExcludedTransaction } from "../matchRule";
-import { computePotSettlement, goalBudgetItemIds, hasPotEnvelope, potCompensationStatus, potGoalsLinkedToItem, potsNeedingCompensation, shadowOverspend, type PotSettlement } from "../potSettlement";
+import { computePotSettlement, hasPotEnvelope, potCompensationStatus, potGoalsLinkedToItem, potsNeedingCompensation, shadowOverspend, type PotSettlement } from "../potSettlement";
 import {
   sumBudgetedAmount,
   sumBudgetedPaid,
@@ -44,14 +45,14 @@ import {
 } from "../kpiBreakdown";
 import TransactionDate from "./TransactionDate.vue";
 import KpiBreakdownModal from "./KpiBreakdownModal.vue";
+import ExpenseBreakdownModal from "./ExpenseBreakdownModal.vue";
+import ExpenseSummaryCard from "./ExpenseSummaryCard.vue";
+import ExpenseTypeBadge from "./ExpenseTypeBadge.vue";
 import PotSettlementModal from "./PotSettlementModal.vue";
 import {
-  buildBudgetExpenseModalBreakdown,
   buildBudgetIncomeModalBreakdown,
   buildBudgetSavingsModalBreakdown,
-  buildDeferredPaymentModalBreakdown,
   buildNettoModalBreakdown,
-  computeDeferredPaymentKpi,
   computeMonthKpi,
   isActiveReportingMonth,
   resolvePeriodStartBalance,
@@ -242,17 +243,12 @@ const monthKpi = computed(() =>
 const totalIncomeBudget = computed(() => monthKpi.value.totalIncomeBudget);
 const totalIncomeReceived = computed(() => monthKpi.value.totalIncomeReceived);
 const totalIncomeRemaining = computed(() => monthKpi.value.totalIncomeRemaining);
-const totalExpenseBudget = computed(() => monthKpi.value.totalExpenseBudget);
-const expenseBudgetedCount = computed(() => monthKpi.value.expenseBudgetedCount);
-const totalExpensePaid = computed(() => monthKpi.value.totalExpensePaid);
 const totalExpenseRemaining = computed(() => monthKpi.value.totalExpenseRemaining);
 const totalSavingsBudget = computed(() => monthKpi.value.totalSavingsBudget);
 const totalSavingsPaid = computed(() => monthKpi.value.totalSavingsPaid);
 const totalSavingsRemaining = computed(() => monthKpi.value.totalSavingsRemaining);
 const totalSavingsOver = computed(() => monthKpi.value.totalSavingsOver);
 const totalIncomeOver = computed(() => monthKpi.value.totalIncomeOver);
-const totalExpenseOver = computed(() => monthKpi.value.totalExpenseOver);
-const deferredPaymentKpi = computed(() => computeDeferredPaymentKpi(expenseItems.value));
 const expectedEndOfMonth = computed(() => monthKpi.value.expectedEndOfMonth);
 
 const potCompensationNeeds = computed(() =>
@@ -268,7 +264,6 @@ const expectedEndAfterCompensation = computed(
 );
 
 function openItemFromKpi(item: BudgetItem) {
-  kpiKey.value = null;
   props.onOpenItemTransactions?.(item);
 }
 
@@ -309,20 +304,14 @@ function closePotDetail() {
 
 const kpiBreakdown = computed(() => {
   const key = kpiKey.value;
-  if (!key) return null;
+  if (!key || key === "expense" || key === "deferred") return null;
   const openFn = props.onOpenItemTransactions ? openItemFromKpi : undefined;
 
   if (key === "income") {
     return buildBudgetIncomeModalBreakdown(incomeItems.value, monthKpi.value, openFn);
   }
-  if (key === "expense") {
-    return buildBudgetExpenseModalBreakdown(expenseItems.value, monthKpi.value, openFn);
-  }
   if (key === "savings") {
     return buildBudgetSavingsModalBreakdown(savingsItems.value, monthKpi.value, openFn);
-  }
-  if (key === "deferred") {
-    return buildDeferredPaymentModalBreakdown(expenseItems.value, openFn);
   }
   return buildNettoModalBreakdown(monthKpi.value, {
     mode: "budget",
@@ -445,7 +434,7 @@ function cardId(groupKey: string) {
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3.5 items-stretch">
       <button
         type="button"
-        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
+        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col md:col-span-2 xl:col-span-1"
         @click="kpiKey = 'income'"
       >
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
@@ -474,43 +463,14 @@ function cardId(groupKey: string) {
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
-      <button
-        type="button"
-        class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
-        @click="kpiKey = 'expense'"
-      >
-        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span>Totaal Uitgaven</span>
-          <span class="text-rose-400 font-semibold">{{ expenseBudgetedCount }} posten</span>
-        </div>
-        <div class="text-lg font-bold text-white font-mono">€ {{ euro(totalExpenseBudget) }}</div>
-        <div class="mt-1.5 space-y-0.5 text-[11px] font-mono">
-          <div class="flex justify-between text-rose-400">
-            <span>Betaald</span><span>€ {{ euro(totalExpensePaid) }}</span>
-          </div>
-          <div
-            class="flex justify-between"
-            :class="totalExpenseRemaining > 0 ? 'text-amber-400' : 'text-slate-500'"
-          >
-            <span>Nog te betalen</span><span>€ {{ euro(totalExpenseRemaining) }}</span>
-          </div>
-          <div
-            v-if="totalToCompensate > 0"
-            class="flex justify-between text-amber-300"
-          >
-            <span>Nog te compenseren</span><span>€ {{ euro(totalToCompensate) }}</span>
-          </div>
-          <div
-            v-if="totalExpenseOver > 0"
-            class="mt-2 pt-1.5 border-t border-slate-800/70 space-y-0.5"
-          >
-            <div class="flex justify-between text-rose-400/90">
-              <span>Overschrijding</span><span>€ {{ euro(totalExpenseOver) }}</span>
-            </div>
-          </div>
-        </div>
-        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
-      </button>
+      <ExpenseSummaryCard
+        :expense-items="expenseItems"
+        :kpi="monthKpi"
+        :to-compensate="totalToCompensate"
+        compact
+        @open-expenses="kpiKey = 'expense'"
+        @open-deferred="kpiKey = 'deferred'"
+      />
       <button
         type="button"
         class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
@@ -542,40 +502,7 @@ function cardId(groupKey: string) {
         </div>
         <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
       </button>
-      <button
-        type="button"
-        class="text-left bg-[#101726] border border-rose-900/60 hover:border-rose-500/70 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
-        @click="kpiKey = 'deferred'"
-      >
-        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span>Vooruit uitgegeven</span>
-          <span class="text-rose-400 font-semibold">Klarna + creditcard</span>
-        </div>
-        <div
-          class="text-lg font-bold font-mono"
-          :class="deferredPaymentKpi.remaining > 0 ? 'text-rose-400' : 'text-emerald-400'"
-        >
-          € {{ euro(deferredPaymentKpi.remaining) }}
-        </div>
-        <div class="mt-1.5 space-y-0.5 text-[11px] font-mono">
-          <div class="flex justify-between text-slate-300">
-            <span>Deze maand</span><span>€ {{ euro(deferredPaymentKpi.budget) }}</span>
-          </div>
-          <div class="flex justify-between text-emerald-400">
-            <span>Afgelost</span><span>€ {{ euro(deferredPaymentKpi.paid) }}</span>
-          </div>
-          <div
-            v-if="deferredPaymentKpi.over > 0"
-            class="flex justify-between text-rose-300"
-          >
-            <span>Extra afgelost</span><span>+€ {{ euro(deferredPaymentKpi.over) }}</span>
-          </div>
-          <div class="flex justify-between text-rose-400">
-            <span>Nog open</span><span>€ {{ euro(deferredPaymentKpi.remaining) }}</span>
-          </div>
-        </div>
-        <p class="mt-auto pt-2 text-[10px] text-slate-500">klik voor detail</p>
-      </button>
+
       <button
         type="button"
         class="text-left bg-[#101726] border border-slate-800/80 hover:border-indigo-500/50 p-3.5 rounded-2xl transition-colors h-full flex flex-col"
@@ -813,6 +740,11 @@ function cardId(groupKey: string) {
                             >
                               {{ item.name }}
                             </span>
+                            <ExpenseTypeBadge
+                              v-if="item.type === 'uitgaven'"
+                              class="mt-1 mr-1"
+                              :item="item"
+                            />
                             <button
                               v-if="hasPotEnvelope(item)"
                               type="button"
@@ -1167,9 +1099,9 @@ function cardId(groupKey: string) {
       </template>
     </div>
 
-    <div
+    <ModalShell
       v-if="selectedGroupModal"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+      :on-close="() => (selectedGroupModal = null)" :close-on-backdrop="false"
     >
       <div
         class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
@@ -1214,7 +1146,16 @@ function cardId(groupKey: string) {
                 class="bg-slate-800/60 border border-slate-700/60 p-3 rounded-xl flex items-center justify-between"
               >
                 <div>
-                  <p class="font-semibold text-white text-sm">{{ item.name }}</p>
+                  <button
+                    v-if="onOpenItemTransactions"
+                    type="button"
+                    class="font-semibold text-white text-sm text-left hover:text-indigo-300 hover:underline"
+                    title="Bekijk gekoppelde banktransacties"
+                    @click="onOpenItemTransactions(item)"
+                  >
+                    {{ item.name }}
+                  </button>
+                  <p v-else class="font-semibold text-white text-sm">{{ item.name }}</p>
                   <p class="text-xs text-slate-400">
                     {{ item.paymentCount || 0 }} gekoppelde transacties
                     <template v-if="hasPotEnvelope(item) && (item.shadowSpent ?? 0) > 0">
@@ -1299,10 +1240,7 @@ function cardId(groupKey: string) {
           <button
             type="button"
             class="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5"
-            @click="
-              selectedGroupModal = null;
-              onOpenAddBudgetItem();
-            "
+            @click="onOpenAddBudgetItem()"
           >
             <Plus class="w-3.5 h-3.5" />
             <span>Nieuwe post in deze groep toevoegen</span>
@@ -1316,7 +1254,16 @@ function cardId(groupKey: string) {
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
+
+    <ExpenseBreakdownModal
+      v-if="kpiKey === 'expense' || kpiKey === 'deferred'"
+      :is-open="true"
+      :expense-items="expenseItems"
+      :initial-view="kpiKey === 'deferred' ? 'deferred' : 'all'"
+      :on-open-item="onOpenItemTransactions ? openItemFromKpi : undefined"
+      :on-close="() => (kpiKey = null)"
+    />
 
     <KpiBreakdownModal
       :is-open="Boolean(kpiBreakdown)"

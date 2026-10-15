@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { AlertTriangle, X } from "lucide-vue-next";
 
 withDefaults(
@@ -21,10 +22,10 @@ withDefaults(
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen"
     id="confirm-dialog-overlay"
-    class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in"
+    :on-close="onCancel" :dismissible="!busy" :close-on-backdrop="false"
   >
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
       <div class="px-5 py-4 border-b border-slate-800 flex items-start justify-between gap-3">
@@ -66,5 +67,5 @@ withDefaults(
         </button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModalShell from "./ModalShell.vue";
 import { computed, ref, watch } from "vue";
 import {
   X,
@@ -249,13 +250,11 @@ const difference = computed(() => {
 
 function openEdit() {
   if (!props.budgetItem || !props.onOpenEditBudgetItem) return;
-  props.onClose();
   props.onOpenEditBudgetItem(props.budgetItem);
 }
 
 function addTx() {
   if (!props.budgetItem || !props.onAddTransactionToItem) return;
-  props.onClose();
   props.onAddTransactionToItem(props.budgetItem.id, props.budgetItem.group);
 }
 
@@ -266,10 +265,10 @@ function openPot() {
 </script>
 
 <template>
-  <div
+  <ModalShell
     v-if="isOpen && budgetItem"
     id="item-transactions-modal-overlay"
-    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+    :on-close="onClose" :close-on-backdrop="false"
   >
     <div class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
       <div class="bg-slate-850 px-5 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
@@ -671,5 +670,5 @@ function openPot() {
         </button>
       </div>
     </div>
-  </div>
+  </ModalShell>
 </template>
