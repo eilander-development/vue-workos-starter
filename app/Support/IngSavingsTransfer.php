@@ -52,6 +52,27 @@ class IngSavingsTransfer
         return $parsed !== null && $parsed['isSpaarpot'] === true;
     }
 
+    /** A generic savings rule must not capture another recognized savings goal. */
+    public static function ruleIdentifiesGoal(string $keyword, string $goalName, ?string $accountIban): bool
+    {
+        $ruleRef = self::extractRef($keyword);
+        $goalRef = self::extractRef(trim($goalName.' '.($accountIban ?? '')));
+        if ($ruleRef && $goalRef) {
+            return $ruleRef === $goalRef;
+        }
+
+        $iban = strtoupper(preg_replace('/\s+/', '', $accountIban ?? '') ?? '');
+        $compactKeyword = strtoupper(preg_replace('/\s+/', '', $keyword) ?? '');
+        if (strlen($iban) >= 10 && str_contains($compactKeyword, $iban)) {
+            return true;
+        }
+
+        $name = mb_strtolower(trim($goalName));
+
+        return mb_strlen($name) >= 3 && ! self::isGenericSavingsLabel($name)
+            && str_contains(mb_strtolower(trim($keyword)), $name);
+    }
+
     public static function isGenericSavingsLabel(string $name): bool
     {
         $normalized = preg_replace('/\s+/', ' ', mb_strtolower(trim($name))) ?? '';

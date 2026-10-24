@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BankAccount;
+use App\Services\BankSyncReport;
 use App\Services\EnableBanking;
 use App\Services\EnableBankingDataService;
 use App\Services\EnableBankingSessionStore;
 use App\Services\EnabledBankingTransactionImporter;
 use App\Services\SparenStateService;
-use App\Models\BankAccount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -225,7 +226,7 @@ class SparenController extends Controller
 
     public function syncReport(): JsonResponse
     {
-        return response()->json(['report' => session('sparen.sync_report')]);
+        return response()->json(['report' => app(BankSyncReport::class)->normalize(session('sparen.sync_report'))]);
     }
 
     public function syncBank(): JsonResponse

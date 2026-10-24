@@ -94,7 +94,16 @@ class TransactionClassifier
             );
         }
 
+        // An explicit goal mapping takes precedence over rules. Without one,
+        // only rules identifying this goal may supply the missing budget link.
+        if ($matchedSavingsGoal && Budget::query()->where('key', $matchedSavingsGoal->budgetKeys()[0] ?? null)->exists()) {
+            return $this->classifySavingsDeposit($matchedSavingsGoal);
+        }
+
         $rules = ImportRule::query()->with(['category', 'budget'])->where('is_active', true)->orderBy('id')->get();
+        if ($matchedSavingsGoal) {
+            $rules = $rules->sortByDesc(fn (ImportRule $rule) => mb_strlen(trim((string) $rule->match_value)));
+        }
 
         foreach ($rules as $rule) {
             if (! $this->ruleMatches($rule, $description, $counterpartyIban, $counterpartyName, $haystack, $amount)) {
@@ -102,7 +111,8 @@ class TransactionClassifier
             }
 
             $categoryType = $rule->category?->type;
-            if ($matchedSavingsGoal && $categoryType === 'saving') {
+            if ($matchedSavingsGoal && $categoryType === 'saving'
+                && (! $rule->budget || ! IngSavingsTransfer::ruleIdentifiesGoal((string) $rule->match_value, $matchedSavingsGoal->name, $matchedSavingsGoal->account_iban))) {
                 continue;
             }
 
@@ -196,6 +206,7 @@ class TransactionClassifier
                 ]);
                 $transaction->save();
                 $updated++;
+
                 continue;
             }
 

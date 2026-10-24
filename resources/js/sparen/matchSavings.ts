@@ -45,6 +45,26 @@ export function extractSavingsTransferRef(text: string): string | null {
   return match ? match[0].toUpperCase() : null;
 }
 
+/** A generic savings rule must not capture another recognized savings goal. */
+export function savingsRuleIdentifiesGoal(
+  keyword: string,
+  goal: Pick<SavingsGoal, "name" | "accountIban">
+): boolean {
+  const ruleRef = extractSavingsTransferRef(keyword);
+  const goalRef = extractSavingsTransferRef(`${goal.name} ${goal.accountIban ?? ""}`);
+  if (ruleRef && goalRef) {
+    return ruleRef === goalRef;
+  }
+
+  const iban = compactIban(goal.accountIban);
+  if (iban.length >= 10 && compactIban(keyword).includes(iban)) {
+    return true;
+  }
+
+  const name = goal.name.trim().toLowerCase();
+  return name.length >= 3 && !isGenericSavingsLabel(name) && keyword.trim().toLowerCase().includes(name);
+}
+
 export function isIngSpaarpotTransfer(tx: Pick<Transaction, "description">): boolean {
   const direction = savingsTransferDirection(tx);
   if (direction !== "naar" && direction !== "van") {

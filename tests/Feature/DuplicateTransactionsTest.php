@@ -3,6 +3,7 @@
 use App\DTOs\TransactionDTO;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\BankSyncReport;
 use App\Services\EnabledBankingTransactionImporter;
 use App\Support\BankTransactionIdentity;
 use Illuminate\Support\Str;
@@ -169,6 +170,88 @@ test('pending bank entries wait until booked', function () {
     $result = $importer->import([strictImportRow(['raw' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'PDNG']]])]);
     expect($result['pending'])->toBe(1)->and(Transaction::count())->toBe(0);
     expect($importer->import([strictImportRow()])['imported'])->toBe(1);
+});
+
+test('a definitive booking with a changed provisional date is reported under pending processing', function () {
+    $old = duplicateBankRow([
+        'bank_payload' => ['raw' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'PDNG']]],
+        'is_pending' => false,
+    ]);
+    $result = app(EnabledBankingTransactionImporter::class)->import([
+        strictImportRow(['booking_date' => '2026-09-25', 'status' => 'BOOK']),
+    ]);
+
+    expect($result['blocked'])->toBe(0)->and($result['conflicts'])->toBe(0)
+        ->and($result['pending'])->toBe(1)->and($result['pending_booking'])->toBe(1)
+        ->and($result['issues'][0]['code'])->toBe('pending_booking')
+        ->and($result['issues'][0]['reason'])->toContain('definitieve boeking', 'volgende synchronisatie lost')
+        ->and($result['imported'])->toBe(0)->and(Transaction::count())->toBe(1)
+        ->and($old->fresh()->date->format('Y-m-d'))->toBe('2026-09-24');
+});
+
+test('an old provisional copy is reported even if the definitive booking already exists', function () {
+    duplicateBankRow(['bank_payload' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'PDNG']]]);
+    duplicateBankRow([
+        'date' => '2026-09-25',
+        'bank_payload' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'BOOK']],
+    ]);
+    $result = app(EnabledBankingTransactionImporter::class)->import([
+        strictImportRow(['booking_date' => '2026-09-25']),
+    ]);
+
+    expect($result['pending_booking'])->toBe(1)->and($result['blocked'])->toBe(0)
+        ->and($result['issues'][0]['existing'])->toHaveCount(2)
+        ->and(Transaction::count())->toBe(2);
+});
+
+test('amount changes remain blocked even when the stored bank status was provisional', function () {
+    duplicateBankRow(['bank_payload' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'PDNG']]]);
+    $result = app(EnabledBankingTransactionImporter::class)->import([
+        strictImportRow(['booking_date' => '2026-09-25', 'amount' => -501]),
+    ]);
+
+    expect($result['blocked'])->toBe(1)->and($result['pending_booking'])->toBe(0)
+        ->and($result['issues'][0]['code'])->toBe('conflict');
+});
+
+test('date changes to a previously final booking remain blocked', function () {
+    duplicateBankRow(['bank_payload' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'BOOK']]]);
+    $result = app(EnabledBankingTransactionImporter::class)->import([
+        strictImportRow(['booking_date' => '2026-09-25']),
+    ]);
+
+    expect($result['blocked'])->toBe(1)->and($result['pending_booking'])->toBe(0)
+        ->and($result['issues'][0]['code'])->toBe('conflict');
+});
+
+test('saved session reports explain provisional date changes without another bank sync', function () {
+    $this->actingAs(User::factory()->create());
+    $old = duplicateBankRow([
+        'bank_payload' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'PDNG']],
+    ]);
+    $report = [
+        'imported' => 0, 'duplicates' => 504, 'blocked' => 1, 'conflicts' => 1, 'pending' => 1,
+        'issues' => [
+            ['code' => 'pending', 'reason' => 'Old explanation'],
+            [
+                'code' => 'conflict', 'reason' => 'Old explanation', 'date' => '2026-09-25', 'amount' => -500,
+                'reference' => 'strict-ref', 'account' => $old->account_iban,
+                'existing' => [['id' => $old->key, 'date' => '2026-09-24', 'differences' => ['boekdatum']]],
+            ],
+        ],
+    ];
+    $this->withSession(['sparen.sync_report' => $report])->getJson('/api/sparen/sync-report')
+        ->assertOk()->assertJsonPath('report.blocked', 0)
+        ->assertJsonPath('report.pending', 2)->assertJsonPath('report.pending_booking', 1)
+        ->assertJsonPath('report.duplicates', 504)
+        ->assertJsonPath('report.issues.0.reason', BankSyncReport::PENDING_REASON)
+        ->assertJsonPath('report.issues.1.code', 'pending_booking');
+    $normalized = app(BankSyncReport::class)->normalize($report);
+    expect(app(BankSyncReport::class)->normalize($normalized))->toBe($normalized)
+        ->and(Transaction::count())->toBe(1);
+
+    $report['issues'][1]['account'] = 'NL00TEST9999999999';
+    expect(app(BankSyncReport::class)->normalize($report)['blocked'])->toBe(1);
 });
 
 test('unique-key collision is recovered when the row was absent from the legacy index', function () {

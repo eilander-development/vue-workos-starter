@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import SyncReportModal from "../sparen/components/SyncReportModal.vue";
 import type { SyncReport } from "../sparen/syncReport";
+import { pendingSyncSummary } from "../sparen/syncReport";
 import AppLayout from '@/layouts/AppLayout.vue';
 import axios from 'axios';
 import { home, enabled_banking } from '@/routes';
@@ -212,8 +213,8 @@ const importEnabledBankingTransactions = async () => {
         importDetailsOpen.value = Boolean(stats.issues?.length);
         importStatsOpen.value = !importDetailsOpen.value;
         showNotification(
-            stats.blocked ? 'Import deels geblokkeerd' : 'Succes',
-            `Import voltooid: ${stats.imported} opgeslagen, ${stats.duplicates} al bekend, ${stats.blocked ?? 0} geblokkeerd (${stats.missing_identity ?? 0} zonder bankreferentie/rekening, ${stats.conflicts ?? 0} afwijkend, ${stats.invalid ?? 0} ongeldig), ${stats.pending ?? 0} nog niet geboekt.`,
+            stats.blocked ? 'Import deels geblokkeerd' : stats.pending_booking ? 'Import: verwerking nodig' : 'Succes',
+            `Import voltooid: ${stats.imported} opgeslagen, ${stats.duplicates} al bekend, ${stats.blocked ?? 0} geblokkeerd (${stats.missing_identity ?? 0} zonder bankreferentie/rekening, ${stats.conflicts ?? 0} afwijkend, ${stats.invalid ?? 0} ongeldig)${stats.pending ? `, ${pendingSyncSummary(stats)}` : ''}.`,
             stats.blocked ? 'destructive' : 'success'
         );
     } catch (error) {

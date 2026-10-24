@@ -23,6 +23,7 @@ import {
 } from "./data/mockBudgetData";
 import SyncReportModal from "./components/SyncReportModal.vue";
 import type { SyncReport } from "./syncReport";
+import { pendingSyncSummary } from "./syncReport";
 import { loadSyncReport } from "./api";
 import Sidebar from "./components/Sidebar.vue";
 import Header from "./components/Header.vue";
@@ -81,7 +82,8 @@ import {
   matchingUnlinkedTransactions,
   transactionMatchesRule,
 } from "./matchRule";
-import { isSavingsCashflowTransfer, transactionMatchesSavingsGoalDeposit } from "./matchSavings";
+import { isSavingsCashflowTransfer } from "./matchSavings";
+import { applyTransactionRules } from "./transactionRules";
 import {
   allocationsFingerprint,
   amountTowardBudgetItem,
@@ -91,7 +93,6 @@ import {
 import {
   goalBudgetItemIds,
   isPotGoal,
-  applyPotTransferLinkExclusion,
   potLinkedBudgetItemIds,
   potsNeedingCompensation,
   potGoalsLinkedToItem,
@@ -267,83 +268,7 @@ watch(saveState, (value) => {
 
 function applyRulesToTransactions(txs: Transaction[], rls: Rule[], sGoals: SavingsGoal[]) {
   const ownIbans = bankAccounts.value.map((account) => account.iban).filter(Boolean);
-
-  return txs.map((tx) => {
-    const savingsApplied = applyPotTransferLinkExclusion(tx, sGoals, ownIbans);
-    if (savingsApplied.linkExcluded) {
-      return savingsApplied;
-    }
-
-    const savingsGoal =
-      sGoals.find(
-        (goal) => !isPotGoal(goal) && transactionMatchesSavingsGoalDeposit(tx, goal, ownIbans)
-      ) ?? null;
-
-    const match = rls.find((rule) => {
-      if (!rule.isActive || !transactionMatchesRule(tx, rule)) {
-        return false;
-      }
-      // Specifieke spaarrekening (A14304836) niet laten stelen door "Oranje spaarrekening" → Buffer.
-      if (savingsGoal && rule.targetType === "sparen") {
-        return false;
-      }
-      return true;
-    });
-    const splitFromRule = match ? allocationsForRule(match, tx) : undefined;
-
-    if (match && isUnlinkedTransaction(tx)) {
-      return {
-        ...tx,
-        categoryGroup: match.targetGroup,
-        type:
-          match.targetType === "inkomsten"
-            ? ("Inkomsten" as const)
-            : match.targetType === "sparen"
-              ? ("Sparen" as const)
-              : ("Uitgave" as const),
-        budgetItemId: match.targetBudgetItemId || tx.budgetItemId,
-        matchedRuleId: match.id,
-        allocations: splitFromRule,
-        assignedSavingsGoalId: savingsGoal?.id ?? tx.assignedSavingsGoalId,
-      };
-    }
-
-    let next = tx;
-
-    if (match && tx.matchedRuleId === match.id) {
-      const nextFingerprint = allocationsFingerprint(splitFromRule);
-      const currentFingerprint = allocationsFingerprint(tx.allocations);
-      if (nextFingerprint !== currentFingerprint) {
-        next = { ...next, allocations: splitFromRule };
-      }
-    }
-
-    if (savingsGoal && isUnlinkedTransaction(next)) {
-      const budgetItemId = goalBudgetItemIds(savingsGoal)[0];
-      return {
-        ...next,
-        type: "Sparen" as const,
-        categoryGroup: "Spaargeld" as const,
-        budgetItemId: budgetItemId || next.budgetItemId,
-        assignedSavingsGoalId: savingsGoal.id,
-        linkExcluded: false,
-        linkExclusionReason: undefined,
-      };
-    }
-
-    if (savingsGoal && next.assignedSavingsGoalId !== savingsGoal.id) {
-      return {
-        ...next,
-        assignedSavingsGoalId: savingsGoal.id,
-      };
-    }
-
-    return next;
-  });
-}
-
-function allocationsForRule(rule: Rule, tx: Pick<Transaction, "amount">): TransactionAllocation[] | undefined {
-  return normalizeAllocations(scaleAllocationsToAmount(rule.allocations ?? [], Math.abs(tx.amount)));
+  return applyTransactionRules(txs, rls, sGoals, ownIbans);
 }
 
 const monthlyBudgets = computed(() => {
@@ -528,19 +453,23 @@ async function handleBankSync() {
     const stats = result?.imported;
     if (stats) {
       lastSyncReport.value = stats;
-      showSyncReport.value = Boolean(stats.blocked);
+      showSyncReport.value = Boolean(stats.blocked || stats.pending_booking);
     }
     const details = stats
       ? [
           `${stats.imported ?? 0} nieuw`,
           `${stats.duplicates ?? 0} al bekend`,
           ...(stats.blocked ? [`${stats.blocked} geblokkeerd (${stats.missing_identity ?? 0} zonder bankreferentie/rekening, ${stats.conflicts ?? 0} met afwijkende boekingsgegevens, ${stats.invalid ?? 0} ongeldig)`] : []),
-          ...(stats.pending ? [`${stats.pending} nog niet geboekt`] : []),
+          ...(stats.pending ? [pendingSyncSummary(stats)] : []),
           ...(stats.time_backfilled ? [`${stats.time_backfilled} tijden aangevuld`] : []),
         ].join(" · ")
       : undefined;
 
-    notify(stats?.blocked ? "error" : "success", stats?.blocked ? "Synchronisatie deels geblokkeerd" : "Bank gesynchroniseerd", details);
+    notify(
+      stats?.blocked ? "error" : stats?.pending_booking ? "info" : "success",
+      stats?.blocked ? "Synchronisatie deels geblokkeerd" : stats?.pending_booking ? "Synchronisatie: verwerking nodig" : "Bank gesynchroniseerd",
+      details
+    );
   } catch (error) {
     notify("error", "Synchronisatie mislukt", error instanceof Error ? error.message : undefined);
   } finally {
@@ -1453,7 +1382,10 @@ function closeSavingsGoalModal() {
         :data-page="activeTab"
       >
         <div v-if="lastSyncReport" class="mb-4 flex flex-wrap justify-between items-center gap-3 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-xs">
-          <span class="text-slate-300">Laatste synchronisatie: {{ lastSyncReport.blocked ?? 0 }} geblokkeerd, {{ lastSyncReport.pending ?? 0 }} nog niet geboekt</span>
+          <div class="space-y-1">
+            <p class="text-slate-300">Laatste synchronisatie: {{ lastSyncReport.blocked ?? 0 }} geblokkeerd, {{ lastSyncReport.pending ?? 0 }} nog niet geboekt</p>
+            <p v-if="lastSyncReport.pending" class="text-slate-400">{{ pendingSyncSummary(lastSyncReport) }}.</p>
+          </div>
           <button type="button" class="text-indigo-300 hover:text-white font-semibold" @click="showSyncReport = true">Bekijk transacties en redenen</button>
         </div>
 

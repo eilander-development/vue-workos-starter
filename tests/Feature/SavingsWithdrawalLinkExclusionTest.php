@@ -4,6 +4,8 @@ use App\Models\Budget;
 use App\Models\Category;
 use App\Models\ImportRule;
 use App\Models\SavingsGoal;
+use App\Models\Transaction;
+use App\Services\EnabledBankingTransactionImporter;
 use App\Services\TransactionClassifier;
 
 function savingsCatalog(): array
@@ -77,6 +79,64 @@ test('spaarstorting van een spaardoel blijft gekoppeld aan de spaarpost', functi
     expect($result['link_excluded'])->toBeFalse()
         ->and($result['budget_id'])->toBe($catalog['budget']->id)
         ->and($result['type'])->toBe('saving');
+});
+
+test('spaarstorting zonder doelbegroting valt terug op een specifieke regel', function () {
+    $catalog = savingsCatalog();
+    $catalog['goal']->update(['budget_key' => null, 'budget_keys' => []]);
+    $wrongBudget = Budget::query()->create([
+        'key' => 'wrong-budget', 'category_id' => $catalog['category']->id,
+        'name' => 'Andere rekening', 'budget' => 100,
+    ]);
+    ImportRule::query()->create([
+        'key' => 'generic-first', 'name' => 'Algemeen', 'type' => 'keyword',
+        'match_value' => 'Oranje spaarrekening', 'is_active' => true,
+        'category_id' => $catalog['category']->id, 'budget_id' => $wrongBudget->id,
+    ]);
+    $rule = ImportRule::query()->create([
+        'key' => 'specific', 'name' => 'Buffer', 'type' => 'keyword',
+        'match_value' => 'Naar Oranje spaarrekening L13628386', 'is_active' => true,
+        'category_id' => $catalog['category']->id, 'budget_id' => $catalog['budget']->id,
+    ]);
+
+    $row = [
+        'booking_date' => '2026-10-24', 'amount' => -600,
+        'description' => 'Naar Oranje spaarrekening L13628386',
+        'account_iban' => 'NL00TEST1234567890', 'raw' => ['entry_reference' => 'deposit-ref'],
+    ];
+    $stats = app(EnabledBankingTransactionImporter::class)->import([$row]);
+    $tx = Transaction::query()->sole();
+
+    expect($stats['matched'])->toBe(1)
+        ->and($tx->budget_id)->toBe($catalog['budget']->id)
+        ->and($tx->rule_id)->toBe($rule->id)
+        ->and($tx->savings_goal_key)->toBe($catalog['goal']->key);
+});
+
+test('expliciete doelbegroting wint van een conflicterende specifieke regel', function () {
+    $catalog = savingsCatalog();
+    $other = Budget::query()->create([
+        'key' => 'other', 'category_id' => $catalog['category']->id, 'name' => 'Ander', 'budget' => 100,
+    ]);
+    ImportRule::query()->create([
+        'key' => 'conflicting', 'name' => 'Conflicterend', 'type' => 'keyword',
+        'match_value' => 'Naar Oranje spaarrekening L13628386', 'is_active' => true,
+        'category_id' => $catalog['category']->id, 'budget_id' => $other->id,
+    ]);
+    $result = app(TransactionClassifier::class)->classify('Naar Oranje spaarrekening L13628386', null, null, -600);
+    expect($result['budget_id'])->toBe($catalog['budget']->id)->and($result['rule_id'])->toBeNull();
+});
+
+test('herkend spaardoel zonder specifieke regel blijft ongekoppeld', function () {
+    $catalog = savingsCatalog();
+    $catalog['goal']->update(['budget_key' => null, 'budget_keys' => []]);
+    ImportRule::query()->create([
+        'key' => 'generic', 'name' => 'Algemeen', 'type' => 'keyword',
+        'match_value' => 'Oranje spaarrekening', 'is_active' => true,
+        'category_id' => $catalog['category']->id, 'budget_id' => $catalog['budget']->id,
+    ]);
+    $result = app(TransactionClassifier::class)->classify('Naar Oranje spaarrekening L13628386', null, null, -600);
+    expect($result['budget_id'])->toBeNull()->and($result['savings_goal_key'])->toBe($catalog['goal']->key);
 });
 
 test('pot-opname en pot-storting worden uitgesloten zonder vaste namen', function () {

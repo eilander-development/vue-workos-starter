@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Transaction;
 use App\Support\BankTransactionIdentity;
+use App\Support\BankTransactionStatus;
 use App\Support\BankTransactionTime;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -20,7 +21,7 @@ class EnabledBankingTransactionImporter
     {
         $hasSourceTypeColumn = Schema::hasColumn('transactions', 'source_type');
         $hasKeyColumn = Schema::hasColumn('transactions', 'key');
-        $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0, 'with_time' => 0, 'time_backfilled' => 0, 'blocked' => 0, 'missing_identity' => 0, 'conflicts' => 0, 'pending' => 0, 'invalid' => 0, 'issues' => []];
+        $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0, 'with_time' => 0, 'time_backfilled' => 0, 'blocked' => 0, 'missing_identity' => 0, 'conflicts' => 0, 'pending' => 0, 'pending_booking' => 0, 'invalid' => 0, 'issues' => []];
         // Index legacy rows too: their source hashes may predate canonical bank identities.
         $known = [];
         foreach (Transaction::query()->where('source_type', 'api')->get() as $tx) {
@@ -57,7 +58,7 @@ class EnabledBankingTransactionImporter
 
                 continue;
             }
-            if ($this->isPending($row)) {
+            if (BankTransactionStatus::isPending($row)) {
                 $stats['pending']++;
                 $stats['issues'][] = $this->issue($row, 'pending');
 
@@ -72,9 +73,7 @@ class EnabledBankingTransactionImporter
 
             $candidates = $known[$hash] ?? [];
             if (collect($candidates)->contains(fn ($tx) => ! $this->sameBooking($tx, $date, $amount))) {
-                $stats['blocked']++;
-                $stats['conflicts']++;
-                $stats['issues'][] = $this->issue($row, 'conflict', $candidates);
+                $this->recordBookingIssue($stats, $row, $candidates);
 
                 continue;
             }
@@ -149,9 +148,7 @@ class EnabledBankingTransactionImporter
                 if ($this->sameBooking($created, $date, $amount)) {
                     $stats['duplicates']++;
                 } else {
-                    $stats['blocked']++;
-                    $stats['conflicts']++;
-                    $stats['issues'][] = $this->issue($row, 'conflict', [$created]);
+                    $this->recordBookingIssue($stats, $row, [$created]);
                 }
 
                 continue;
@@ -166,6 +163,20 @@ class EnabledBankingTransactionImporter
         }
 
         return $stats;
+    }
+
+    private function recordBookingIssue(array &$stats, array $row, array $existing): void
+    {
+        $date = BankTransactionTime::bookingDate($row, fallbackToToday: false);
+        if (BankSyncReport::needsBookingReconciliation($existing, $date, (float) $row['amount'])) {
+            $stats['pending']++;
+            $stats['pending_booking']++;
+            $stats['issues'][] = $this->issue($row, 'pending_booking', $existing);
+        } else {
+            $stats['blocked']++;
+            $stats['conflicts']++;
+            $stats['issues'][] = $this->issue($row, 'conflict', $existing);
+        }
     }
 
     private function issue(array $row, string $code, array $existing = []): array
@@ -195,7 +206,8 @@ class EnabledBankingTransactionImporter
                 'conflict' => 'Dezelfde bankreferentie en rekening, maar een andere boekdatum of een ander bedrag. De bestaande boeking is niet gewijzigd.',
                 'missing_identity' => 'Ontbreekt: '.implode(', ', $missing).'. Niet opgeslagen om dubbele boekingen te voorkomen.',
                 'invalid' => 'Ontbrekend of ongeldig: '.implode(', ', $invalid).'. Niet opgeslagen.',
-                'pending' => 'De bank heeft deze transactie nog niet definitief geboekt. Wordt bij een volgende synchronisatie opnieuw gecontroleerd.',
+                'pending' => BankSyncReport::PENDING_REASON,
+                'pending_booking' => BankSyncReport::PENDING_BOOKING_REASON,
             },
             'date' => $date,
             'amount' => $amount,
@@ -237,18 +249,5 @@ class EnabledBankingTransactionImporter
     {
         return $tx->date?->format('Y-m-d') === $date
             && number_format((float) $tx->amount, 2, '.', '') === number_format($amount, 2, '.', '');
-    }
-
-    private function isPending(array $row): bool
-    {
-        if (! empty($row['is_pending']) || ! empty($row['isPending'])) {
-            return true;
-        }
-        $status = strtoupper((string) ($row['status'] ?? ''));
-        if (in_array($status, ['PDNG', 'PENDING', 'INFO'], true)) {
-            return true;
-        }
-
-        return is_array($row['raw'] ?? null) && $this->isPending($row['raw']);
     }
 }
