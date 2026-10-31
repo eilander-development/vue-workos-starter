@@ -12,6 +12,7 @@ import {
   Sliders,
   Split,
   Calendar,
+  TrendingUp,
   CheckCircle2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -79,6 +80,7 @@ const menuItems: {
   { id: "koppelregels", label: "Koppelregels", icon: Sliders },
   { id: "splits", label: "Splits", icon: Split },
   { id: "jaaroverzicht", label: "Jaaroverzicht", icon: Calendar },
+  { id: "prognoses", label: "Prognoses", icon: TrendingUp },
   { id: "settings", label: "Instellingen", icon: Settings },
 ];
 

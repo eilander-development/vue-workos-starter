@@ -2,16 +2,17 @@
 
 use App\Http\Controllers\CategoriesController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DataBackupController;
+use App\Http\Controllers\DuplicateTransactionsController;
+use App\Http\Controllers\EnableBankingController;
 use App\Http\Controllers\ExpensesController;
+use App\Http\Controllers\ForecastController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\SavingsController;
-use App\Http\Controllers\EnableBankingController;
-use App\Http\Controllers\DataBackupController;
 use App\Http\Controllers\SparenController;
 use App\Http\Controllers\TransactionsController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/', [SparenController::class, 'app'])->name('home');
@@ -26,13 +27,22 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/koppelregels', [SparenController::class, 'app'])->name('sparen.koppelregels');
     Route::get('/splits', [SparenController::class, 'app'])->name('sparen.splits');
     Route::get('/jaaroverzicht', [SparenController::class, 'app'])->name('sparen.jaaroverzicht');
+    Route::get('/prognoses', [SparenController::class, 'app'])->name('sparen.prognoses');
     Route::get('/instellingen', [SparenController::class, 'app'])->name('sparen.instellingen');
     Route::get('/instellingen/{section}', [SparenController::class, 'app'])
         ->whereIn('section', ['profiel', 'uiterlijk', 'data', 'uitloggen'])
         ->name('sparen.instellingen.section');
-    Route::get('/api/sparen/duplicate-transactions', [\App\Http\Controllers\DuplicateTransactionsController::class, 'index']);
-    Route::delete('/api/sparen/duplicate-transactions', [\App\Http\Controllers\DuplicateTransactionsController::class, 'destroy']);
+    Route::get('/api/sparen/duplicate-transactions', [DuplicateTransactionsController::class, 'index']);
+    Route::delete('/api/sparen/duplicate-transactions', [DuplicateTransactionsController::class, 'destroy']);
     Route::get('/api/sparen/state', [SparenController::class, 'state'])->name('sparen.state');
+    Route::get('/api/sparen/forecasts', [ForecastController::class, 'index']);
+    Route::get('/api/sparen/forecasts/source', [ForecastController::class, 'source']);
+    Route::post('/api/sparen/forecasts', [ForecastController::class, 'store']);
+    Route::get('/api/sparen/forecasts/{forecast}', [ForecastController::class, 'show']);
+    Route::put('/api/sparen/forecasts/{forecast}', [ForecastController::class, 'update']);
+    Route::post('/api/sparen/forecasts/{forecast}/apply', [ForecastController::class, 'apply']);
+    Route::post('/api/sparen/forecasts/{forecast}/revert', [ForecastController::class, 'revert']);
+    Route::get('/api/sparen/budget-items/{itemId}/history', [ForecastController::class, 'history']);
     Route::put('/api/sparen/state', [SparenController::class, 'persist'])->name('sparen.persist');
     Route::put('/api/sparen/budget-items/{itemId}', [SparenController::class, 'persistBudgetItem'])->name('sparen.budget_item.persist');
     Route::delete('/api/sparen/budget-items/{itemId}', [SparenController::class, 'destroyBudgetItem'])->name('sparen.budget_item.destroy');

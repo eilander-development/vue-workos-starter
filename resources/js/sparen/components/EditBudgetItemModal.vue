@@ -12,6 +12,7 @@ import type {
 } from "../types";
 import ConfirmDialog from "./ConfirmDialog.vue";
 import BudgetMonthEntriesModal from "./BudgetMonthEntriesModal.vue";
+import BudgetChangeHistory from "./BudgetChangeHistory.vue";
 
 type FrequencyMode = "current_only" | "all_months" | "quarterly" | "custom" | "monthly_lines";
 
@@ -26,6 +27,7 @@ const props = defineProps<{
     itemId: string,
     updatedData: {
       name: string;
+      forecastMode?: 'auto' | 'fixed' | 'extra';
       group: BudgetCategoryGroup;
       type?: BudgetType;
       monthlyAmounts: Record<string, number>;
@@ -48,6 +50,7 @@ function itemUsesMonthlyLines(item: BudgetItem | null, allMonths: MonthlyBudget[
 }
 
 const name = ref("");
+const forecastMode = ref<'auto' | 'fixed' | 'extra'>('auto');
 const group = ref<BudgetCategoryGroup>("Dagelijks Leven");
 const currentAmount = ref(0);
 const frequencyMode = ref<FrequencyMode>("current_only");
@@ -69,6 +72,7 @@ watch(
     if (!item || !props.isOpen) return;
 
     name.value = item.name;
+    forecastMode.value = item.forecastMode ?? 'auto';
     group.value = item.group;
     currentAmount.value = item.actual;
     entriesModalOpen.value = false;
@@ -250,6 +254,7 @@ function buildFinalPayload() {
 
   return {
     name: name.value.trim(),
+    forecastMode: forecastMode.value,
     group: group.value,
     type: matchedType,
     monthlyAmounts: finalAmounts,
@@ -332,6 +337,16 @@ const frequencyOptions = [
             </select>
           </div>
         </div>
+
+        <label v-if="item.type === 'uitgaven'" class="block text-xs font-semibold text-slate-300">
+          Meenemen in prognoses
+          <select v-model="forecastMode" class="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-white">
+            <option value="auto">Automatisch: vast, behalve losse regels en Klarna/creditcard</option>
+            <option value="fixed">Vast: meetellen in structurele vrije ruimte</option>
+            <option value="extra">Extra: apart tonen, buiten structurele vrije ruimte</option>
+          </select>
+          <span class="mt-1 block font-normal text-slate-500">Kies Vast voor bijvoorbeeld een vaste maandelijkse aflossing. Deze keuze verandert geen begrotingsbedragen.</span>
+        </label>
 
         <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-3">
           <div class="flex items-center justify-between">
@@ -457,6 +472,11 @@ const frequencyOptions = [
           </button>
           om omschrijvingen en bedragen te beheren.
         </div>
+
+        <details class="border-t border-slate-800 pt-3">
+          <summary class="cursor-pointer text-sm text-indigo-300">Wijzigingshistorie vanuit prognoses</summary>
+          <BudgetChangeHistory :item-id="item.id" class="mt-3" />
+        </details>
 
         <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
           <button

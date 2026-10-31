@@ -39,6 +39,7 @@ import CategoriesView from "./components/CategoriesView.vue";
 import KoppelregelsView from "./components/KoppelregelsView.vue";
 import SplitsView from "./components/SplitsView.vue";
 import YearOverviewView from "./components/YearOverviewView.vue";
+import ForecastsView from "./components/ForecastsView.vue";
 import SettingsView from "./components/SettingsView.vue";
 import AddTransactionModal from "./components/AddTransactionModal.vue";
 import AddBudgetItemModal from "./components/AddBudgetItemModal.vue";
@@ -181,6 +182,14 @@ function applyRemoteState(data: Record<string, unknown>) {
   if (data.bankAccounts) bankAccounts.value = data.bankAccounts as BankAccount[];
   if (data.savingsGoals) savingsGoals.value = data.savingsGoals as SavingsGoal[];
   if (data.savingsHistory) savingsHistory.value = data.savingsHistory as SavingsRow[];
+}
+
+async function refreshAfterForecast() {
+  try {
+    applyRemoteState(await loadSparenState());
+  } catch {
+    notify("error", "Begroting herladen mislukt", "De prognose is verwerkt. Herlaad de pagina om de actuele begroting te zien.");
+  }
 }
 
 function reconcilePotDepositFlags() {
@@ -1000,6 +1009,7 @@ function handleSaveBudgetItemDetails(
   itemId: string,
   updatedData: {
     name: string;
+    forecastMode?: 'auto' | 'fixed' | 'extra';
     group: BudgetCategoryGroup;
     type?: "inkomsten" | "uitgaven" | "sparen";
     monthlyAmounts: Record<string, number>;
@@ -1023,6 +1033,7 @@ function handleSaveBudgetItemDetails(
           return {
             ...item,
             name: updatedData.name,
+            forecastMode: updatedData.forecastMode ?? item.forecastMode,
             group: updatedData.group,
             type: updatedData.type || item.type,
             estimated: newAmount,
@@ -1043,6 +1054,7 @@ function handleSaveBudgetItemDetails(
     itemId,
     {
       name: updatedData.name,
+      forecastMode: updatedData.forecastMode,
       group: updatedData.group,
       estimated: updatedData.monthlyAmounts[selectedMonthId.value] ?? 0,
       year: currentMonth.value.year,
@@ -1364,6 +1376,7 @@ function closeSavingsGoalModal() {
 
     <div class="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen">
       <Header
+        v-if="activeTab !== 'prognoses'"
         :current-month="currentMonth"
         :all-months="monthlyBudgets"
         :reporting-period-label="currentReportingPeriodLabel"
@@ -1381,7 +1394,7 @@ function closeSavingsGoalModal() {
         class="flex-1 px-3 md:px-4 py-3 md:py-4 pb-24 md:pb-6 w-full space-y-5"
         :data-page="activeTab"
       >
-        <div v-if="lastSyncReport" class="mb-4 flex flex-wrap justify-between items-center gap-3 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-xs">
+        <div v-if="lastSyncReport && activeTab !== 'prognoses'" class="mb-4 flex flex-wrap justify-between items-center gap-3 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-xs">
           <div class="space-y-1">
             <p class="text-slate-300">Laatste synchronisatie: {{ lastSyncReport.blocked ?? 0 }} geblokkeerd, {{ lastSyncReport.pending ?? 0 }} nog niet geboekt</p>
             <p v-if="lastSyncReport.pending" class="text-slate-400">{{ pendingSyncSummary(lastSyncReport) }}.</p>
@@ -1390,6 +1403,7 @@ function closeSavingsGoalModal() {
         </div>
 
         <PotCompensationBanner
+          v-if="activeTab !== 'prognoses'"
           :needs="potCompensationNeeds"
           :month-name="currentMonth.monthName"
           @select="openPotFromCompensation"
@@ -1536,6 +1550,9 @@ function closeSavingsGoalModal() {
           :on-select-month="handleYearOverviewSelectMonth"
         />
 
+        <KeepAlive>
+          <ForecastsView v-if="activeTab === 'prognoses'" @changed="refreshAfterForecast" @open-mobile-menu="isMobileDrawerOpen = true" />
+        </KeepAlive>
         <SettingsView v-if="activeTab === 'settings'" />
       </main>
     </div>

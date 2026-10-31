@@ -28,9 +28,11 @@ class SparenController extends Controller
         return view('sparen');
     }
 
-    public function state(): JsonResponse
+    public function state(Request $request): JsonResponse
     {
-        return response()->json($this->state->build());
+        $data = $request->validate(['year' => ['nullable', 'integer', 'between:2000,2200']]);
+
+        return response()->json($this->state->build(isset($data['year']) ? (int) $data['year'] : null));
     }
 
     public function persist(Request $request): JsonResponse
@@ -48,6 +50,7 @@ class SparenController extends Controller
             'estimated' => ['nullable', 'numeric'],
             'actual' => ['nullable', 'numeric'],
             'notes' => ['nullable', 'string'],
+            'forecastMode' => ['sometimes', 'in:auto,fixed,extra'],
             'monthId' => ['nullable', 'string'],
             'year' => ['nullable', 'integer'],
             'monthlyAmounts' => ['nullable', 'array'],

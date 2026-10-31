@@ -11,7 +11,7 @@ function csrfHeaders(): HeadersInit {
   };
 }
 
-async function sparenRequest(method: string, path: string, body?: unknown) {
+export async function sparenRequest(method: string, path: string, body?: unknown) {
   const response = await fetch(path, {
     method,
     credentials: "same-origin",

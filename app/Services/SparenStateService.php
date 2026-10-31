@@ -47,13 +47,14 @@ class SparenStateService
 
     private ?bool $bankPayloadColumnExists = null;
 
-    public function build(int $year = 2026): array
+    public function build(?int $year = null): array
     {
+        $year ??= $this->reportingPeriod->defaultSparenMonth()['year'];
         $this->savingsGoalOverrides->apply();
 
         $categories = Category::query()->orderBy('id')->get();
         $budgets = Budget::query()->with('category')->orderBy('sort_order')->orderBy('id')->get();
-        $monthValues = BudgetMonthValue::query()->where('year', $year)->get()->groupBy('budget_id');
+        $projection = new BudgetProjection;
         $transactions = Transaction::query()->with(['category', 'budget', 'importRule'])->orderByDesc('date')->orderByDesc('id')->get();
         $rules = ImportRule::query()->with(['category', 'budget'])->orderBy('id')->get();
         $goals = SavingsGoal::query()->orderBy('id')->get();
@@ -72,9 +73,10 @@ class SparenStateService
         $monthlyBudgets = [];
         foreach (self::MONTHS as $monthId => $monthName) {
             [$periodStart, $periodEnd] = $this->reportingPeriod->periodForSparenMonth($monthId, $year);
-            $items = $budgets->map(function (Budget $budget) use ($monthValues, $monthId, $txPayload, $year, $potBudgetKeys) {
-                $monthValue = optional($monthValues->get($budget->id))->firstWhere('month_id', $monthId);
-                $entries = collect($monthValue?->entries ?? [])
+            $items = $budgets->map(function (Budget $budget) use ($projection, $monthId, $txPayload, $year, $potBudgetKeys) {
+                $monthNumber = array_search($monthId, ReportingPeriod::SPAREN_MONTH_IDS, true) + 1;
+                $resolved = $projection->resolve($budget, sprintf('%04d-%02d', $year, $monthNumber));
+                $entries = collect($resolved['entries'])
                     ->filter(fn ($row) => is_array($row))
                     ->map(fn (array $row) => [
                         'id' => (string) ($row['id'] ?? uniqid('entry-', true)),
@@ -88,7 +90,7 @@ class SparenStateService
                 $estimatedFromEntries = round(collect($entries)->sum('amount'), 2);
                 $estimated = $entries !== []
                     ? $estimatedFromEntries
-                    : (float) ($monthValue?->estimated ?? $budget->budget);
+                    : $resolved['amount'];
 
                 $matching = $txPayload->filter(function (array $tx) use ($budget, $monthId, $year) {
                     return $this->transactionCountsTowardBudget($budget, $tx)
@@ -118,6 +120,7 @@ class SparenStateService
                     'shadowSpent' => $isPotEnvelope ? $txPaid : null,
                     'paymentCount' => $matching->count(),
                     'notes' => $budget->notes,
+                    'forecastMode' => $budget->forecast_mode ?? 'auto',
                     'isPaid' => $estimated > 0 && $paid >= $estimated,
                     'monthEntries' => $entries,
                 ];
@@ -363,6 +366,7 @@ class SparenStateService
                 'name' => $item['name'],
                 'budget' => $item['estimated'] ?? $item['actual'] ?? 0,
                 'notes' => $item['notes'] ?? null,
+                ...(array_key_exists('forecastMode', $item) ? ['forecast_mode' => $item['forecastMode']] : []),
             ]
         );
         $budget->load('category');
@@ -627,6 +631,7 @@ class SparenStateService
         }
 
         $rows = TransactionAllocations::normalize($rule->allocations);
+
         return $rows === [] ? null : $rows;
     }
 

@@ -33,6 +33,7 @@ const isMoreActive = computed(() =>
     "koppelregels",
     "splits",
     "jaaroverzicht",
+    "prognoses",
   ].includes(props.activeTab)
 );
 

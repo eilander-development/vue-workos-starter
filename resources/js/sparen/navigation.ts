@@ -17,6 +17,7 @@ export const SPAREN_PAGES: {
   { tab: "koppelregels", path: "/koppelregels", title: "Koppelregels" },
   { tab: "splits", path: "/splits", title: "Splits" },
   { tab: "jaaroverzicht", path: "/jaaroverzicht", title: "Jaaroverzicht" },
+  { tab: "prognoses", path: "/prognoses", title: "Prognoses" },
   { tab: "settings", path: "/instellingen", title: "Instellingen" },
 ];
 

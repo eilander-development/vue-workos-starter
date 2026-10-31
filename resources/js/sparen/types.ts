@@ -40,6 +40,7 @@ export interface BudgetItem {
   shadowSpent?: number;
   paymentCount?: number; // Aantal transacties / betalingen
   notes?: string;
+  forecastMode?: 'auto' | 'fixed' | 'extra';
   icon?: string;
   isPaid?: boolean;
   /** Losse regels per maand (som = begroot bedrag) */
@@ -192,6 +193,7 @@ export type ActiveTab =
   | "koppelregels"
   | "splits"
   | "jaaroverzicht"
+  | "prognoses"
   | "settings";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
