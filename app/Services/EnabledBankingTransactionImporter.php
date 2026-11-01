@@ -16,10 +16,12 @@ class EnabledBankingTransactionImporter
         protected ImportRuleMatcher $ruleMatcher,
         protected TransactionRuleEnricher $transactionRuleEnricher,
         protected TransactionClassifier $classifier,
+        protected BankImportReviewService $reviews,
     ) {}
 
     public function import(array $transactions): array
     {
+        $this->reviews->beginImport();
         $hasSourceTypeColumn = Schema::hasColumn('transactions', 'source_type');
         $hasKeyColumn = Schema::hasColumn('transactions', 'key');
         $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0, 'with_time' => 0, 'time_backfilled' => 0, 'blocked' => 0, 'missing_identity' => 0, 'conflicts' => 0, 'pending' => 0, 'pending_booking' => 0, 'invalid' => 0, 'reserved_imported' => 0, 'finalized' => 0, 'archived' => 0, 'ignored_reservations' => 0, 'issues' => []];
@@ -39,6 +41,19 @@ class EnabledBankingTransactionImporter
             $account = BankTransactionIdentity::ownAccount($old->bank_payload, (float) $old->amount, $old->account_iban);
             if ($reference && $account !== '') {
                 $decisions[$this->identityHash($account, $reference)] = $old;
+            }
+        }
+
+        $variants = [];
+        foreach ($transactions as $row) {
+            if (BankTransactionStatus::isPending($row) || ! is_numeric($row['amount'] ?? null)) {
+                continue;
+            }
+            $date = BankTransactionTime::bookingDate($row, fallbackToToday: false);
+            $reference = BankTransactionIdentity::reference($row);
+            $account = BankTransactionIdentity::ownAccount($row, (float) $row['amount'], $row['account_iban'] ?? null);
+            if ($date !== '' && $reference && $account !== '') {
+                $variants[$this->identityHash($account, $reference)][$date.'/'.number_format((float) $row['amount'], 2, '.', '')] = true;
             }
         }
 
@@ -76,6 +91,7 @@ class EnabledBankingTransactionImporter
             if ($pending) {
                 $stats['pending']++;
             }
+            $unambiguous = count($variants[$hash] ?? []) === 1;
             $time = $row['time'] ?? BankTransactionTime::extractBookingTime($row);
             $bankPayload = $this->bankPayload($row);
             if ($time) {
@@ -83,7 +99,7 @@ class EnabledBankingTransactionImporter
             }
 
             $ids = array_map(fn ($tx) => $tx->id, $known[$hash] ?? []);
-            $handled = DB::connection('ledger')->transaction(function () use ($ids, $row, $date, $amount, $pending, $time, $bankPayload, &$stats) {
+            $handled = DB::connection('ledger')->transaction(function () use ($ids, $row, $date, $amount, $pending, $time, $bankPayload, $unambiguous, &$stats) {
                 $locked = Transaction::withHistory()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
                 $decision = $locked->last(fn ($tx) => $tx->archived_at && in_array($tx->archive_reason, ['reservation_matched', 'reservation_expired'], true));
                 if ($decision && $this->resolvedReservation($decision, $row, $date, $amount, $pending, $stats)) {
@@ -93,7 +109,7 @@ class EnabledBankingTransactionImporter
                 if (! $candidates) {
                     return false;
                 }
-                $this->updateExisting($candidates, $row, $date, $amount, $pending, $time, $bankPayload, $stats);
+                $this->updateExisting($candidates, $row, $date, $amount, $pending, $time, $bankPayload, $stats, $unambiguous);
 
                 return true;
             });
@@ -151,9 +167,9 @@ class EnabledBankingTransactionImporter
             $created = Transaction::query()->createOrFirst(['source_hash' => $hash], $payload);
             $known[$hash] = [$created];
             if (! $created->wasRecentlyCreated) {
-                DB::connection('ledger')->transaction(function () use ($created, $row, $date, $amount, $pending, $time, $bankPayload, &$stats) {
+                DB::connection('ledger')->transaction(function () use ($created, $row, $date, $amount, $pending, $time, $bankPayload, $unambiguous, &$stats) {
                     $locked = Transaction::query()->whereKey($created->id)->lockForUpdate()->firstOrFail();
-                    $this->updateExisting([$locked], $row, $date, $amount, $pending, $time, $bankPayload, $stats);
+                    $this->updateExisting([$locked], $row, $date, $amount, $pending, $time, $bankPayload, $stats, $unambiguous);
                 });
 
                 continue;
@@ -167,13 +183,15 @@ class EnabledBankingTransactionImporter
             $stats['imported']++;
             if ($pending) {
                 $stats['reserved_imported']++;
+            } else {
+                $this->reviews->observeConfirmed($row, $created, $unambiguous);
             }
         }
 
         return $stats;
     }
 
-    private function updateExisting(array $rows, array $row, string $date, float $amount, bool $pending, ?string $time, ?array $payload, array &$stats): void
+    private function updateExisting(array $rows, array $row, string $date, float $amount, bool $pending, ?string $time, ?array $payload, array &$stats, bool $unambiguous): void
     {
         $lifecycle = new TransactionLifecycle;
         $incompatible = collect($rows)->contains(fn ($tx) => number_format((float) $tx->amount, 2, '.', '') !== number_format($amount, 2, '.', '')
@@ -219,6 +237,9 @@ class EnabledBankingTransactionImporter
             }
         }
         $keep->save();
+        if (! $pending) {
+            $this->reviews->observeConfirmed($row, $keep, $unambiguous);
+        }
         if (! $promoting) {
             $stats['duplicates']++;
         }
@@ -261,6 +282,7 @@ class EnabledBankingTransactionImporter
 
     private function issue(array $row, string $code, array $existing = []): array
     {
+        $reviewKey = $code === 'conflict' ? $this->reviews->record($row, $existing) : null;
         $amount = is_numeric($row['amount'] ?? null) && is_finite((float) $row['amount']) ? (float) $row['amount'] : null;
         $date = BankTransactionTime::bookingDate($row, fallbackToToday: false) ?: null;
         $reference = BankTransactionIdentity::reference($row);
@@ -282,6 +304,7 @@ class EnabledBankingTransactionImporter
 
         return [
             'code' => $code,
+            ...($reviewKey ? ['reviewKey' => $reviewKey] : []),
             'reason' => match ($code) {
                 'conflict' => 'Dezelfde bankreferentie en rekening, maar afwijkende boekingsgegevens of tegenstrijdige koppelingen/splitsingen. Niets samengevoegd of overschreven; controle nodig.',
                 'missing_identity' => 'Ontbreekt: '.implode(', ', $missing).'. Niet opgeslagen om dubbele boekingen te voorkomen.',

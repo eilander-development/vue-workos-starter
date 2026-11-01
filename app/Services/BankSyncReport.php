@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BankImportReview;
 use App\Models\Transaction;
 use App\Support\BankTransactionIdentity;
 use App\Support\BankTransactionStatus;
@@ -40,6 +41,20 @@ class BankSyncReport
         }
 
         foreach ($report['issues'] ?? [] as $index => $issue) {
+            if (! empty($issue['reviewKey'])) {
+                $review = BankImportReview::query()->where('key', $issue['reviewKey'])->first();
+                if ($review && $review->status !== 'open') {
+                    unset($report['issues'][$index]);
+                    foreach (['blocked', 'conflicts'] as $counter) {
+                        $report[$counter] = max(0, ($report[$counter] ?? 0) - 1);
+                    }
+
+                    continue;
+                }
+                if ($review) {
+                    continue;
+                }
+            }
             if (in_array($issue['code'], ['conflict', 'pending_booking'], true) && $this->resolved($issue)) {
                 unset($report['issues'][$index]);
                 foreach ($issue['code'] === 'conflict' ? ['blocked', 'conflicts'] : ['pending', 'pending_booking'] as $counter) {

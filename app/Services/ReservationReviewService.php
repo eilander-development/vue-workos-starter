@@ -74,6 +74,9 @@ class ReservationReviewService
                 abort_unless($data['scaleSplit'] ?? false, 422, 'Het definitieve bedrag wijkt af. Bevestig de aangepaste verdeling of behoud de koppelingen van de definitieve betaling.');
             }
 
+            $scaled = $usesReservationSplit && $reservationSplit !== [] ? TransactionAllocations::scaleToAmount($reservationSplit, (float) $booked->amount) : null;
+            abort_if($scaled && (collect($scaled)->contains(fn ($row) => $row['amount'] <= 0)
+                || array_sum(array_map(fn ($row) => (int) round($row['amount'] * 100), $scaled)) !== (int) round(abs((float) $booked->amount) * 100)), 422, 'Het bankbedrag is te klein voor deze splitsing. Pas de koppeling aan voordat je verdergaat.');
             $this->lifecycle->rememberReservation($booked, 'links_before_reservation_match');
             if ($choice === 'reservation') {
                 $booked->fill($reservation->only(TransactionLifecycle::LINK_FIELDS));
@@ -81,7 +84,7 @@ class ReservationReviewService
                 $this->lifecycle->mergeLinks($booked, [$reservation]);
             }
             if ($usesReservationSplit && $reservationSplit !== []) {
-                $booked->allocations = TransactionAllocations::scaleToAmount($reservationSplit, (float) $booked->amount);
+                $booked->allocations = $scaled;
             }
             $booked->save();
             $this->lifecycle->archive($reservation, $booked, 'reservation_matched');

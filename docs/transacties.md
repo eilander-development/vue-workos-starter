@@ -31,6 +31,40 @@ bankregel niet geïmporteerd. Bij een andere referentie worden betalingen nooit
 alleen op gelijke naam, bedrag of datum samengevoegd. Een verdwenen reservering
 wordt niet automatisch als betaald of vervallen beschouwd.
 
+## Geblokkeerde definitieve bankboekingen
+
+Bij een geldige definitieve boeking die afwijkt van bestaande gegevens bewaart de
+importer de volledige bankversie in een aparte beoordelingslijst. Deze voorstellen
+tellen nergens als transactie mee. Het synchronisatierapport heeft daarvoor de knop
+**Bankboeking beoordelen en verwerken**. Dezelfde lijst staat op `/transacties`
+achter **Bankboekingen beoordelen**, ook na sluiten van het rapport of opnieuw inloggen.
+Oudere rapporten zonder bewaarde bankversie bieden opnieuw ophalen aan.
+
+Het scherm toont de oude registratie(s), de nieuw aangeleverde boekdatum en het
+definitieve bedrag. Na controle kun je de bankgegevens overnemen in dezelfde
+transactie. Bij meerdere registraties kies je welke haar ID houdt. Ontbrekende
+koppelingen kunnen worden overgenomen; tegenstrijdige koppelingen vereisen een
+bewuste bronkeuze. De oude bankgegevens en eventuele vervangen kopieën blijven
+als Historie bewaard. Een datum- of bedragwijziging wordt dus nooit stil toegepast.
+
+Bij een ander bedrag toont het scherm vooraf de aangepaste splitsing. Evenredig
+herschalen vereist bevestiging en moet exact op het definitieve bedrag uitkomen.
+Een bankbedrag dat geen positieve splitdelen meer toelaat wordt niet opgeslagen;
+pas dan eerst de koppeling aan. De bankbedragen, boekdatum en bronpayload komen
+uitsluitend uit de opgeslagen bankrespons, niet uit invoervelden van de browser.
+Begrotingsschema's en opgehaalde banksaldi worden niet gewijzigd.
+
+Revisiecontroles en databaselocks voorkomen dat ondertussen gewijzigde gegevens
+worden overschreven. Herhaalde bankleveringen maken niet steeds nieuwe voorstellen.
+Na acceptatie wordt een herhaalde boeking als bekend herkend. Andere open voorstellen
+voor dezelfde betaling worden afgesloten en bewaard. Als de bank later eenduidig
+de bestaande boeking bevestigt, wordt een verouderd voorstel automatisch afgesloten;
+tegenstrijdige versies in één levering blijven om beoordeling vragen.
+
+Alleen een betrouwbare bankidentiteit en definitieve gegevens zijn te accepteren.
+Ontbrekende gegevens, een andere betaalrichting of een onzekere bankidentiteit
+blijven geblokkeerd. De beoordelingslijst en bronpayloads gaan mee in back-ups.
+
 ## Bewaren en bekijken
 
 De knop **Historie** op de transactiepagina opent een doorzoekbaar overzicht met
@@ -82,6 +116,9 @@ ouder sessierapport worden niet opnieuw als openstaand getoond.
 
 De ledger-migratie `2026_11_01_190000_add_transaction_history.php` voegt historievelden
 toe en herstelt oude reserveringsvlaggen op basis van de opgeslagen bankstatus.
+
+`2026_11_01_210000_create_bank_import_reviews.php` voegt de blijvende lijst met
+geblokkeerde bankversies toe; bestaande transacties worden daarbij niet gewijzigd.
 
 `php artisan transactions:reconcile` controleert bestaande registraties zonder ze
 te wijzigen. Met `--apply` archiveert het commando uitsluitend bewezen kopieën,

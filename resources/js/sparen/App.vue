@@ -22,10 +22,12 @@ import {
   DEFAULT_CATEGORY_DEFINITIONS,
 } from "./data/mockBudgetData";
 import SyncReportModal from "./components/SyncReportModal.vue";
+import BankImportReviewModal from './components/BankImportReviewModal.vue';
+import type { BankReviewResult } from './bankReviews';
 import type { SyncReport } from "./syncReport";
 import { pendingSyncSummary } from "./syncReport";
 import { isBookedTransaction } from './transactionStatus';
-import { loadSyncReport } from "./api";
+import { loadSyncReport, loadBankReviews } from "./api";
 import Sidebar from "./components/Sidebar.vue";
 import Header from "./components/Header.vue";
 import BottomNav from "./components/BottomNav.vue";
@@ -439,6 +441,20 @@ async function persistBudgetChange(
 }
 
 const lastSyncReport = ref<SyncReport | null>(null);
+const bankReviewCount = ref(0);
+const showBankReviews = ref(false);
+const initialBankReviewKey = ref<string | null>(null);
+function openBankReviews(key: string | null = null) {
+  initialBankReviewKey.value = key;
+  showBankReviews.value = true;
+}
+function handleBankReviewResult(result: BankReviewResult) {
+  const removed = new Set([...result.removedKeys, result.booked.id]);
+  transactions.value = [result.booked, ...transactions.value.filter(tx => !removed.has(tx.id))];
+  lastSyncReport.value = result.report;
+  bankReviewCount.value = result.reviewCount;
+  notify('success', 'Definitieve bankboeking verwerkt', 'Het bankbedrag is overgenomen. De vorige registratie en splitsing blijven bewaard in Historie.');
+}
 function handleReservationResolved(result: { reservationKey: string; booked: Transaction | null }) {
   transactions.value = transactions.value.filter(tx => tx.id !== result.reservationKey);
   if (result.booked) {
@@ -451,7 +467,9 @@ function handleReservationResolved(result: { reservationKey: string; booked: Tra
 }
 const showSyncReport = ref(false);
 onMounted(async () => {
-  try { lastSyncReport.value = (await loadSyncReport()).report; } catch { /* A new sync can still provide a report. */ }
+  const [report, reviews] = await Promise.allSettled([loadSyncReport(), loadBankReviews()]);
+  if (report.status === 'fulfilled') lastSyncReport.value = report.value.report;
+  if (reviews.status === 'fulfilled') bankReviewCount.value = reviews.value.total;
 });
 
 async function handleBankSync() {
@@ -478,6 +496,7 @@ async function handleBankSync() {
       lastSyncReport.value = stats;
       showSyncReport.value = Boolean(stats.blocked);
     }
+    try { bankReviewCount.value = (await loadBankReviews()).total; } catch { /* The financial sync remains valid if the review count cannot be refreshed. */ }
     const details = stats
       ? [
           `${stats.imported ?? 0} nieuw`,
@@ -1475,6 +1494,8 @@ function closeSavingsGoalModal() {
           :on-delete-transaction="handleDeleteTransaction"
           :on-duplicate-deleted="(id: string) => { transactions = transactions.filter(tx => tx.id !== id); }"
           :on-reservation-resolved="handleReservationResolved"
+          :on-open-bank-reviews="() => openBankReviews()"
+          :bank-review-count="bankReviewCount"
           :on-link-transaction="handleLinkTransaction"
           :on-assign-savings-goal="handleAssignSavingsGoal"
           :on-open-savings-goal="handleOpenSavingsGoalFromTransaction"
@@ -1663,7 +1684,8 @@ function closeSavingsGoalModal() {
       :on-close="closeTransactionDetail"
     />
 
-    <SyncReportModal v-if="showSyncReport && lastSyncReport" :report="lastSyncReport" @close="showSyncReport = false" />
+    <SyncReportModal v-if="showSyncReport && lastSyncReport" :report="lastSyncReport" @close="showSyncReport = false" @review="openBankReviews" @sync="showSyncReport = false; handleBankSync()" />
+    <BankImportReviewModal v-if="showBankReviews" :initial-review-key="initialBankReviewKey" :budget-items="currentMonth.items" @close="showBankReviews = false" @resolved="handleBankReviewResult" @count="bankReviewCount = $event" />
     <ToastStack :toasts="toasts" @dismiss="dismiss" />
   </div>
 </template>

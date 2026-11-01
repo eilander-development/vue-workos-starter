@@ -30,17 +30,17 @@ test('reservations get rule splits immediately and finalization preserves ID and
     $first = $importer->import([lifecycleBankRow(['status' => 'PDNG'])]);
     $reserved = Transaction::first();
     expect($first['reserved_imported'])->toBe(1)->and($first['issues'])->toBe([])
-        ->and($reserved->is_pending)->toBeTrue()->and($reserved->allocations)->toBe($splits);
+        ->and($reserved->is_pending)->toBeTrue()->and($reserved->allocations)->toEqual($splits);
     $reserved->update(['savings_goal_key' => 'manual-assignment']);
     $result = $importer->import([lifecycleBankRow(['booking_date' => '2026-10-22'])]);
     $booked = Transaction::first();
     expect($result['finalized'])->toBe(1)->and($booked->id)->toBe($reserved->id)
         ->and($booked->key)->toBe($reserved->key)->and($booked->is_pending)->toBeFalse()
         ->and($booked->date->format('Y-m-d'))->toBe('2026-10-22')
-        ->and($booked->allocations)->toBe($splits)->and($booked->savings_goal_key)->toBe('manual-assignment');
+        ->and($booked->allocations)->toEqual($splits)->and($booked->savings_goal_key)->toBe('manual-assignment');
     $old = Transaction::onlyHistory()->first();
     expect($old->date->format('Y-m-d'))->toBe('2026-10-20')->and($old->is_pending)->toBeTrue()
-        ->and($old->superseded_by_key)->toBe($booked->key)->and($old->allocations)->toBe($splits);
+        ->and($old->superseded_by_key)->toBe($booked->key)->and($old->allocations)->toEqual($splits);
     $repeat = $importer->import([lifecycleBankRow(['booking_date' => '2026-10-22']), lifecycleBankRow(['status' => 'PDNG'])]);
     expect($repeat['finalized'])->toBe(0)->and(Transaction::count())->toBe(1)
         ->and(Transaction::onlyHistory()->count())->toBe(1)->and(Transaction::first()->is_pending)->toBeFalse();

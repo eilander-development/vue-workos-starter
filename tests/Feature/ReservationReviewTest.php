@@ -109,8 +109,8 @@ test('a changed final amount needs explicit split rescaling in cents', function 
     expect(Transaction::onlyHistory()->count())->toBe(0)->and($booked->fresh()->allocations)->toBeNull();
     $this->postJson('/api/sparen/reservations/'.$pending->key.'/resolve', [...$payload, 'scaleSplit' => true])->assertOk();
     expect($booked->fresh()->amount)->toBe('-180.01')
-        ->and($booked->fresh()->allocations)->toBe([['budgetItemId' => 'a', 'amount' => 120.01], ['budgetItemId' => 'b', 'amount' => 60]])
-        ->and(Transaction::onlyHistory()->where('key', $pending->key)->first()->allocations)->toBe($split);
+        ->and($booked->fresh()->allocations)->toEqual([['budgetItemId' => 'a', 'amount' => 120.01], ['budgetItemId' => 'b', 'amount' => 60]])
+        ->and(Transaction::onlyHistory()->where('key', $pending->key)->first()->allocations)->toEqual($split);
 });
 
 test('keeping definitive links leaves the reservation split unchanged in history without rescaling', function () {
@@ -119,7 +119,7 @@ test('keeping definitive links leaves the reservation split unchanged in history
     $pending = reviewPayment(['is_pending' => true, 'allocations' => $split]);
     $booked = reviewPayment(['amount' => -180]);
     $this->postJson('/api/sparen/reservations/'.$pending->key.'/resolve', reviewResolution($pending, $booked, ['linkChoice' => 'booked']))->assertOk();
-    expect($booked->fresh()->allocations)->toBeNull()->and(Transaction::onlyHistory()->where('key', $pending->key)->first()->allocations)->toBe($split);
+    expect($booked->fresh()->allocations)->toBeNull()->and(Transaction::onlyHistory()->where('key', $pending->key)->first()->allocations)->toEqual($split);
 });
 
 test('expiring a reservation keeps history and suppresses repeat provisional deliveries but never final bookings', function () {
@@ -158,4 +158,12 @@ test('legacy reservation keys can be reviewed and repeated resolutions are rejec
     $this->postJson('/api/sparen/reservations/'.$key.'/resolve', $payload)->assertOk();
     $this->postJson('/api/sparen/reservations/'.$key.'/resolve', $payload)->assertStatus(409);
     expect(Transaction::onlyHistory()->count())->toBe(1);
+});
+
+test('reservation review cannot save a rescaled split with zero or negative parts', function () {
+    $this->actingAs(User::factory()->create());
+    $pending = reviewPayment(['is_pending' => true, 'allocations' => [['budgetItemId' => 'a', 'amount' => 100], ['budgetItemId' => 'b', 'amount' => 50]]]);
+    $booked = reviewPayment(['amount' => -0.01]);
+    $this->postJson('/api/sparen/reservations/'.$pending->key.'/resolve', reviewResolution($pending, $booked, ['linkChoice' => 'reservation', 'scaleSplit' => true]))->assertUnprocessable();
+    expect(Transaction::onlyHistory()->count())->toBe(0)->and($booked->fresh()->amount)->toBe('-0.01');
 });

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BankImportReviewController;
 use App\Http\Controllers\CategoriesController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataBackupController;
@@ -9,8 +10,10 @@ use App\Http\Controllers\ExpensesController;
 use App\Http\Controllers\ForecastController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\IncomeController;
+use App\Http\Controllers\ReservationReviewController;
 use App\Http\Controllers\SavingsController;
 use App\Http\Controllers\SparenController;
+use App\Http\Controllers\TransactionHistoryController;
 use App\Http\Controllers\TransactionsController;
 use Illuminate\Support\Facades\Route;
 
@@ -58,9 +61,12 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'persistSavingsGoal'])->name('sparen.savings_goal.persist');
     Route::delete('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'destroySavingsGoal'])->name('sparen.savings_goal.destroy');
     Route::get('/api/sparen/sync-report', [SparenController::class, 'syncReport']);
-    Route::get('/api/sparen/transaction-history', [\App\Http\Controllers\TransactionHistoryController::class, 'index']);
-    Route::get('/api/sparen/reservations/{key}/review', [\App\Http\Controllers\ReservationReviewController::class, 'show']);
-    Route::post('/api/sparen/reservations/{key}/resolve', [\App\Http\Controllers\ReservationReviewController::class, 'resolve']);
+    Route::get('/api/sparen/bank-reviews', [BankImportReviewController::class, 'index']);
+    Route::get('/api/sparen/bank-reviews/{key}', [BankImportReviewController::class, 'show']);
+    Route::post('/api/sparen/bank-reviews/{key}/accept', [BankImportReviewController::class, 'accept']);
+    Route::get('/api/sparen/transaction-history', [TransactionHistoryController::class, 'index']);
+    Route::get('/api/sparen/reservations/{key}/review', [ReservationReviewController::class, 'show']);
+    Route::post('/api/sparen/reservations/{key}/resolve', [ReservationReviewController::class, 'resolve']);
     Route::post('/api/sparen/sync-bank', [SparenController::class, 'syncBank'])->name('sparen.sync_bank');
     Route::post('/api/sparen/backup/export', [DataBackupController::class, 'export'])->name('sparen.backup.export');
     Route::post('/api/sparen/backup/import', [DataBackupController::class, 'import'])->name('sparen.backup.import');

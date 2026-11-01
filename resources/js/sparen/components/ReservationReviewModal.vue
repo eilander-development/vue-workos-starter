@@ -70,7 +70,9 @@ const canSave = computed(() =>
             (action.value === 'expire' ||
                 (selected.value?.revision &&
                     linkChoice.value &&
-                    (!needsScaling.value || scaleSplit.value))),
+                    (!needsScaling.value || scaleSplit.value) &&
+                    (!usesReservationSplit.value ||
+                        finalSplit.value.every((row) => row.amount > 0)))),
     ),
 );
 const euro = (amount: number) =>
@@ -426,6 +428,16 @@ onMounted(load);
                             aanpassen aan het definitieve bedrag, volgens de
                             verdeling hieronder.</label
                         >
+                        <p
+                            v-if="
+                                usesReservationSplit &&
+                                finalSplit.some((row) => row.amount <= 0)
+                            "
+                            class="text-xs text-rose-200"
+                        >
+                            Het bankbedrag is te klein voor deze splitsing. Pas
+                            eerst de koppeling aan.
+                        </p>
                         <div
                             v-if="linkChoice"
                             class="space-y-2 rounded-xl bg-slate-950/50 p-3"

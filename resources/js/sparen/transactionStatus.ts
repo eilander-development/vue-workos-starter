@@ -60,6 +60,8 @@ export function transactionArchiveReason(reason?: string | null): string {
                 reservation_matched: 'Reservering na controle gekoppeld aan definitieve betaling',
                 reservation_expired: 'Reservering na controle als vervallen gemarkeerd',
                 links_before_reservation_match: 'Koppelingen vóór beoordeling van de reservering',
+                bank_booking_before_acceptance: 'Bankregistratie vóór accepteren gewijzigde boeking',
+                bank_conflict_replaced: 'Dubbele registratie na beoordeling bankboeking',
             } as Record<string, string>
         )[reason ?? ''] ?? 'Historische registratie'
     );

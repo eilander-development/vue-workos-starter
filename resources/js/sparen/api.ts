@@ -1,4 +1,5 @@
 import type { CategoryDefinition, Rule, SavingsGoal, Transaction } from "./types";
+import type { BankReviewDetails, BankReviewResult, BankReviewSummary } from './bankReviews';
 
 function csrfHeaders(): HeadersInit {
   const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
@@ -209,4 +210,16 @@ export type ReservationResolution = {
 
 export async function resolveReservation(key: string, resolution: ReservationResolution): Promise<{ reservationKey: string; booked: Transaction | null }> {
   return sparenRequest('POST', `/api/sparen/reservations/${encodeURIComponent(key)}/resolve`, resolution);
+}
+
+export async function loadBankReviews(page = 1): Promise<{ data: BankReviewSummary[]; total: number; current_page: number; last_page: number }> {
+  return sparenRequest('GET', `/api/sparen/bank-reviews?page=${page}`);
+}
+
+export async function loadBankReview(key: string): Promise<BankReviewDetails> {
+  return sparenRequest('GET', `/api/sparen/bank-reviews/${encodeURIComponent(key)}`);
+}
+
+export async function acceptBankReview(key: string, body: { revision: string; keeperKey: string; existingRevisions: Record<string, string>; linkSource: string; scaleSplit: boolean }): Promise<BankReviewResult> {
+  return sparenRequest('POST', `/api/sparen/bank-reviews/${encodeURIComponent(key)}/accept`, body);
 }

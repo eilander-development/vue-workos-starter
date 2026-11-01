@@ -4,7 +4,7 @@ import type { SyncReport } from '../syncReport';
 import { isPendingSyncIssue, pendingSyncSummary } from '../syncReport';
 import ModalShell from './ModalShell.vue';
 const props = defineProps<{ report: SyncReport }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; review: [key: string]; sync: [] }>();
 const filter = ref('all');
 const search = ref('');
 const rows = computed(() =>
@@ -158,6 +158,8 @@ function euro(value: number | null) {
                         </div>
                     </div>
                     <p class="text-sm text-slate-300">{{ row.reason }}</p>
+                    <button v-if="row.reviewKey" type="button" class="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/20" @click="emit('review', row.reviewKey)">Bankboeking beoordelen en verwerken</button>
+                    <div v-else-if="row.code === 'conflict' || row.code === 'pending_booking'" class="space-y-2 text-xs text-slate-400"><p>Deze oudere melding bevat nog geen bewaarde bankversie. Haal de bankgegevens opnieuw op om haar te kunnen beoordelen.</p><button type="button" class="rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 font-semibold text-indigo-200" @click="emit('sync')">Bankgegevens opnieuw ophalen</button></div>
                     <p
                         v-if="
                             row.code === 'pending_booking' &&

@@ -1,4 +1,5 @@
 export interface SyncIssue {
+    reviewKey?: string;
     code:
         | 'conflict'
         | 'missing_identity'
