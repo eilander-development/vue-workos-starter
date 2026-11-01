@@ -1,3 +1,4 @@
+import { isBookedTransaction } from './transactionStatus';
 import type { BudgetItem, MonthlyBudget, SavingsGoal, Transaction } from "./types";
 import { isTransactionInReportingMonth } from "./month";
 import { amountTowardBudgetItem } from "./allocations";
@@ -274,7 +275,7 @@ export function computePotSettlement(
       : goal.monthlyContribution ?? 0;
 
   const monthTxs = transactions.filter(
-    (tx) => isTransactionInReportingMonth(tx, currentMonth) && !tx.isPending
+    (tx) => isTransactionInReportingMonth(tx, currentMonth) && isBookedTransaction(tx)
   );
 
   // Alleen echte uitgaven op de gekoppelde rubriek(en), geen spaarstortingen.
@@ -387,7 +388,7 @@ export function computePotPeriodBalance(
   const monthTxs = transactions.filter(
     (tx) =>
       isTransactionInReportingMonth(tx, currentMonth) &&
-      !tx.isPending &&
+      isBookedTransaction(tx) &&
       (tx.type === "Sparen" || tx.categoryGroup === "Spaargeld") &&
       transactionMatchesSavingsGoal(tx, goal, ownIbans)
   );

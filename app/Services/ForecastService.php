@@ -33,7 +33,8 @@ class ForecastService
         $budgets = Budget::query()->with('category')->orderBy('id')->get();
         $items = $budgets->map(fn ($budget) => [
             'id' => $budget->key, 'name' => $budget->name, 'group' => $budget->category?->name,
-            'forecastMode' => $budget->forecast_mode ?? 'auto',
+            'forecastMode' => 'auto',
+            'forecastBasis' => 'latest',
             ...$this->amountHistory($budget, $start, $projection, $policy),
             'type' => match ($budget->category?->type) {
                 'income' => 'inkomsten', 'saving' => 'sparen', default => 'uitgaven',
@@ -50,12 +51,14 @@ class ForecastService
                 $cells[$budget->key] = $policy->cell($budget, $resolved, $key);
                 $cells[$budget->key]['sourceMonth'] = $resolved['sourceMonth'];
                 $cells[$budget->key]['datedChange'] = $resolved['datedChange'];
+                $cells[$budget->key]['rawAmount'] = $resolved['amount'];
+                $cells[$budget->key]['rawScheduled'] = $resolved['scheduled'];
             }
             $months[] = ['month' => $key, 'items' => $cells];
         }
 
         return [
-            'version' => 3, 'startMonth' => $start, 'minMonth' => $this->firstFutureMonth(), 'items' => $items,
+            'version' => 7, 'startMonth' => $start, 'basisMonth' => $date->subMonth()->format('Y-m'), 'minMonth' => $this->firstFutureMonth(), 'items' => $items,
             'months' => $months, 'sourceHash' => $this->sourceHash(),
             'boundaries' => $budgets->mapWithKeys(fn ($budget) => [$budget->key => $projection->boundaries($budget->id)])->all(),
         ];
@@ -76,6 +79,7 @@ class ForecastService
             $this->lockSources();
             $source = $this->source($data['startMonth']);
             $this->assertHash($data['sourceHash'], $source['sourceHash']);
+            $data['settings'] = (new ForecastAssumptions)->normalizeSettings($source, $data['settings'] ?? []);
             $last = $source['months'][11]['month'];
             $seen = [];
             foreach ($data['rules'] as $rule) {
@@ -223,11 +227,29 @@ class ForecastService
     {
         $anchor = CarbonImmutable::createFromFormat('!Y-m', $start);
         $latest = null;
+        $latestKnown = null;
+        $latestRaw = null;
         $amounts = [];
+        $history = [];
+        $references = [];
         for ($i = 1; $i <= 12; $i++) {
             $month = $anchor->subMonths($i)->format('Y-m');
             $resolved = $projection->resolve($budget, $month);
             $cell = $policy->cell($budget, $resolved, $month);
+            if ($resolved['scheduled']) {
+                $candidate = ['amount' => $resolved['amount'], 'sourceMonth' => $resolved['sourceMonth']];
+                if ($latestRaw === null || ($candidate['sourceMonth'] ?? '') > ($latestRaw['sourceMonth'] ?? '')) {
+                    $latestRaw = $candidate;
+                }
+            }
+            $references[(int) substr($month, 5, 2)] = ['month' => $month, 'amount' => $resolved['amount'], 'sourceMonth' => $resolved['sourceMonth']];
+            $history[$resolved['sourceMonth'] ?? $month] = (bool) $cell['scheduled'];
+            if (! isset($cell['excludedCost'])) {
+                $known = ['amount' => $cell['amount'], 'sourceMonth' => $resolved['sourceMonth']];
+                if ($latestKnown === null || ($known['sourceMonth'] ?? '') > ($latestKnown['sourceMonth'] ?? '')) {
+                    $latestKnown = $known;
+                }
+            }
             if (! $cell['scheduled']) {
                 continue;
             }
@@ -238,7 +260,50 @@ class ForecastService
             }
         }
 
-        return ['latestFixed' => $latest, 'amountVariants' => array_values(array_unique($amounts))];
+        ksort($history);
+        $pattern = array_values($history);
+        $firstPayment = array_search(true, $pattern, true);
+        // Leading zeros followed by an uninterrupted series are an inception,
+        // not a yearly season. Explicit profile choices keep their own pattern.
+        $newMonthlySeries = $firstPayment !== false && $firstPayment > 0
+            && count($pattern) - $firstPayment >= 2
+            && ! in_array(false, array_slice($pattern, $firstPayment), true);
+        $payments = $firstPayment === false ? [] : array_slice($pattern, $firstPayment);
+        $firstZero = array_search(false, $payments, true);
+        $stoppedMonthlySeries = $firstZero !== false && $firstZero >= 2
+            && ! in_array(true, array_slice($payments, $firstZero), true);
+        $trailingPayments = 0;
+        foreach (array_reverse($pattern) as $paid) {
+            if (! $paid) {
+                break;
+            }
+            $trailingPayments++;
+        }
+        $monthlyContinuation = count(array_filter($pattern)) >= 8 && $trailingPayments >= 2;
+        $monthly = $newMonthlySeries || $stoppedMonthlySeries || $monthlyContinuation;
+        if ($monthly && $latestKnown !== null && $latestKnown['amount'] == 0 && $latestKnown['sourceMonth']
+            && ($latest === null || $latestKnown['sourceMonth'] > ($latest['sourceMonth'] ?? ''))) {
+            $latest = $latestKnown;
+        }
+        $anchorResolved = $projection->resolve($budget, $anchor->subMonth()->format('Y-m'));
+        $anchorCell = $policy->cell($budget, $anchorResolved, $anchor->subMonth()->format('Y-m'));
+        // An applied schema already defines the amount on the basis date. A
+        // single later-dated edit to another calendar slot must not replace it.
+        if ($anchorResolved['datedChange']) {
+            if ($anchorResolved['scheduled']) {
+                $latestRaw = ['amount' => $anchorResolved['amount'], 'sourceMonth' => $anchorResolved['sourceMonth']];
+            }
+            if ($anchorCell['scheduled'] || ($monthly && ! isset($anchorCell['excludedCost']))) {
+                $latest = ['amount' => $anchorCell['amount'], 'sourceMonth' => $anchorResolved['sourceMonth']];
+            }
+        }
+
+        return ['latestFixed' => $latest, 'amountVariants' => array_values(array_unique($amounts)),
+            'forecastMonthly' => $monthly,
+            'cadenceReason' => $newMonthlySeries ? 'monthly-start' : ($stoppedMonthlySeries ? 'monthly-stop' : ($monthlyContinuation ? 'monthly-continuation' : 'existing')),
+            'latestUnfiltered' => $latestRaw,
+            'references' => $references,
+        ];
     }
 
     private function assertFuture(string $month): void
@@ -266,6 +331,9 @@ class ForecastService
             $forecast->key, $forecast->name, $forecast->notes, $forecast->start_month,
             $forecast->source_hash, $rules, array_map(fn ($setting) => [
                 $setting['itemId'], $setting['basis'], $setting['included'], $setting['excludedMonths'] ?? [],
+                $setting['rememberBasis'] ?? false, $setting['everyMonth'] ?? null,
+                $setting['cadenceOverride'] ?? null,
+                $setting['costMode'] ?? 'auto',
             ], $forecast->snapshot['settings'] ?? []), $forecast->applied_at?->toIso8601String(),
             $forecast->reverted_at?->toIso8601String(),
         ]));
@@ -283,9 +351,13 @@ class ForecastService
         if (Schema::connection('catalog')->hasColumn('budgets', 'forecast_mode')) {
             $columns[] = 'forecast_mode';
         }
+        if (Schema::connection('catalog')->hasColumn('budgets', 'forecast_basis')) {
+            $columns[] = 'forecast_basis';
+            $columns[] = 'forecast_monthly';
+        }
 
         return hash('sha256', json_encode([
-            'structural-v3',
+            'structural-v7',
             Budget::query()->orderBy('id')->get($columns)->toArray(),
             Category::query()->orderBy('id')->get(['id', 'name', 'type'])->toArray(),
             BudgetMonthValue::query()->orderBy('id')->get(['budget_id', 'month_id', 'year', 'estimated', 'entries'])->toArray(),

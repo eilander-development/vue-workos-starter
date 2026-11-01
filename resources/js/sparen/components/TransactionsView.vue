@@ -33,6 +33,9 @@ import type {
   TransactionAllocation,
 } from "../types";
 import DuplicateTransactionsModal from "./DuplicateTransactionsModal.vue";
+import TransactionHistoryModal from './TransactionHistoryModal.vue';
+import ReservationReviewModal from './ReservationReviewModal.vue';
+import { isBookedTransaction, transactionStatusLabel, transactionStatusTotals } from '../transactionStatus';
 import LinkTransactionModal from "./LinkTransactionModal.vue";
 import TransactionDate from "./TransactionDate.vue";
 import { isLinkExcludedTransaction, isUnlinkedTransaction, matchingUnlinkedTransactions } from "../matchRule";
@@ -47,6 +50,7 @@ const props = defineProps<{
   onOpenAutoProcess: () => void;
   onDeleteTransaction: (id: string) => void;
   onDuplicateDeleted: (id: string) => void;
+  onReservationResolved: (result: { reservationKey: string; booked: Transaction | null }) => void;
   onLinkTransaction: (
     txId: string,
     categoryGroup: BudgetCategoryGroup,
@@ -85,6 +89,10 @@ const { openTransactionDetail } = useTransactionDetail();
 
 const searchTerm = ref("");
 const showDuplicates = ref(false);
+const showHistory = ref(false);
+const reservationForReview = ref<string | null>(null);
+const statusFilter = ref<'all' | 'booked' | 'reserved'>('all');
+const statusTotals = computed(() => transactionStatusTotals(scopedTransactions.value));
 const filterType = ref<"ALL" | "UNLINKED" | "LINKED" | "Inkomsten" | "Uitgave" | "Sparen">(
   props.initialFilter ?? "ALL"
 );
@@ -253,6 +261,8 @@ function transactionMatchesSearchToken(
 
 const filtered = computed(() =>
   scopedTransactions.value.filter((tx) => {
+    if (statusFilter.value === 'booked' && !isBookedTransaction(tx)) return false;
+    if (statusFilter.value === 'reserved' && isBookedTransaction(tx)) return false;
     const isUnlinked = isUnlinkedTransaction(tx);
     const isExcluded = isLinkExcludedTransaction(tx);
     const query = searchTerm.value.trim();
@@ -445,6 +455,8 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
 
 <template>
   <div id="transactions-view" class="space-y-6">
+    <ReservationReviewModal v-if="reservationForReview" :reservation-key="reservationForReview" :budget-items="budgetItems" @close="reservationForReview = null" @resolved="result => { onReservationResolved(result); reservationForReview = null; selectedTxIds = selectedTxIds.filter(id => id !== result.reservationKey); }" />
+    <TransactionHistoryModal v-if="showHistory" @close="showHistory = false" />
     <DuplicateTransactionsModal v-if="showDuplicates" @close="showDuplicates = false" @deleted="onDuplicateDeleted" />
     <div
       class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
@@ -464,7 +476,8 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
           }}
         </p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" class="rounded-xl border border-slate-600 px-3.5 py-2 text-xs font-semibold text-indigo-200" @click="showHistory = true">Historie</button>
         <button type="button" class="border border-amber-700 text-amber-300 px-3.5 py-2 rounded-xl text-xs font-semibold" @click="showDuplicates = true">
           Dubbele transacties
         </button>
@@ -488,6 +501,11 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
       </div>
     </div>
 
+    <section aria-label="Geboekt en gereserveerd" class="grid gap-3 sm:grid-cols-2">
+      <div class="rounded-2xl border border-emerald-500/20 bg-slate-900 p-4"><h3 class="text-sm font-semibold text-emerald-300">Geboekt</h3><p class="mt-2 text-sm text-slate-300">Erbij {{ statusTotals.bookedIn.toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' }) }} · Eraf {{ statusTotals.bookedOut.toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' }) }}</p><p class="mt-1 text-xs text-slate-400">Definitieve transacties tellen mee als ontvangen of betaald.</p></div>
+      <div class="rounded-2xl border border-amber-500/25 bg-amber-500/[0.04] p-4"><h3 class="text-sm font-semibold text-amber-300">Reserveringen · {{ statusTotals.reservedCount }}</h3><p class="mt-2 text-sm text-slate-300">Erbij {{ statusTotals.reservedIn.toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' }) }} · Eraf {{ statusTotals.reservedOut.toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' }) }}</p><p class="mt-1 text-xs text-slate-400">Al te koppelen en splitsen, nog niet betaald. Worden niet nogmaals van het banksaldo afgetrokken en starten geen potcompensatie.</p></div>
+    </section>
+    <label class="flex items-center gap-2 text-xs text-slate-300">Transactiestatus<select v-model="statusFilter" aria-label="Transactiestatus" class="rounded-xl border border-slate-700 bg-slate-800 p-2"><option value="all">Geboekt en reserveringen</option><option value="booked">Alleen geboekt</option><option value="reserved">Alleen reserveringen</option></select></label>
     <div
       v-if="justLinked"
       id="just-linked-banner"
@@ -759,6 +777,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                 <div class="font-semibold text-white max-w-sm sm:max-w-md truncate">
                   {{ tx.description }}
                 </div>
+                <span class="mt-1 inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold" :class="isBookedTransaction(tx) ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-300'">{{ transactionStatusLabel(tx) }}</span>
                 <div
                   v-if="tx.counterparty"
                   class="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5"
@@ -826,7 +845,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                     {{ tx.linkExclusionReason }}
                   </div>
                 </div>
-                <div v-else-if="tx.budgetItemId && tx.categoryGroup !== 'Ongecategoriseerd'" class="space-y-1">
+                <div v-else-if="!isUnlinkedTransaction(tx)" class="space-y-1">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <button
                       v-for="row in txAllocations(tx)"
@@ -899,6 +918,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
               </td>
               <td class="py-3 px-3 text-center" @click.stop>
                 <div class="flex items-center justify-center gap-1">
+                  <button v-if="tx.source === 'EnableBanking' && !isBookedTransaction(tx)" type="button" class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs font-semibold text-amber-200" :aria-label="`Reservering beoordelen: ${tx.description}`" @click="reservationForReview = tx.id">Beoordelen</button>
                   <button
                     v-if="!tx.linkExcluded"
                     type="button"
@@ -927,6 +947,7 @@ function handleSavingsGoalChange(tx: Transaction, value: string) {
                     <Sliders class="w-3.5 h-3.5" />
                   </button>
                   <button
+                    v-if="isBookedTransaction(tx) || tx.source !== 'EnableBanking'"
                     type="button"
                     class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
                     title="Verwijder transactie"

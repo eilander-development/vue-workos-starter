@@ -42,7 +42,7 @@ async function confirmRemoval() {
       return { ...group, rows };
     }).filter(group => group.rows.length > 1);
     pending.value = null;
-  } catch (e) { error.value = e instanceof Error ? e.message : "Verwijderen mislukt"; }
+  } catch (e) { error.value = e instanceof Error ? e.message : "Archiveren mislukt"; }
   finally { saving.value = false; }
 }
 
@@ -58,7 +58,7 @@ function euro(amount: number) {
         <div>
           <h2 id="duplicates-title" class="text-lg font-bold text-white">Dubbele transacties</h2>
           <p class="text-xs text-slate-400 mt-1">Alle periodes &middot; dezelfde bankreferentie, rekening, datum en bedrag.</p>
-          <p class="text-xs text-slate-400 mt-1">Bewaar de rij met de juiste koppeling. Een ontbrekende koppeling op de bewaarde rij blokkeert het verwijderen.</p>
+          <p class="text-xs text-slate-400 mt-1">Bewaar de rij met de juiste koppeling. Ontbrekende koppelingen worden overgenomen. Tegenstrijdige koppelingen of splitsingen blokkeren het archiveren.</p>
         </div>
         <button type="button" :disabled="saving" class="text-sm hover:text-white disabled:opacity-50" @click="emit('close')">Sluiten</button>
       </div>
@@ -82,14 +82,14 @@ function euro(amount: number) {
               <p class="text-slate-400 mt-1">Rij #{{ row.id }} &middot; ge&iuml;mporteerd {{ row.importedAt || 'onbekend' }}</p>
             </div>
             <span class="font-mono">{{ euro(row.amount) }}</span>
-            <button type="button" :disabled="row.id === keepIds[group.rows[0].key] || saving || !!pending" class="text-rose-300 border border-rose-900 rounded-lg px-3 py-2 disabled:opacity-30" @click="review(group, row)">Dubbele rij verwijderen</button>
+            <button type="button" :disabled="row.id === keepIds[group.rows[0].key] || saving || !!pending" class="text-rose-300 border border-rose-900 rounded-lg px-3 py-2 disabled:opacity-30" @click="review(group, row)">Dubbele rij archiveren</button>
           </div>
         </section>
       </div>
       <div v-if="pending" class="p-5 border-t border-rose-900 bg-rose-950/30 text-sm space-y-3">
-        <p>Rij #{{ pending.remove.id }} ({{ euro(pending.remove.amount) }}) verwijderen en rij #{{ pending.keep.id }} bewaren? Dit verwijdert de dubbele registratie uit de gedeelde database; het banksaldo blijft ongewijzigd.</p>
+        <p>Rij #{{ pending.remove.id }} ({{ euro(pending.remove.amount) }}) archiveren en rij #{{ pending.keep.id }} bewaren? De registratie blijft bewaard onder Historie en telt niet meer mee. Het banksaldo blijft ongewijzigd.</p>
         <div class="flex gap-3">
-          <button type="button" :disabled="saving" class="bg-rose-600 rounded-lg px-4 py-2 disabled:opacity-50" @click="confirmRemoval">{{ saving ? 'Bezig...' : 'Ja, dubbele rij verwijderen' }}</button>
+          <button type="button" :disabled="saving" class="bg-rose-600 rounded-lg px-4 py-2 disabled:opacity-50" @click="confirmRemoval">{{ saving ? 'Bezig...' : 'Ja, dubbele rij archiveren' }}</button>
           <button type="button" :disabled="saving" class="bg-slate-800 rounded-lg px-4 py-2" @click="pending = null">Annuleren</button>
         </div>
       </div>

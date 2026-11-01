@@ -12,12 +12,13 @@ class ForecastCalculator
         $prepared = (new ForecastAssumptions)->prepare($source, $settings);
         $months = $prepared['months'];
         $specs = $prepared['specs'];
+        $settings = $prepared['settings'];
         $ordered = collect($rules)->filter(fn ($rule) => $rule['enabled'] ?? true)->sortBy('effectiveMonth', SORT_STRING);
 
         foreach ($ordered as $rule) {
             $item = collect($source['items'])->firstWhere('id', $rule['itemId']);
-            if (! $item || $item['type'] === 'sparen') {
-                throw ValidationException::withMessages(['rules' => 'Kies een bestaande inkomsten- of uitgavenpost.']);
+            if (! $item) {
+                throw ValidationException::withMessages(['rules' => 'Kies een bestaande inkomsten-, uitgaven- of spaarpost.']);
             }
             $next = collect($source['boundaries'][$rule['itemId']] ?? [])
                 ->first(fn ($month) => $month > $rule['effectiveMonth']);
@@ -62,6 +63,9 @@ class ForecastCalculator
 
         foreach ($months as &$month) {
             foreach ($month['items'] as &$cell) {
+                if (($cell['analysisExtra'] ?? false) && isset($cell['excludedCost'])) {
+                    $cell['excludedCost']['amount'] = $cell['amount'];
+                }
                 if ($cell['omitted'] ?? false) {
                     $cell['amount'] = 0;
                     $cell['scheduled'] = false;
@@ -79,15 +83,15 @@ class ForecastCalculator
                 'after' => $this->totals($month['items'], $source['items']),
                 'beforeItems' => $source['months'][$index]['items'],
                 'afterItems' => $month['items'],
-                'warnings' => collect($source['items'])->filter(fn ($item) => isset($source['months'][$index]['items'][$item['id']]['excludedCost']))
+                'warnings' => collect($source['items'])->filter(fn ($item) => isset($month['items'][$item['id']]['excludedCost']))
                     ->map(fn ($item) => [
                         'itemId' => $item['id'], 'name' => $item['name'], 'group' => $item['group'],
-                        ...$source['months'][$index]['items'][$item['id']]['excludedCost'],
+                        ...$month['items'][$item['id']]['excludedCost'],
                     ])->values()->all(),
             ];
         }
 
-        return ['months' => $result, 'specs' => $specs, 'items' => $source['items'], 'version' => 3, 'settings' => $settings];
+        return ['months' => $result, 'specs' => $specs, 'items' => $source['items'], 'version' => 7, 'settings' => $settings];
     }
 
     private function adjust(float $amount, string $operation, float $value): float

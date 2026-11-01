@@ -1,3 +1,4 @@
+import { isBookedTransaction } from './transactionStatus';
 import type { MonthlyBudget, SavingsGoal, Transaction } from "./types";
 import { MONTH_ID_TO_NUMBER, isTransactionInReportingMonth, reportingPeriodForMonth } from "./month";
 import { isUnlinkedTransaction } from "./matchRule";
@@ -182,7 +183,7 @@ export function computePeriodCashflow(
   let unlinkedSpent = 0;
 
   for (const tx of transactions) {
-    if (tx.isPending || !isTransactionInReportingMonth(tx, month)) {
+    if (!isBookedTransaction(tx) || !isTransactionInReportingMonth(tx, month)) {
       continue;
     }
 
@@ -341,7 +342,7 @@ export function checkingBalanceSeries(input: {
   const today = (input.today ?? localIsoDate()).slice(0, 10);
   const end = input.isCurrentMonth ? (today < period.end ? today : period.end) : period.end;
   const txs = input.transactions.filter(
-    (tx) => !tx.isPending && tx.date.slice(0, 10) >= period.start && tx.date.slice(0, 10) <= end
+    (tx) => isBookedTransaction(tx) && tx.date.slice(0, 10) >= period.start && tx.date.slice(0, 10) <= end
   );
   const start = input.isCurrentMonth
     ? input.liveBalance - txs.reduce((sum, tx) => sum + tx.amount, 0)
@@ -390,7 +391,7 @@ export function monthEndBalances(
   transactions: Transaction[] = []
 ): MonthBalanceRow[] {
   const currentIndex = reportingMonthIndex(current);
-  const txs = transactions.filter((tx) => !tx.isPending);
+  const txs = transactions.filter((tx) => isBookedTransaction(tx));
   const firstTxDate = txs.reduce((min, tx) => {
     const day = tx.date.slice(0, 10);
     return day < min ? day : min;

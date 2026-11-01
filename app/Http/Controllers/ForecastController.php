@@ -68,6 +68,10 @@ class ForecastController extends Controller
             'settings.*.included' => ['required', 'boolean'],
             'settings.*.excludedMonths' => ['present', 'array', 'max:12'],
             'settings.*.excludedMonths.*' => ['required', 'date_format:Y-m'],
+            'settings.*.rememberBasis' => ['sometimes', 'boolean'],
+            'settings.*.everyMonth' => ['sometimes', 'boolean'],
+            'settings.*.cadenceOverride' => ['sometimes', 'boolean'],
+            'settings.*.costMode' => ['sometimes', 'in:auto,fixed,extra'],
         ]);
     }
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BankAccount;
 use App\Services\BankSyncReport;
+use App\Services\BudgetScheduleService;
 use App\Services\EnableBanking;
 use App\Services\EnableBankingDataService;
 use App\Services\EnableBankingSessionStore;
@@ -51,8 +52,11 @@ class SparenController extends Controller
             'actual' => ['nullable', 'numeric'],
             'notes' => ['nullable', 'string'],
             'forecastMode' => ['sometimes', 'in:auto,fixed,extra'],
+            'forecastBasis' => ['sometimes', 'in:profile,latest'],
+            'forecastMonthly' => ['sometimes', 'nullable', 'boolean'],
             'monthId' => ['nullable', 'string'],
             'year' => ['nullable', 'integer'],
+            'scheduleRevision' => ['sometimes', 'string', 'size:64'],
             'monthlyAmounts' => ['nullable', 'array'],
             'monthlyAmounts.*' => ['numeric'],
             'monthlyEntries' => ['nullable', 'array'],
@@ -65,6 +69,16 @@ class SparenController extends Controller
         $this->state->persistBudgetItem(['id' => $itemId, ...$data]);
 
         return response()->json($this->state->build());
+    }
+
+    public function budgetItemRhythm(string $itemId): JsonResponse
+    {
+        return response()->json($this->state->budgetItemRhythm($itemId));
+    }
+
+    public function budgetItemSchedule(string $itemId, BudgetScheduleService $schedules): JsonResponse
+    {
+        return response()->json($schedules->forItem($itemId));
     }
 
     public function destroyBudgetItem(string $itemId): JsonResponse

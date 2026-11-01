@@ -168,11 +168,13 @@ test('changed amount or date for the same reference is blocked rather than dupli
 test('pending bank entries wait until booked', function () {
     $importer = app(EnabledBankingTransactionImporter::class);
     $result = $importer->import([strictImportRow(['raw' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'PDNG']]])]);
-    expect($result['pending'])->toBe(1)->and(Transaction::count())->toBe(0);
-    expect($importer->import([strictImportRow()])['imported'])->toBe(1);
+    expect($result['pending'])->toBe(1)->and(Transaction::count())->toBe(1)
+        ->and(Transaction::first()->is_pending)->toBeTrue();
+    expect($importer->import([strictImportRow()])['finalized'])->toBe(1)
+        ->and(Transaction::onlyHistory()->count())->toBe(1);
 });
 
-test('a definitive booking with a changed provisional date is reported under pending processing', function () {
+test('a definitive booking with a changed provisional date updates the same transaction', function () {
     $old = duplicateBankRow([
         'bank_payload' => ['raw' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'PDNG']]],
         'is_pending' => false,
@@ -182,14 +184,15 @@ test('a definitive booking with a changed provisional date is reported under pen
     ]);
 
     expect($result['blocked'])->toBe(0)->and($result['conflicts'])->toBe(0)
-        ->and($result['pending'])->toBe(1)->and($result['pending_booking'])->toBe(1)
-        ->and($result['issues'][0]['code'])->toBe('pending_booking')
-        ->and($result['issues'][0]['reason'])->toContain('definitieve boeking', 'volgende synchronisatie lost')
+        ->and($result['pending'])->toBe(0)->and($result['finalized'])->toBe(1)
+        ->and($result['issues'])->toBe([])
+        ->and(Transaction::onlyHistory()->count())->toBe(1)
         ->and($result['imported'])->toBe(0)->and(Transaction::count())->toBe(1)
-        ->and($old->fresh()->date->format('Y-m-d'))->toBe('2026-09-24');
+        ->and($old->fresh()->date->format('Y-m-d'))->toBe('2026-09-25')
+        ->and($old->fresh()->is_pending)->toBeFalse();
 });
 
-test('an old provisional copy is reported even if the definitive booking already exists', function () {
+test('an old provisional copy is archived when the definitive booking already exists', function () {
     duplicateBankRow(['bank_payload' => ['raw' => ['entry_reference' => 'strict-ref', 'status' => 'PDNG']]]);
     duplicateBankRow([
         'date' => '2026-09-25',
@@ -199,9 +202,9 @@ test('an old provisional copy is reported even if the definitive booking already
         strictImportRow(['booking_date' => '2026-09-25']),
     ]);
 
-    expect($result['pending_booking'])->toBe(1)->and($result['blocked'])->toBe(0)
-        ->and($result['issues'][0]['existing'])->toHaveCount(2)
-        ->and(Transaction::count())->toBe(2);
+    expect($result['pending_booking'])->toBe(0)->and($result['blocked'])->toBe(0)
+        ->and($result['archived'])->toBe(1)
+        ->and(Transaction::count())->toBe(1)->and(Transaction::withHistory()->count())->toBe(2);
 });
 
 test('amount changes remain blocked even when the stored bank status was provisional', function () {
@@ -299,17 +302,17 @@ test('legacy incoming payment stored under sender account matches its categorize
         'booking_date' => '2026-09-24', 'amount' => 1.50, 'account_iban' => 'NL00TEST1234567890',
         'description' => 'Payment', 'raw' => $payload,
     ]]);
-    expect($result['duplicates'])->toBe(1)->and(Transaction::count())->toBe(2);
+    expect($result['duplicates'])->toBe(1)->and(Transaction::count())->toBe(1)->and(Transaction::onlyHistory()->count())->toBe(1);
 });
 
 test('duplicate removal cannot discard an existing savings assignment', function () {
     $this->actingAs(User::factory()->create());
     $linked = duplicateBankRow(['savings_goal_key' => 'previous-assignment']);
     $unlinked = duplicateBankRow();
-    $this->deleteJson('/api/sparen/duplicate-transactions', ['keepId' => $unlinked->id, 'removeId' => $linked->id])->assertUnprocessable();
-    expect(Transaction::count())->toBe(2);
-    $this->deleteJson('/api/sparen/duplicate-transactions', ['keepId' => $linked->id, 'removeId' => $unlinked->id])->assertOk();
-    expect(Transaction::first()->savings_goal_key)->toBe('previous-assignment');
+    $this->deleteJson('/api/sparen/duplicate-transactions', ['keepId' => $unlinked->id, 'removeId' => $linked->id])->assertOk();
+    expect(Transaction::count())->toBe(1)->and(Transaction::onlyHistory()->count())->toBe(1)
+        ->and(Transaction::first()->savings_goal_key)->toBe('previous-assignment')
+        ->and(Transaction::onlyHistory()->first()->savings_goal_key)->toBe('previous-assignment');
 });
 
 test('sync issues explain blocked rows with exact existing and incoming values', function () {
@@ -321,7 +324,7 @@ test('sync issues explain blocked rows with exact existing and incoming values',
         strictImportRow(['amount' => 'invalid']),
         strictImportRow(['status' => 'PDNG']),
     ]);
-    expect($result['issues'])->toHaveCount(4);
+    expect($result['issues'])->toHaveCount(3);
     $issue = $result['issues'][0];
     expect($issue['code'])->toBe('conflict')
         ->and($issue['date'])->toBe('2026-09-25')
@@ -331,7 +334,7 @@ test('sync issues explain blocked rows with exact existing and incoming values',
         ->and($issue['existing'][0]['differences'])->toBe(['boekdatum', 'bedrag'])
         ->and($result['issues'][1]['reason'])->toContain('bankreferentie')
         ->and($result['issues'][2]['reason'])->toContain('bedrag')
-        ->and($result['issues'][3]['code'])->toBe('pending')
+        ->and($result['pending'])->toBe(1)
         ->and(array_key_exists('raw', $issue))->toBeFalse();
 });
 

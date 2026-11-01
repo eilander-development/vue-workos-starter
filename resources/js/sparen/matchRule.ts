@@ -1,4 +1,5 @@
 import type { BudgetType, Rule, Transaction } from "./types";
+import { normalizeAllocations } from './allocations';
 
 export type RuleMatchField = "description" | "counterparty" | "both";
 export type RuleAmountDirection = "in" | "out" | "any";
@@ -10,11 +11,12 @@ export function isLinkExcludedTransaction(
 }
 
 export function isUnlinkedTransaction(
-  tx: Pick<Transaction, "budgetItemId" | "categoryGroup" | "linkExcluded">
+  tx: Pick<Transaction, "budgetItemId" | "categoryGroup" | "linkExcluded" | "allocations">
 ): boolean {
   if (isLinkExcludedTransaction(tx)) {
     return false;
   }
+  if (normalizeAllocations(tx.allocations)) return false;
 
   return !tx.budgetItemId || tx.categoryGroup === "Ongecategoriseerd";
 }

@@ -43,6 +43,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/sparen/forecasts/{forecast}/apply', [ForecastController::class, 'apply']);
     Route::post('/api/sparen/forecasts/{forecast}/revert', [ForecastController::class, 'revert']);
     Route::get('/api/sparen/budget-items/{itemId}/history', [ForecastController::class, 'history']);
+    Route::get('/api/sparen/budget-items/{itemId}/rhythm', [SparenController::class, 'budgetItemRhythm']);
+    Route::get('/api/sparen/budget-items/{itemId}/schedule', [SparenController::class, 'budgetItemSchedule']);
     Route::put('/api/sparen/state', [SparenController::class, 'persist'])->name('sparen.persist');
     Route::put('/api/sparen/budget-items/{itemId}', [SparenController::class, 'persistBudgetItem'])->name('sparen.budget_item.persist');
     Route::delete('/api/sparen/budget-items/{itemId}', [SparenController::class, 'destroyBudgetItem'])->name('sparen.budget_item.destroy');
@@ -56,6 +58,9 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'persistSavingsGoal'])->name('sparen.savings_goal.persist');
     Route::delete('/api/sparen/savings-goals/{goalId}', [SparenController::class, 'destroySavingsGoal'])->name('sparen.savings_goal.destroy');
     Route::get('/api/sparen/sync-report', [SparenController::class, 'syncReport']);
+    Route::get('/api/sparen/transaction-history', [\App\Http\Controllers\TransactionHistoryController::class, 'index']);
+    Route::get('/api/sparen/reservations/{key}/review', [\App\Http\Controllers\ReservationReviewController::class, 'show']);
+    Route::post('/api/sparen/reservations/{key}/resolve', [\App\Http\Controllers\ReservationReviewController::class, 'resolve']);
     Route::post('/api/sparen/sync-bank', [SparenController::class, 'syncBank'])->name('sparen.sync_bank');
     Route::post('/api/sparen/backup/export', [DataBackupController::class, 'export'])->name('sparen.backup.export');
     Route::post('/api/sparen/backup/import', [DataBackupController::class, 'import'])->name('sparen.backup.import');

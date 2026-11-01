@@ -11,6 +11,7 @@ use App\Models\ImportRule;
 use App\Models\SavingsGoal;
 use App\Models\Transaction;
 use App\Support\TransactionAllocations;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -46,6 +47,31 @@ class SparenStateService
     private ?bool $importRuleAllocationsColumnExists = null;
 
     private ?bool $bankPayloadColumnExists = null;
+
+    /** Historical evidence for a post, independent of the selected forecast year. */
+    public function budgetItemRhythm(string $itemId): array
+    {
+        $budget = Budget::query()->where('key', $itemId)->firstOrFail();
+        $current = $this->reportingPeriod->defaultSparenMonth();
+        $anchor = CarbonImmutable::create($current['year'], array_search($current['monthId'], ReportingPeriod::SPAREN_MONTH_IDS, true) + 1, 1);
+        $projection = new BudgetProjection;
+        $today = CarbonImmutable::now('Europe/Amsterdam')->toDateString();
+        $months = [];
+        for ($offset = 11; $offset >= 0; $offset--) {
+            $month = $anchor->subMonths($offset);
+            $monthId = ReportingPeriod::SPAREN_MONTH_IDS[$month->month - 1];
+            [$start, $end] = $this->reportingPeriod->periodForSparenMonth($monthId, $month->year);
+            $resolved = $projection->resolve($budget, $month->format('Y-m'));
+            $months[] = [
+                'month' => $month->format('Y-m'), 'monthId' => $monthId, 'year' => $month->year,
+                'amount' => $resolved['amount'], 'sourceMonth' => $resolved['sourceMonth'],
+                'periodStart' => $start->toDateString(), 'periodEnd' => $end->toDateString(),
+                'through' => min($today, $end->toDateString()), 'complete' => $end->toDateString() < $today,
+            ];
+        }
+
+        return ['months' => $months];
+    }
 
     public function build(?int $year = null): array
     {
@@ -121,6 +147,8 @@ class SparenStateService
                     'paymentCount' => $matching->count(),
                     'notes' => $budget->notes,
                     'forecastMode' => $budget->forecast_mode ?? 'auto',
+                    'forecastBasis' => $budget->forecast_basis ?? 'latest',
+                    'forecastMonthly' => $budget->forecast_monthly,
                     'isPaid' => $estimated > 0 && $paid >= $estimated,
                     'monthEntries' => $entries,
                 ];
@@ -356,17 +384,30 @@ class SparenStateService
 
     public function persistBudgetItem(array $item): void
     {
+        DB::connection('catalog')->transaction(fn () => $this->writeBudgetItem($item));
+    }
+
+    private function writeBudgetItem(array $item): void
+    {
         $category = Category::query()->where('name', $item['group'] ?? '')->first();
-        $existing = Budget::query()->where('key', $item['id'])->first();
+        $existing = Budget::query()->where('key', $item['id'])->lockForUpdate()->first();
+        if ($existing && isset($item['scheduleRevision'])) {
+            abort_unless(hash_equals(app(BudgetScheduleService::class)->revision($existing), $item['scheduleRevision']), 409,
+                'Het begrotingsschema is ondertussen gewijzigd. Open de post opnieuw om de actuele bedragen te laden.');
+        }
         $previousCategoryId = $existing?->category_id;
         $budget = Budget::query()->updateOrCreate(
             ['key' => $item['id']],
             [
                 'category_id' => $category?->id ?? Category::query()->value('id'),
                 'name' => $item['name'],
-                'budget' => $item['estimated'] ?? $item['actual'] ?? 0,
-                'notes' => $item['notes'] ?? null,
+                // Year-specific edits must not change fallback amounts in earlier years.
+                'budget' => $existing && (isset($item['monthlyAmounts']) || isset($item['monthId']))
+                    ? $existing->budget : ($item['estimated'] ?? $item['actual'] ?? 0),
+                'notes' => array_key_exists('notes', $item) ? $item['notes'] : $existing?->notes,
                 ...(array_key_exists('forecastMode', $item) ? ['forecast_mode' => $item['forecastMode']] : []),
+                ...(array_key_exists('forecastBasis', $item) ? ['forecast_basis' => $item['forecastBasis']] : []),
+                ...(array_key_exists('forecastMonthly', $item) ? ['forecast_monthly' => $item['forecastMonthly']] : []),
             ]
         );
         $budget->load('category');
@@ -387,6 +428,7 @@ class SparenStateService
         }
 
         $year = (int) ($item['year'] ?? 2026);
+        $projection = isset($item['scheduleRevision']) ? new BudgetProjection : null;
         $amounts = $item['monthlyAmounts'] ?? [];
         $entriesByMonth = $item['monthlyEntries'] ?? [];
 
@@ -416,6 +458,16 @@ class SparenStateService
             $estimated = $entries !== []
                 ? round(collect($entries)->sum('amount'), 2)
                 : (float) ($amounts[$monthId] ?? 0);
+
+            // Merely saving an unchanged projected year must not create manual
+            // overrides that would block a later forecast undo.
+            if ($projection && in_array($monthId, ReportingPeriod::SPAREN_MONTH_IDS, true)) {
+                $resolved = $projection->resolve($budget, sprintf('%04d-%02d', $year, array_search($monthId, ReportingPeriod::SPAREN_MONTH_IDS, true) + 1));
+                $stored = BudgetMonthValue::query()->where('budget_id', $budget->id)->where('year', $year)->where('month_id', $monthId)->exists();
+                if (! $stored && round($resolved['amount'], 2) === round($estimated, 2) && $resolved['entries'] == $entries) {
+                    continue;
+                }
+            }
 
             BudgetMonthValue::query()->updateOrCreate(
                 [
@@ -447,6 +499,7 @@ class SparenStateService
 
     private function writeTransaction(array $row): void
     {
+        abort_if(Transaction::onlyHistory()->where('key', $row['id'] ?? '')->exists(), 409, 'Historie kan niet worden gewijzigd of opnieuw actief gemaakt.');
         $existing = Transaction::query()->where('key', $row['id'] ?? '')->first();
         $sourceType = $this->fromSparenSource($row['source'] ?? ($existing?->source_type === 'api' ? 'EnableBanking' : ($existing?->source_type === 'csv' ? 'CSV-import' : 'Handmatig')));
 
@@ -497,13 +550,18 @@ class SparenStateService
             $payload['allocations'] = TransactionAllocations::normalize($row['allocations']) ?: null;
         }
 
+        // A stale browser may carry the old provisional date/status after finalization.
+        // The bank owns these fields; the UI may still edit links and allocations.
+        if ($existing?->source_type === 'api') {
+            $payload = array_replace($payload, $existing->only(['date', 'amount', 'description', 'account_iban', 'is_pending', 'booked_time']));
+        }
         Transaction::query()->updateOrCreate(
             ['key' => $row['id']],
             $payload
         );
     }
 
-    private function mapTransaction(Transaction $tx): array
+    public function mapTransaction(Transaction $tx): array
     {
         $type = match ($tx->type) {
             'income' => 'Inkomsten',
@@ -517,18 +575,25 @@ class SparenStateService
 
         return [
             'id' => $tx->key ?: 'tx-'.$tx->id,
+            'revision' => $tx->revision(),
+            'bankReference' => \App\Support\BankTransactionIdentity::reference($tx->bank_payload),
             'date' => optional($tx->date)->format('Y-m-d'),
             'time' => $tx->booked_time ? substr((string) $tx->booked_time, 0, 5) : null,
             'description' => $tx->description,
             'amount' => (float) $tx->amount,
             'type' => $type,
-            'categoryGroup' => $tx->category?->name ?? 'Ongecategoriseerd',
+            'categoryGroup' => ($tx->archived_at ? ($tx->lifecycle_metadata['categoryName'] ?? null) : null) ?? $tx->category?->name ?? 'Ongecategoriseerd',
+            'budgetItemName' => ($tx->archived_at ? ($tx->lifecycle_metadata['budgetName'] ?? null) : null) ?? $tx->budget?->name,
             'budgetItemId' => $tx->budget?->key,
             'allocations' => $this->mapTransactionAllocations($tx),
             'accountIban' => $tx->account_iban ?? '',
             'counterparty' => $tx->counterparty_name ?: $tx->counterparty_iban,
             'counterpartyIban' => $tx->counterparty_iban,
             'isPending' => (bool) $tx->is_pending,
+            'status' => $tx->archived_at ? 'history' : ($tx->is_pending ? 'reserved' : 'booked'),
+            'archivedAt' => $tx->archived_at?->toIso8601String(),
+            'archiveReason' => $tx->archive_reason,
+            'supersededBy' => $tx->superseded_by_key,
             'matchedRuleId' => $tx->importRule?->key,
             'linkExcluded' => (bool) $tx->link_excluded,
             'linkExclusionReason' => $tx->link_exclusion_reason,
@@ -578,7 +643,7 @@ class SparenStateService
 
         foreach (self::MONTHS as $monthId => $monthName) {
             $monthTx = $transactions->filter(
-                fn (array $tx) => ($tx['type'] ?? '') === 'Sparen'
+                fn (array $tx) => empty($tx['isPending']) && ($tx['type'] ?? '') === 'Sparen'
                     && $this->reportingPeriod->transactionInSparenMonth((string) $tx['date'], $monthId, $year)
             );
             $out = (float) $monthTx->filter(fn (array $tx) => $tx['amount'] < 0)->sum(fn (array $tx) => abs($tx['amount']));
@@ -705,7 +770,7 @@ class SparenStateService
 
     private function transactionCountsTowardBudget(Budget $budget, array $tx): bool
     {
-        if (! empty($tx['linkExcluded'])) {
+        if (! empty($tx['linkExcluded']) || ! empty($tx['isPending']) || ($tx['status'] ?? '') === 'history') {
             return false;
         }
 

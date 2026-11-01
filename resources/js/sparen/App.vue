@@ -24,6 +24,7 @@ import {
 import SyncReportModal from "./components/SyncReportModal.vue";
 import type { SyncReport } from "./syncReport";
 import { pendingSyncSummary } from "./syncReport";
+import { isBookedTransaction } from './transactionStatus';
 import { loadSyncReport } from "./api";
 import Sidebar from "./components/Sidebar.vue";
 import Header from "./components/Header.vue";
@@ -92,7 +93,6 @@ import {
   scaleAllocationsToAmount,
 } from "./allocations";
 import {
-  goalBudgetItemIds,
   isPotGoal,
   potLinkedBudgetItemIds,
   potsNeedingCompensation,
@@ -100,6 +100,7 @@ import {
   computePotSettlement,
   type PotCompensationNeed,
 } from "./potSettlement";
+import type { ForecastPostContext } from "./forecast";
 import { transactionCountsTowardBudgetItem } from "./budgetPayment";
 
 const DISCONNECTED_CHECKING_ACCOUNT: BankAccount = {
@@ -137,6 +138,7 @@ const isAutoProcessModalOpen = ref(false);
 const isAddBudgetItemModalOpen = ref(false);
 const addBudgetItemDefaultGroup = ref<BudgetCategoryGroup | undefined>(undefined);
 const editingBudgetItem = ref<BudgetItem | null>(null);
+const editingForecastContext = ref<ForecastPostContext | undefined>();
 const isCategoryModalOpen = ref(false);
 const editingCategory = ref<CategoryDefinition | null>(null);
 const isAddRuleModalOpen = ref(false);
@@ -153,6 +155,7 @@ const initialRuleGroup = ref<BudgetCategoryGroup>("Dagelijks Leven");
 const initialRuleBudgetItemId = ref("");
 const isReady = ref(false);
 const saveState = ref<SaveState>("idle");
+const budgetRevision = ref(0);
 const { toasts, notify, dismiss } = useToasts();
 const { selectedTransaction, closeTransactionDetail } = useTransactionDetail();
 const detailTransaction = computed(() => {
@@ -284,7 +287,7 @@ const monthlyBudgets = computed(() => {
   const potLinkedIds = potLinkedBudgetItemIds(savingsGoals.value);
 
   return baseMonthlyBudgets.value.map((mb) => {
-    const txsInMonth = transactions.value.filter((t) => isTransactionInReportingMonth(t, mb));
+    const txsInMonth = transactions.value.filter((t) => isBookedTransaction(t) && isTransactionInReportingMonth(t, mb));
 
     const updatedItems = mb.items.map((item) => {
       const isPotEnvelope = potLinkedIds.has(item.id) && item.type === "uitgaven";
@@ -424,6 +427,7 @@ async function persistBudgetChange(
   saveState.value = "saving";
   try {
     await saveBudgetItem(itemId, payload);
+    budgetRevision.value++;
     saveState.value = "saved";
     if (successTitle) {
       notify("success", successTitle, successDetail);
@@ -435,6 +439,16 @@ async function persistBudgetChange(
 }
 
 const lastSyncReport = ref<SyncReport | null>(null);
+function handleReservationResolved(result: { reservationKey: string; booked: Transaction | null }) {
+  transactions.value = transactions.value.filter(tx => tx.id !== result.reservationKey);
+  if (result.booked) {
+    const booked = result.booked;
+    transactions.value = transactions.value.some(tx => tx.id === booked.id)
+      ? transactions.value.map(tx => tx.id === booked.id ? booked : tx)
+      : [booked, ...transactions.value];
+  }
+  notify('success', 'Reservering beoordeeld', result.booked ? 'Gekoppeld aan de definitieve betaling. De reservering blijft bewaard in Historie.' : 'De vervallen reservering blijft bewaard in Historie.');
+}
 const showSyncReport = ref(false);
 onMounted(async () => {
   try { lastSyncReport.value = (await loadSyncReport()).report; } catch { /* A new sync can still provide a report. */ }
@@ -462,12 +476,15 @@ async function handleBankSync() {
     const stats = result?.imported;
     if (stats) {
       lastSyncReport.value = stats;
-      showSyncReport.value = Boolean(stats.blocked || stats.pending_booking);
+      showSyncReport.value = Boolean(stats.blocked);
     }
     const details = stats
       ? [
           `${stats.imported ?? 0} nieuw`,
           `${stats.duplicates ?? 0} al bekend`,
+          ...(stats.finalized ? [`${stats.finalized} reserveringen definitief geboekt`] : []),
+          ...(stats.archived ? [`${stats.archived} registraties als historie bewaard`] : []),
+          ...(stats.ignored_reservations ? [`${stats.ignored_reservations} eerder beoordeelde reserveringen herkend`] : []),
           ...(stats.blocked ? [`${stats.blocked} geblokkeerd (${stats.missing_identity ?? 0} zonder bankreferentie/rekening, ${stats.conflicts ?? 0} met afwijkende boekingsgegevens, ${stats.invalid ?? 0} ongeldig)`] : []),
           ...(stats.pending ? [pendingSyncSummary(stats)] : []),
           ...(stats.time_backfilled ? [`${stats.time_backfilled} tijden aangevuld`] : []),
@@ -475,8 +492,8 @@ async function handleBankSync() {
       : undefined;
 
     notify(
-      stats?.blocked ? "error" : stats?.pending_booking ? "info" : "success",
-      stats?.blocked ? "Synchronisatie deels geblokkeerd" : stats?.pending_booking ? "Synchronisatie: verwerking nodig" : "Bank gesynchroniseerd",
+      stats?.blocked ? "error" : "success",
+      stats?.blocked ? "Synchronisatie vraagt controle" : "Bank gesynchroniseerd",
       details
     );
   } catch (error) {
@@ -1005,65 +1022,33 @@ function handleUpdateBudgetItem(itemId: string, updates: Partial<BudgetItem>) {
   );
 }
 
-function handleSaveBudgetItemDetails(
+async function handleSaveBudgetItemDetails(
   itemId: string,
   updatedData: {
     name: string;
-    forecastMode?: 'auto' | 'fixed' | 'extra';
     group: BudgetCategoryGroup;
-    type?: "inkomsten" | "uitgaven" | "sparen";
+    type?: BudgetType;
+    year: number;
+    scheduleRevision?: string;
     monthlyAmounts: Record<string, number>;
     monthlyEntries?: Record<string, { id: string; description: string; amount: number }[]>;
   }
 ) {
-  const existing = currentMonth.value.items.find((item) => item.id === itemId);
-  const nextType = updatedData.type || existing?.type || "uitgaven";
-  const moved =
-    Boolean(existing) &&
-    (existing!.group !== updatedData.group || existing!.type !== nextType);
-
-  baseMonthlyBudgets.value = baseMonthlyBudgets.value.map((m) => {
-    const monthAmount = updatedData.monthlyAmounts[m.monthId];
-    const monthEntries = updatedData.monthlyEntries?.[m.monthId];
-    return {
-      ...m,
-      items: m.items.map((item) => {
-        if (item.id === itemId) {
-          const newAmount = monthAmount !== undefined ? monthAmount : item.actual;
-          return {
-            ...item,
-            name: updatedData.name,
-            forecastMode: updatedData.forecastMode ?? item.forecastMode,
-            group: updatedData.group,
-            type: updatedData.type || item.type,
-            estimated: newAmount,
-            actual: newAmount,
-            monthEntries: monthEntries !== undefined ? monthEntries : item.monthEntries,
-          };
-        }
-        return item;
-      }),
-    };
-  });
-
-  if (moved) {
-    retargetLinksForBudgetItem(itemId, updatedData.group, nextType);
-  }
-
-  void persistBudgetChange(
-    itemId,
-    {
-      name: updatedData.name,
-      forecastMode: updatedData.forecastMode,
-      group: updatedData.group,
+  saveState.value = "saving";
+  try {
+    const result = await saveBudgetItem(itemId, {
+      ...updatedData,
       estimated: updatedData.monthlyAmounts[selectedMonthId.value] ?? 0,
-      year: currentMonth.value.year,
-      monthlyAmounts: updatedData.monthlyAmounts,
-      monthlyEntries: updatedData.monthlyEntries,
-    },
-    "Begrotingspost opgeslagen",
-    `${updatedData.name} · ${updatedData.group}`
-  );
+    });
+    applyRemoteState(result);
+    budgetRevision.value++;
+    saveState.value = "saved";
+    notify("success", "Begrotingspost opgeslagen", `${updatedData.name} · ${updatedData.year}`);
+  } catch (error) {
+    saveState.value = "error";
+    notify("error", "Begrotingspost niet opgeslagen", error instanceof Error ? error.message : undefined);
+    throw error;
+  }
 }
 
 async function handleDeleteBudgetItem(itemId: string) {
@@ -1088,7 +1073,14 @@ async function handleDeleteBudgetItem(itemId: string) {
 }
 
 function handleOpenEditBudgetItem(item: BudgetItem) {
+  editingForecastContext.value = undefined;
   editingBudgetItem.value = item;
+}
+
+function handleOpenForecastBudgetItem(itemId: string, context?: ForecastPostContext) {
+  const item = currentMonth.value.items.find(item => item.id === itemId);
+  if (item) { handleOpenEditBudgetItem(item); editingForecastContext.value = context; }
+  else notify("error", "Post niet meer beschikbaar", "Deze post staat nog in de bewaarde prognose, maar is uit de actuele begroting verwijderd.");
 }
 
 function handleAddBudgetItem(itemData: Omit<BudgetItem, "id">) {
@@ -1482,6 +1474,7 @@ function closeSavingsGoalModal() {
           :on-open-auto-process="() => (isAutoProcessModalOpen = true)"
           :on-delete-transaction="handleDeleteTransaction"
           :on-duplicate-deleted="(id: string) => { transactions = transactions.filter(tx => tx.id !== id); }"
+          :on-reservation-resolved="handleReservationResolved"
           :on-link-transaction="handleLinkTransaction"
           :on-assign-savings-goal="handleAssignSavingsGoal"
           :on-open-savings-goal="handleOpenSavingsGoalFromTransaction"
@@ -1551,7 +1544,7 @@ function closeSavingsGoalModal() {
         />
 
         <KeepAlive>
-          <ForecastsView v-if="activeTab === 'prognoses'" @changed="refreshAfterForecast" @open-mobile-menu="isMobileDrawerOpen = true" />
+          <ForecastsView v-if="activeTab === 'prognoses'" :budget-revision="budgetRevision" @changed="refreshAfterForecast" @open-mobile-menu="isMobileDrawerOpen = true" @open-item="handleOpenForecastBudgetItem" />
         </KeepAlive>
         <SettingsView v-if="activeTab === 'settings'" />
       </main>
@@ -1596,6 +1589,9 @@ function closeSavingsGoalModal() {
       :item="editingBudgetItem"
       :current-month-id="selectedMonthId"
       :all-months="monthlyBudgets"
+      :transactions="transactions"
+      :from-forecast="activeTab === 'prognoses'"
+      :forecast-context="editingForecastContext"
       :categories="categories"
       :on-save="handleSaveBudgetItemDetails"
       :on-delete="handleDeleteBudgetItem"

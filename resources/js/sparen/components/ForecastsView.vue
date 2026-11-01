@@ -10,6 +10,7 @@ import {
     FolderClock,
     Layers3,
     Menu,
+    PiggyBank,
     Plus,
     RefreshCw,
     Save,
@@ -19,15 +20,24 @@ import {
     Undo2,
     X,
 } from 'lucide-vue-next';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { sparenRequest } from '../api';
 import {
     addMonths,
     calculateForecast,
     euro,
+    forecastBasisFor,
+    forecastBeforeRules,
+    forecastComparisonReference,
+    forecastKpiRuleEffects,
+    forecastMonthComparisons,
+    forecastPostContext,
+    forecastYearOverview,
     monthLabel,
+    normalizeForecastSettings,
     ruleLabel,
     signedEuro,
+    type ForecastPostContext,
     type ForecastRule,
     type ForecastSetting,
     type ForecastSettingChange,
@@ -43,10 +53,26 @@ import ForecastExtraCostsModal from './ForecastExtraCostsModal.vue';
 import ForecastItemsTable from './ForecastItemsTable.vue';
 import ForecastKpiCard from './ForecastKpiCard.vue';
 import ForecastMonthCard from './ForecastMonthCard.vue';
+import ForecastMonthComparison from './ForecastMonthComparison.vue';
 import ModalShell from './ModalShell.vue';
 
-const emit = defineEmits<{ changed: []; openMobileMenu: [] }>();
+const props = defineProps<{ budgetRevision?: number }>();
+const emit = defineEmits<{
+    changed: [];
+    openMobileMenu: [];
+    openItem: [itemId: string, context?: ForecastPostContext];
+}>();
 const records = ref<SavedForecast[]>([]);
+const showSavedForecasts = ref(false);
+const savedForecastSearch = ref('');
+const filteredRecords = computed(() => {
+    const search = savedForecastSearch.value.trim().toLocaleLowerCase('nl-NL');
+    return records.value.filter((record) =>
+        `${record.name} ${monthLabel(record.startMonth)} ${status(record)}`
+            .toLocaleLowerCase('nl-NL')
+            .includes(search),
+    );
+});
 const active = ref<SavedForecast | null>(null);
 const source = ref<ForecastSource | null>(null);
 const minMonth = ref('');
@@ -56,6 +82,18 @@ const notes = ref('');
 const rules = ref<ForecastRule[]>([]);
 const settings = ref<ForecastSetting[]>([]);
 const calculationMonth = ref<string | null>(null);
+const comparisonMonth = ref<string | null>(null);
+const comparisons = computed(() =>
+    snapshot.value
+        ? forecastMonthComparisons(snapshot.value, source.value)
+        : [],
+);
+const comparison = computed(() =>
+    comparisons.value.find((value) => value?.month === comparisonMonth.value),
+);
+const currentComparison = computed(
+    () => comparisons.value[selectedMonth.value],
+);
 const calculation = computed(() =>
     snapshot.value?.months.find(
         (month) => month.month === calculationMonth.value,
@@ -69,15 +107,32 @@ const settingsState = (entries: ForecastSetting[]) =>
                 setting.basis,
                 setting.included,
                 setting.excludedMonths,
+                setting.rememberBasis ?? false,
+                setting.everyMonth ?? null,
+                setting.cadenceOverride ?? null,
+                setting.costMode ?? 'auto',
             ])
             .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
     );
 function updateSetting(change: ForecastSettingChange) {
+    if (change.reset) {
+        settings.value = settings.value.filter(
+            (setting) => setting.itemId !== change.itemId,
+        );
+        return;
+    }
+    const item = (source.value?.items ?? snapshot.value?.items ?? []).find(
+        (item) => item.id === change.itemId,
+    );
     const previous = settings.value.find(
         (setting) => setting.itemId === change.itemId,
     ) ?? {
         itemId: change.itemId,
-        basis: 'profile' as const,
+        basis:
+            item?.forecastBasis ??
+            ((source.value?.version ?? 3) >= 4
+                ? ('latest' as const)
+                : ('profile' as const)),
         included: true,
         excludedMonths: [],
     };
@@ -85,7 +140,15 @@ function updateSetting(change: ForecastSettingChange) {
         ...previous,
         basis: change.basis ?? previous.basis,
         included: change.included ?? previous.included,
+        costMode: change.costMode ?? previous.costMode ?? 'auto',
+        ...(change.everyMonth !== undefined
+            ? { everyMonth: change.everyMonth, cadenceOverride: true }
+            : {}),
     };
+    if (change.automaticCadence) {
+        delete next.everyMonth;
+        delete next.cadenceOverride;
+    }
     if (change.month)
         next.excludedMonths = change.monthIncluded
             ? previous.excludedMonths.filter((month) => month !== change.month)
@@ -97,17 +160,61 @@ function updateSetting(change: ForecastSettingChange) {
 }
 const hasOmissions = computed(() =>
     settings.value.some(
-        (setting) => !setting.included || setting.excludedMonths.length,
+        (setting) =>
+            !setting.included ||
+            setting.excludedMonths.length ||
+            setting.costMode === 'extra',
     ),
 );
 const reviewCount = computed(
     () =>
         snapshot.value?.items.filter(
             (item) =>
-                (item.amountVariants?.length ?? 0) > 1 &&
-                !settings.value.some((setting) => setting.itemId === item.id),
+                !item.latestFixed &&
+                forecastBasisFor(item, snapshot.value!, settings.value) ===
+                    'latest' &&
+                snapshot.value!.months.some(
+                    (month) => month.beforeItems[item.id]?.scheduled,
+                ),
         ).length ?? 0,
 );
+const basisSummary = computed(() => {
+    const items =
+        snapshot.value?.items.filter(
+            (item) =>
+                item.latestFixed ||
+                snapshot.value!.months.some(
+                    (month) => month.beforeItems[item.id]?.scheduled,
+                ),
+        ) ?? [];
+    return {
+        automatic: items.filter(
+            (item) =>
+                forecastBasisFor(item, snapshot.value!, settings.value) ===
+                    'latest' &&
+                settings.value.find((setting) => setting.itemId === item.id)
+                    ?.included !== false,
+        ).length,
+        profile: items.filter(
+            (item) =>
+                forecastBasisFor(item, snapshot.value!, settings.value) ===
+                'profile',
+        ).length,
+        excluded: settings.value.filter((setting) => !setting.included).length,
+    };
+});
+function useLatestDefaults() {
+    for (const item of source.value?.items ?? []) {
+        if (item.latestFixed && item.forecastBasis !== 'profile')
+            updateSetting({
+                itemId: item.id,
+                basis: 'latest',
+                rememberBasis: false,
+            });
+    }
+    message.value =
+        'Laatste vaste bedragen toegepast in deze prognose. Betaalmaanden en uitsluitingen zijn behouden. Sla op om deze prognose bij te werken.';
+}
 const specLabel = (spec: ForecastSpec) =>
     spec.label ??
     (active.value?.rules?.find((rule) => rule.id === spec.ruleId)
@@ -178,7 +285,7 @@ const dirty = computed(() => {
         Boolean(
             source.value &&
                 (source.value.sourceHash !== active.value.sourceHash ||
-                    (active.value.snapshot?.version ?? 1) < 3),
+                    (active.value.snapshot?.version ?? 1) < 7),
         ) ||
         settingsState(settings.value) !==
             settingsState(active.value.snapshot?.settings ?? [])
@@ -208,13 +315,63 @@ const preview = computed<{ snapshot: ForecastSnapshot | null; error: string }>(
     },
 );
 const snapshot = computed(() => preview.value.snapshot);
+function openPost(itemId: string, month?: string) {
+    emit(
+        'openItem',
+        itemId,
+        snapshot.value
+            ? forecastPostContext(
+                  snapshot.value,
+                  month ??
+                      current.value?.month ??
+                      snapshot.value.months[0].month,
+                  itemId,
+              )
+            : undefined,
+    );
+}
 const structural = computed(() => (snapshot.value?.version ?? 2) >= 2);
 const extraCostMonth = ref<ForecastSnapshot['months'][number] | null>(null);
 const current = computed(() => snapshot.value?.months[selectedMonth.value]);
-const itemOptions = computed(() =>
-    (source.value?.items ?? active.value?.snapshot?.items ?? []).filter(
-        (item) => item.type !== 'sparen',
-    ),
+const beforeRules = computed(() =>
+    snapshot.value
+        ? forecastBeforeRules(
+              snapshot.value,
+              editable.value ? source.value : undefined,
+          )
+        : null,
+);
+const currentBeforeRules = computed(
+    () => beforeRules.value?.months[selectedMonth.value]?.after,
+);
+const yearOverview = computed(() =>
+    snapshot.value && beforeRules.value
+        ? forecastYearOverview(snapshot.value, beforeRules.value)
+        : null,
+);
+function kpiReference(kind: keyof ForecastTotals) {
+    const month = current.value!;
+    const type =
+        kind === 'income'
+            ? 'inkomsten'
+            : kind === 'expenses'
+              ? 'uitgaven'
+              : 'sparen';
+    if (kind === 'free') return forecastComparisonReference(month);
+    const ids = new Set(
+        snapshot
+            .value!.items.filter((item) => item.type === type)
+            .map((item) => item.id),
+    );
+    return forecastComparisonReference({
+        ...month,
+        beforeItems: Object.fromEntries(
+            Object.entries(month.beforeItems).filter(([id]) => ids.has(id)),
+        ),
+    });
+}
+const itemOptions = computed(
+    () => source.value?.items ?? active.value?.snapshot?.items ?? [],
 );
 const monthOptions = computed(() =>
     Array.from({ length: 12 }, (_, i) =>
@@ -268,10 +425,12 @@ const status = (record: SavedForecast) =>
         : record.appliedAt
           ? 'Doorgevoerd'
           : 'Opgeslagen';
-const ruleIsIncome = (rule: ForecastRule) =>
+const ruleType = (rule: ForecastRule) =>
     (snapshot.value?.items ?? source.value?.items ?? []).find(
         (item) => item.id === rule.itemId,
-    )?.type === 'inkomsten';
+    )?.type;
+const ruleIsIncome = (rule: ForecastRule) => ruleType(rule) === 'inkomsten';
+const ruleIsSaving = (rule: ForecastRule) => ruleType(rule) === 'sparen';
 const statusTone = (record: SavedForecast) =>
     record.revertedAt
         ? 'border-amber-500/20 bg-amber-500/10 text-amber-300'
@@ -314,12 +473,24 @@ async function loadSource() {
         );
         if (request === sourceRequest) {
             source.value = data;
+            settings.value = normalizeForecastSettings(settings.value, data);
             minMonth.value = data.minMonth;
         }
     } finally {
         if (request === sourceRequest) loadingSource.value = false;
     }
 }
+watch(
+    () => props.budgetRevision,
+    () => {
+        if (editable.value && startMonth.value)
+            void run(async () => {
+                await loadSource();
+                message.value =
+                    'Begrotingspost bijgewerkt. De prognose is opnieuw berekend met je bestaande regels en afwijkingen. Sla de prognose op om dit te bewaren.';
+            });
+    },
+);
 function discardDraft() {
     return (
         !dirty.value || window.confirm('De niet-opgeslagen prognose verlaten?')
@@ -367,6 +538,10 @@ async function changeStart() {
     await run(loadSource);
 }
 async function openForecast(id: string) {
+    if (active.value?.id === id) {
+        showSavedForecasts.value = false;
+        return;
+    }
     if (!discardDraft()) return;
     await run(async () => {
         const record: SavedForecast = await sparenRequest(
@@ -385,14 +560,19 @@ async function openForecast(id: string) {
         source.value = null;
         ++sourceRequest;
         if (!record.appliedAt) {
-            if (record.snapshot?.source?.version === 3) {
+            if (record.snapshot?.source?.version === 7) {
                 source.value = record.snapshot.source;
+                settings.value = normalizeForecastSettings(
+                    settings.value,
+                    source.value,
+                );
             } else if (record.startMonth >= minMonth.value) {
                 await loadSource();
                 message.value =
                     'Je kunt deze prognose verder aanpassen. De actuele begrotingsgegevens zijn opgehaald; opslaan werkt dezelfde prognose bij.';
             }
         }
+        showSavedForecasts.value = false;
     });
 }
 function addRule() {
@@ -438,6 +618,7 @@ async function save() {
         rules.value = structuredClone(result.rules!);
         settings.value = structuredClone(result.snapshot?.settings ?? []);
         source.value = result.snapshot?.source ?? source.value;
+
         await loadList();
         message.value = existing
             ? 'Wijzigingen opgeslagen in dezelfde prognose. Je kunt de regels verder aanpassen totdat je doorvoert.'
@@ -505,8 +686,17 @@ async function confirmAction() {
                 : 'De toekomstige wijzigingen zijn teruggedraaid. De historie blijft behouden.';
     });
 }
-onMounted(() => {
-    void newForecast();
+onMounted(async () => {
+    await run(async () => {
+        await loadList();
+        startMonth.value = minMonth.value;
+    });
+    if (error.value) return;
+    const latest = records.value
+        .filter((record) => !record.appliedAt)
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+    if (latest) await openForecast(latest.id);
+    else await run(loadSource);
 });
 </script>
 
@@ -540,14 +730,33 @@ onMounted(() => {
                     </p>
                 </div>
             </div>
-            <button
-                type="button"
-                class="forecast-button forecast-primary"
-                :disabled="busy"
-                @click="newForecast"
-            >
-                <Plus class="h-4 w-4" /> Nieuwe prognose
-            </button>
+            <div class="flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    class="forecast-button"
+                    :disabled="busy"
+                    aria-haspopup="dialog"
+                    :aria-expanded="showSavedForecasts"
+                    @click="
+                        savedForecastSearch = '';
+                        showSavedForecasts = true;
+                    "
+                >
+                    <FolderClock class="h-4 w-4" /> Opgeslagen prognoses
+                    <span
+                        class="rounded-md bg-indigo-500/15 px-1.5 py-0.5 text-indigo-300"
+                        >{{ records.length }}</span
+                    >
+                </button>
+                <button
+                    type="button"
+                    class="forecast-button forecast-primary"
+                    :disabled="busy"
+                    @click="newForecast"
+                >
+                    <Plus class="h-4 w-4" /> Nieuwe prognose
+                </button>
+            </div>
         </div>
 
         <p
@@ -565,57 +774,7 @@ onMounted(() => {
             {{ message }}
         </p>
 
-        <div class="grid gap-5 xl:grid-cols-[250px_minmax(0,1fr)]">
-            <aside class="forecast-panel forecast-accent space-y-4 self-start">
-                <div class="flex items-center gap-2">
-                    <span
-                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
-                        ><FolderClock class="h-4 w-4"
-                    /></span>
-                    <h2 class="text-sm font-semibold text-white">
-                        Opgeslagen prognoses
-                    </h2>
-                    <span
-                        class="ml-auto rounded-md bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-300"
-                        >{{ records.length }}</span
-                    >
-                </div>
-                <p
-                    v-if="!records.length"
-                    class="rounded-xl border border-dashed border-indigo-500/25 bg-indigo-500/[0.04] p-4 text-xs leading-relaxed text-slate-400"
-                >
-                    Je hebt nog geen prognoses opgeslagen.
-                </p>
-                <div class="max-h-64 space-y-2 overflow-y-auto xl:max-h-[65vh]">
-                    <button
-                        v-for="record in records"
-                        :key="record.id"
-                        type="button"
-                        class="w-full rounded-xl border p-3 text-left transition-colors"
-                        :class="
-                            active?.id === record.id
-                                ? 'border-indigo-400/60 bg-indigo-500/15 shadow-sm shadow-indigo-500/10'
-                                : 'border-slate-800 bg-slate-950/20 hover:border-indigo-500/40 hover:bg-indigo-500/[0.04]'
-                        "
-                        :disabled="busy"
-                        @click="openForecast(record.id)"
-                    >
-                        <span
-                            class="block text-sm font-medium break-words text-white"
-                            >{{ record.name }}</span
-                        >
-                        <span class="mt-1 block text-xs text-slate-400"
-                            >{{ monthLabel(record.startMonth) }} ·
-                            <span
-                                class="mt-2 inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold"
-                                :class="statusTone(record)"
-                                >{{ status(record) }}</span
-                            ></span
-                        >
-                    </button>
-                </div>
-            </aside>
-
+        <div class="space-y-5">
             <div class="min-w-0 space-y-5" :aria-busy="busy || loadingSource">
                 <section class="forecast-panel forecast-accent space-y-4">
                     <div
@@ -807,6 +966,51 @@ onMounted(() => {
                 </section>
 
                 <section
+                    v-if="snapshot && (snapshot.version >= 4 || editable)"
+                    class="forecast-panel forecast-accent space-y-3"
+                >
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3"
+                    >
+                        <h2
+                            class="flex items-center gap-2 text-sm font-semibold text-white"
+                        >
+                            <SlidersHorizontal
+                                class="h-4 w-4 text-indigo-400"
+                            />Automatische bedragbasis
+                        </h2>
+                        <button
+                            v-if="editable"
+                            type="button"
+                            class="forecast-button"
+                            :disabled="busy || loadingSource || !source"
+                            @click="useLatestDefaults"
+                        >
+                            Laatste vaste bedragen gebruiken
+                        </button>
+                    </div>
+                    <p class="text-xs leading-relaxed text-slate-400">
+                        Vaste posten gebruiken standaard het laatste bekende
+                        bedrag. Betaalmaanden en expliciet geplande toekomstige
+                        bedragen blijven behouden. Alleen bij uitzonderingen
+                        stel je een maandprofiel of een maandelijks ritme in.
+                    </p>
+                    <div class="flex flex-wrap gap-2 text-[11px]">
+                        <span
+                            class="rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-2 py-1 text-indigo-300"
+                            >{{ basisSummary.automatic }} automatisch
+                            overgenomen</span
+                        ><span
+                            class="rounded-lg border border-violet-500/20 bg-violet-500/10 px-2 py-1 text-violet-300"
+                            >{{ basisSummary.profile }} met maandprofiel</span
+                        ><span
+                            v-if="basisSummary.excluded"
+                            class="rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-300"
+                            >{{ basisSummary.excluded }} uitgeschakeld</span
+                        >
+                    </div>
+                </section>
+                <section
                     v-if="snapshot && current"
                     class="space-y-3"
                     aria-label="Maandresultaat"
@@ -842,6 +1046,19 @@ onMounted(() => {
                             <ChevronRight class="h-4 w-4" />
                         </button>
                     </div>
+                    <p
+                        class="text-xs text-slate-400"
+                        :title="
+                            forecastComparisonReference(current).description
+                        "
+                    >
+                        Begroting en verschil hieronder vergelijken met de
+                        oorspronkelijke maandbegroting:
+                        <strong class="text-indigo-200">{{
+                            forecastComparisonReference(current).label
+                        }}</strong
+                        >. De bronperiode staat per post in de tabel.
+                    </p>
                     <div
                         class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
                         aria-live="polite"
@@ -853,8 +1070,42 @@ onMounted(() => {
                             :label="kpi.label"
                             :before="current.before[kpi.key]"
                             :after="current.after[kpi.key]"
+                            :basis="
+                                currentBeforeRules?.[kpi.key] ??
+                                current.before[kpi.key]
+                            "
+                            :reference="kpiReference(kpi.key)"
+                            :rule-effects="
+                                forecastKpiRuleEffects(
+                                    snapshot,
+                                    current,
+                                    rules,
+                                    kpi.key,
+                                )
+                            "
+                            @open-item="openPost($event, current?.month)"
                         />
                     </div>
+                    <button
+                        v-if="currentComparison"
+                        type="button"
+                        class="forecast-button"
+                        @click="comparisonMonth = current.month"
+                    >
+                        Afwijkingen buiten vaste begroting sinds
+                        {{ monthLabel(currentComparison.previousMonth) }}
+                        <span
+                            class="font-mono"
+                            :class="
+                                currentComparison.difference >= 0
+                                    ? 'text-emerald-300'
+                                    : 'text-rose-300'
+                            "
+                            >{{
+                                signedEuro(currentComparison.difference)
+                            }}</span
+                        >
+                    </button>
                     <button
                         type="button"
                         class="forecast-button"
@@ -867,11 +1118,9 @@ onMounted(() => {
                         v-if="reviewCount && editable"
                         class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-300"
                     >
-                        Bij {{ reviewCount }} posten verschillen de
-                        bronbedragen. Controleer in Berekening en bronnen of je
-                        het laatste vaste bedrag wilt gebruiken of het
-                        maandprofiel wilt behouden. De app kiest dit niet
-                        stilzwijgend voor je.
+                        Bij {{ reviewCount }} posten ontbreekt een bruikbaar
+                        vast bedrag. Open de post om de begroting en de
+                        gekoppelde transacties te controleren.
                     </p>
                     <button
                         v-if="current.warnings?.length"
@@ -928,8 +1177,8 @@ onMounted(() => {
                         v-else-if="editable && source && !itemOptions.length"
                         class="text-sm text-slate-400"
                     >
-                        Voeg eerst een inkomsten- of uitgavenpost toe aan je
-                        begroting.
+                        Voeg eerst een inkomsten-, uitgaven- of spaarpost toe
+                        aan je begroting.
                     </p>
                     <p v-else-if="!rules.length" class="text-sm text-slate-400">
                         Voeg een post toe om het effect direct te bekijken. Het
@@ -944,7 +1193,9 @@ onMounted(() => {
                                 ? 'border-slate-700 opacity-60'
                                 : ruleIsIncome(rule)
                                   ? 'border-emerald-500/20 border-l-emerald-400 bg-emerald-500/[0.03]'
-                                  : 'border-rose-500/20 border-l-rose-400 bg-rose-500/[0.03]'
+                                  : ruleIsSaving(rule)
+                                    ? 'border-blue-500/20 border-l-blue-400 bg-blue-500/[0.03]'
+                                    : 'border-rose-500/20 border-l-rose-400 bg-rose-500/[0.03]'
                         "
                     >
                         <div
@@ -952,18 +1203,26 @@ onMounted(() => {
                             :class="
                                 ruleIsIncome(rule)
                                     ? 'text-emerald-300'
-                                    : 'text-rose-300'
+                                    : ruleIsSaving(rule)
+                                      ? 'text-blue-300'
+                                      : 'text-rose-300'
                             "
                         >
                             <component
                                 :is="
                                     ruleIsIncome(rule)
                                         ? ArrowUpCircle
-                                        : ArrowDownCircle
+                                        : ruleIsSaving(rule)
+                                          ? PiggyBank
+                                          : ArrowDownCircle
                                 "
                                 class="h-4 w-4"
                             /><span>{{
-                                ruleIsIncome(rule) ? 'Inkomsten' : 'Uitgaven'
+                                ruleIsIncome(rule)
+                                    ? 'Inkomsten'
+                                    : ruleIsSaving(rule)
+                                      ? 'Sparen'
+                                      : 'Uitgaven'
                             }}</span
                             ><span
                                 class="ml-auto text-[10px] font-normal text-slate-500"
@@ -990,7 +1249,9 @@ onMounted(() => {
                                         {{
                                             item.type === 'inkomsten'
                                                 ? 'Inkomst'
-                                                : 'Uitgave'
+                                                : item.type === 'sparen'
+                                                  ? 'Sparen'
+                                                  : 'Uitgave'
                                         }}
                                         · {{ item.name }}
                                     </option>
@@ -1187,7 +1448,126 @@ onMounted(() => {
                             >
                         </p>
                         <div
-                            class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6"
+                            v-if="yearOverview"
+                            class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                            aria-label="Resultaat over twaalf maanden"
+                        >
+                            <div
+                                class="rounded-xl border border-violet-500/20 bg-violet-500/[0.06] p-3"
+                            >
+                                <p class="text-xs text-violet-200">
+                                    Effect regels over 12 maanden
+                                </p>
+                                <strong
+                                    class="mt-2 block font-mono text-lg text-white"
+                                    >{{
+                                        signedEuro(yearOverview.ruleEffect)
+                                    }}</strong
+                                >
+                                <p class="mt-1 text-[11px] text-slate-400">
+                                    Op vrije ruimte, vergeleken met vóór jouw
+                                    regels.
+                                </p>
+                            </div>
+                            <div
+                                class="rounded-xl border border-indigo-500/20 bg-indigo-500/[0.04] p-3"
+                            >
+                                <p class="text-xs text-indigo-200">
+                                    Laagste vrije ruimte
+                                </p>
+                                <strong
+                                    class="mt-2 block font-mono text-lg"
+                                    :class="
+                                        yearOverview.lowest.after.free < 0
+                                            ? 'text-rose-300'
+                                            : 'text-white'
+                                    "
+                                    >{{
+                                        euro(yearOverview.lowest.after.free)
+                                    }}</strong
+                                >
+                                <p class="mt-1 text-[11px] text-slate-400">
+                                    {{ monthLabel(yearOverview.lowest.month) }}
+                                </p>
+                            </div>
+                            <div
+                                class="rounded-xl border p-3"
+                                :class="
+                                    yearOverview.deficitMonths
+                                        ? 'border-rose-500/25 bg-rose-500/[0.05]'
+                                        : 'border-emerald-500/20 bg-emerald-500/[0.04]'
+                                "
+                            >
+                                <p class="text-xs text-slate-300">
+                                    Maanden met tekort
+                                </p>
+                                <strong
+                                    class="mt-2 block font-mono text-lg"
+                                    :class="
+                                        yearOverview.deficitMonths
+                                            ? 'text-rose-300'
+                                            : 'text-emerald-300'
+                                    "
+                                    >{{ yearOverview.deficitMonths }} /
+                                    12</strong
+                                >
+                                <p class="mt-1 text-[11px] text-slate-400">
+                                    Na vaste uitgaven en geplande spaarinleg.
+                                </p>
+                            </div>
+                            <div
+                                class="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-3"
+                            >
+                                <p class="text-xs text-blue-200">
+                                    Gemiddelde vrije ruimte
+                                </p>
+                                <strong
+                                    class="mt-2 block font-mono text-lg text-white"
+                                    >{{
+                                        euro(yearOverview.averageFree)
+                                    }}</strong
+                                >
+                                <p class="mt-1 text-[11px] text-slate-400">
+                                    Per maand; saldi worden niet doorgeschoven.
+                                </p>
+                            </div>
+                        </div>
+                        <div
+                            class="space-y-2 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.06] p-3 text-xs leading-relaxed text-slate-300"
+                        >
+                            <p>
+                                <strong class="text-indigo-200"
+                                    >Prognosebasis:</strong
+                                >
+                                de laatst bekende begroting vóór
+                                {{ monthLabel(snapshot.months[0].month) }}
+                                (peildatum
+                                {{
+                                    monthLabel(
+                                        snapshot.source?.basisMonth ??
+                                            addMonths(
+                                                snapshot.months[0].month,
+                                                -1,
+                                            ),
+                                    )
+                                }}), met het herkende betaalritme en jouw
+                                prognoseregels.
+                            </p>
+                            <p>
+                                <strong class="text-indigo-200"
+                                    >Vergelijking bij ‘Begroting’ en ‘vs
+                                    begroting’:</strong
+                                >
+                                de oorspronkelijke structurele maandbegroting
+                                vóór deze prognose. De bronperiode staat op elke
+                                kaart en per post in de tabel. Dit kunnen
+                                historische bedragen of al vastgelegde
+                                toekomstige bedragen zijn; het zijn geen
+                                bankbetalingen.
+                            </p>
+                        </div>
+                        <div
+                            class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6"
                         >
                             <ForecastMonthCard
                                 v-for="(month, index) in snapshot.months"
@@ -1195,6 +1575,12 @@ onMounted(() => {
                                 :month="month"
                                 :active="index === selectedMonth"
                                 :structural="structural"
+                                :reference="forecastComparisonReference(month)"
+                                :comparison="comparisons[index]"
+                                @compare="
+                                    selectedMonth = index;
+                                    comparisonMonth = month.month;
+                                "
                                 @select="selectedMonth = index"
                                 @extras="extraCostMonth = month"
                             />
@@ -1216,13 +1602,114 @@ onMounted(() => {
                             :month="current"
                             :editable="editable && !busy && !loadingSource"
                             :settings="settings"
+                            :source="editable ? source : undefined"
                             @setting="updateSetting"
                             @history="historyItem = $event"
+                            @open-item="openPost($event, current?.month)"
                         />
                     </section>
                 </template>
             </div>
         </div>
+
+        <ModalShell
+            v-if="showSavedForecasts"
+            :on-close="
+                () => {
+                    if (!busy) showSavedForecasts = false;
+                }
+            "
+            :dismissible="!busy"
+        >
+            <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="saved-forecasts-title"
+                :aria-busy="busy"
+                class="max-h-[85vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl border border-indigo-500/25 bg-slate-900 p-5 shadow-xl"
+            >
+                <div class="flex items-center gap-3">
+                    <FolderClock class="h-5 w-5 text-indigo-300" />
+                    <h2
+                        id="saved-forecasts-title"
+                        class="text-lg font-bold text-white"
+                    >
+                        Opgeslagen prognoses
+                    </h2>
+                    <span
+                        class="rounded-md bg-indigo-500/15 px-2 py-0.5 text-xs text-indigo-300"
+                        >{{ records.length }}</span
+                    >
+                    <button
+                        type="button"
+                        class="forecast-button ml-auto"
+                        aria-label="Prognosekeuze sluiten"
+                        :disabled="busy"
+                        @click="showSavedForecasts = false"
+                    >
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+                <p class="text-xs text-slate-400">
+                    Kies een prognose om verder te werken of een eerdere
+                    berekening te bekijken.
+                </p>
+                <label v-if="records.length" class="forecast-label"
+                    >Zoek prognose<input
+                        v-model="savedForecastSearch"
+                        type="search"
+                        class="forecast-input"
+                        placeholder="Naam, startmaand of status"
+                /></label>
+                <p v-if="error" role="alert" class="text-sm text-rose-300">
+                    {{ error }}
+                </p>
+                <p
+                    v-if="!records.length"
+                    class="rounded-xl border border-dashed border-indigo-500/25 bg-indigo-500/[0.04] p-4 text-xs leading-relaxed text-slate-400"
+                >
+                    Je hebt nog geen prognoses opgeslagen.
+                </p>
+                <div class="space-y-2">
+                    <button
+                        v-for="record in filteredRecords"
+                        :key="record.id"
+                        type="button"
+                        class="w-full rounded-xl border p-3 text-left transition-colors"
+                        :class="
+                            active?.id === record.id
+                                ? 'border-indigo-400/60 bg-indigo-500/15 shadow-sm shadow-indigo-500/10'
+                                : 'border-slate-800 bg-slate-950/20 hover:border-indigo-500/40 hover:bg-indigo-500/[0.04]'
+                        "
+                        :disabled="busy"
+                        :aria-current="
+                            active?.id === record.id ? 'true' : undefined
+                        "
+                        @click="openForecast(record.id)"
+                    >
+                        <span
+                            class="block text-sm font-medium break-words text-white"
+                            >{{ record.name }}</span
+                        >
+                        <span class="mt-1 block text-xs text-slate-400"
+                            >{{ monthLabel(record.startMonth) }} ·
+                            <span
+                                class="mt-2 inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold"
+                                :class="statusTone(record)"
+                                >{{ status(record) }}</span
+                            ></span
+                        >
+                    </button>
+                </div>
+
+                <p
+                    v-if="records.length && !filteredRecords.length"
+                    class="text-sm text-slate-400"
+                >
+                    Geen prognoses gevonden.
+                </p>
+            </section>
+        </ModalShell>
 
         <ModalShell
             v-if="showReview && active && snapshot"
@@ -1363,6 +1850,12 @@ onMounted(() => {
             </section>
         </ModalShell>
 
+        <ForecastMonthComparison
+            v-if="comparison"
+            :comparison="comparison"
+            :on-close="() => (comparisonMonth = null)"
+            @open-item="openPost($event, comparison?.month)"
+        />
         <ForecastCalculationModal
             v-if="snapshot && calculation"
             :snapshot="snapshot"
@@ -1372,6 +1865,7 @@ onMounted(() => {
             :on-close="() => (calculationMonth = null)"
             @setting="updateSetting"
             @history="historyItem = $event"
+            @open-item="openPost($event, calculation?.month)"
         />
         <ForecastExtraCostsModal
             v-if="extraCostMonth"

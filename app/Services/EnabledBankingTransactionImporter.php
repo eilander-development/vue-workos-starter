@@ -6,6 +6,7 @@ use App\Models\Transaction;
 use App\Support\BankTransactionIdentity;
 use App\Support\BankTransactionStatus;
 use App\Support\BankTransactionTime;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -21,7 +22,7 @@ class EnabledBankingTransactionImporter
     {
         $hasSourceTypeColumn = Schema::hasColumn('transactions', 'source_type');
         $hasKeyColumn = Schema::hasColumn('transactions', 'key');
-        $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0, 'with_time' => 0, 'time_backfilled' => 0, 'blocked' => 0, 'missing_identity' => 0, 'conflicts' => 0, 'pending' => 0, 'pending_booking' => 0, 'invalid' => 0, 'issues' => []];
+        $stats = ['total' => 0, 'imported' => 0, 'duplicates' => 0, 'matched' => 0, 'unmatched' => 0, 'with_time' => 0, 'time_backfilled' => 0, 'blocked' => 0, 'missing_identity' => 0, 'conflicts' => 0, 'pending' => 0, 'pending_booking' => 0, 'invalid' => 0, 'reserved_imported' => 0, 'finalized' => 0, 'archived' => 0, 'ignored_reservations' => 0, 'issues' => []];
         // Index legacy rows too: their source hashes may predate canonical bank identities.
         $known = [];
         foreach (Transaction::query()->where('source_type', 'api')->get() as $tx) {
@@ -32,9 +33,19 @@ class EnabledBankingTransactionImporter
             }
         }
 
+        $decisions = [];
+        foreach (Transaction::onlyHistory()->where('source_type', 'api')->whereIn('archive_reason', ['reservation_matched', 'reservation_expired'])->orderBy('id')->get() as $old) {
+            $reference = BankTransactionIdentity::reference($old->bank_payload);
+            $account = BankTransactionIdentity::ownAccount($old->bank_payload, (float) $old->amount, $old->account_iban);
+            if ($reference && $account !== '') {
+                $decisions[$this->identityHash($account, $reference)] = $old;
+            }
+        }
+
         foreach ($transactions as $row) {
             $stats['total']++;
-            $date = BankTransactionTime::bookingDate($row, fallbackToToday: false);
+            $pending = BankTransactionStatus::isPending($row);
+            $date = BankTransactionTime::bookingDate($row, $pending ? ($row['transaction_date'] ?? data_get($row, 'raw.transaction_date')) : null, fallbackToToday: false);
             if ($date === '' || ! is_numeric($row['amount'] ?? null) || ! is_finite((float) $row['amount'])) {
                 $stats['blocked']++;
                 $stats['invalid']++;
@@ -58,42 +69,35 @@ class EnabledBankingTransactionImporter
 
                 continue;
             }
-            if (BankTransactionStatus::isPending($row)) {
-                $stats['pending']++;
-                $stats['issues'][] = $this->issue($row, 'pending');
-
+            $hash = $this->identityHash($account, $reference);
+            if ($this->resolvedReservation($decisions[$hash] ?? null, $row, $date, $amount, $pending, $stats)) {
                 continue;
             }
-            $hash = $this->identityHash($account, $reference);
+            if ($pending) {
+                $stats['pending']++;
+            }
             $time = $row['time'] ?? BankTransactionTime::extractBookingTime($row);
             $bankPayload = $this->bankPayload($row);
             if ($time) {
                 $stats['with_time']++;
             }
 
-            $candidates = $known[$hash] ?? [];
-            if (collect($candidates)->contains(fn ($tx) => ! $this->sameBooking($tx, $date, $amount))) {
-                $this->recordBookingIssue($stats, $row, $candidates);
+            $ids = array_map(fn ($tx) => $tx->id, $known[$hash] ?? []);
+            $handled = DB::connection('ledger')->transaction(function () use ($ids, $row, $date, $amount, $pending, $time, $bankPayload, &$stats) {
+                $locked = Transaction::withHistory()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
+                $decision = $locked->last(fn ($tx) => $tx->archived_at && in_array($tx->archive_reason, ['reservation_matched', 'reservation_expired'], true));
+                if ($decision && $this->resolvedReservation($decision, $row, $date, $amount, $pending, $stats)) {
+                    return true;
+                }
+                $candidates = $locked->filter(fn ($tx) => ! $tx->archived_at)->values()->all();
+                if (! $candidates) {
+                    return false;
+                }
+                $this->updateExisting($candidates, $row, $date, $amount, $pending, $time, $bankPayload, $stats);
 
-                continue;
-            }
-            $existing = $candidates[0] ?? null;
-            if ($existing) {
-                $stats['duplicates']++;
-                $dirty = false;
-                if ($time && blank($existing->booked_time)) {
-                    $existing->booked_time = $time;
-                    $dirty = true;
-                    $stats['time_backfilled']++;
-                }
-                if ($bankPayload && Schema::hasColumn('transactions', 'bank_payload') && blank($existing->bank_payload)) {
-                    $existing->bank_payload = $bankPayload;
-                    $dirty = true;
-                }
-                if ($dirty) {
-                    $existing->save();
-                }
-
+                return true;
+            });
+            if ($handled) {
                 continue;
             }
 
@@ -110,6 +114,8 @@ class EnabledBankingTransactionImporter
                 'category_id' => $classified['category_id'],
                 'budget_id' => $classified['budget_id'],
                 'rule_id' => $classified['rule_id'],
+                'is_pending' => $pending,
+                'allocations' => $classified['allocations'] ?? null,
             ];
 
             if ($hasSourceTypeColumn) {
@@ -145,11 +151,10 @@ class EnabledBankingTransactionImporter
             $created = Transaction::query()->createOrFirst(['source_hash' => $hash], $payload);
             $known[$hash] = [$created];
             if (! $created->wasRecentlyCreated) {
-                if ($this->sameBooking($created, $date, $amount)) {
-                    $stats['duplicates']++;
-                } else {
-                    $this->recordBookingIssue($stats, $row, [$created]);
-                }
+                DB::connection('ledger')->transaction(function () use ($created, $row, $date, $amount, $pending, $time, $bankPayload, &$stats) {
+                    $locked = Transaction::query()->whereKey($created->id)->lockForUpdate()->firstOrFail();
+                    $this->updateExisting([$locked], $row, $date, $amount, $pending, $time, $bankPayload, $stats);
+                });
 
                 continue;
             }
@@ -160,23 +165,98 @@ class EnabledBankingTransactionImporter
                 $stats['unmatched']++;
             }
             $stats['imported']++;
+            if ($pending) {
+                $stats['reserved_imported']++;
+            }
         }
 
         return $stats;
     }
 
-    private function recordBookingIssue(array &$stats, array $row, array $existing): void
+    private function updateExisting(array $rows, array $row, string $date, float $amount, bool $pending, ?string $time, ?array $payload, array &$stats): void
     {
-        $date = BankTransactionTime::bookingDate($row, fallbackToToday: false);
-        if (BankSyncReport::needsBookingReconciliation($existing, $date, (float) $row['amount'])) {
-            $stats['pending']++;
-            $stats['pending_booking']++;
-            $stats['issues'][] = $this->issue($row, 'pending_booking', $existing);
-        } else {
+        $lifecycle = new TransactionLifecycle;
+        $incompatible = collect($rows)->contains(fn ($tx) => number_format((float) $tx->amount, 2, '.', '') !== number_format($amount, 2, '.', '')
+            || (! $pending && ! $tx->is_pending && $tx->date->format('Y-m-d') !== $date));
+        if ($incompatible || ! $lifecycle->compatible($rows)) {
             $stats['blocked']++;
             $stats['conflicts']++;
-            $stats['issues'][] = $this->issue($row, 'conflict', $existing);
+            $stats['issues'][] = $this->issue($row, 'conflict', $rows);
+
+            return;
         }
+        // Prefer an existing final booking; a late reservation never downgrades it.
+        $keep = collect($rows)->sortBy(fn ($tx) => $tx->is_pending ? 1 : 0)->first();
+        $promoting = ! $pending && $keep->is_pending;
+        if ($promoting) {
+            $lifecycle->rememberReservation($keep);
+            $stats['archived']++;
+        }
+        $lifecycle->mergeLinks($keep, $rows);
+        foreach ($rows as $other) {
+            if ($other->id === $keep->id) {
+                continue;
+            }
+            $lifecycle->archive($other, $keep, $other->is_pending ? 'reservation_replaced' : 'confirmed_duplicate');
+            $stats['archived']++;
+        }
+        if ($promoting || ($pending && $keep->is_pending)) {
+            $keep->fill([
+                'date' => $date, 'amount' => $amount, 'is_pending' => $pending,
+                'bank_payload' => $payload, 'description' => $this->normalizeDescription(trim((string) ($row['description'] ?? $row['merchant'] ?? $keep->description))),
+                'booked_time' => $time,
+            ]);
+            if ($promoting) {
+                $stats['finalized']++;
+            }
+        } elseif (! $pending) {
+            if ($time && blank($keep->booked_time)) {
+                $keep->booked_time = $time;
+                $stats['time_backfilled']++;
+            }
+            if (blank($keep->bank_payload)) {
+                $keep->bank_payload = $payload;
+            }
+        }
+        $keep->save();
+        if (! $promoting) {
+            $stats['duplicates']++;
+        }
+    }
+
+    private function resolvedReservation(?Transaction $old, array $row, string $date, float $amount, bool $pending, array &$stats): bool
+    {
+        if (! $old) {
+            return false;
+        }
+        $sameAmount = fn ($a, $b) => number_format((float) $a, 2, '.', '') === number_format((float) $b, 2, '.', '');
+        if ($old->archive_reason === 'reservation_expired') {
+            // A genuinely final booking is always imported, even after an expiry decision.
+            if (! $pending || ! $sameAmount($old->amount, $amount)) {
+                return false;
+            }
+        } else {
+            $target = $old->superseded_by_key ? Transaction::query()->forPublicKey($old->superseded_by_key)->first() : null;
+            if (! $target || $target->is_pending) {
+                return false;
+            }
+            $matches = $pending
+                ? ($sameAmount($old->amount, $amount) || $sameAmount($target->amount, $amount))
+                : ($sameAmount($target->amount, $amount) && $target->date->format('Y-m-d') === $date);
+            if (! $matches) {
+                $stats['blocked']++;
+                $stats['conflicts']++;
+                $stats['issues'][] = $this->issue($row, 'conflict', [$target]);
+
+                return true;
+            }
+        }
+        $stats['duplicates']++;
+        if ($pending) {
+            $stats['ignored_reservations']++;
+        }
+
+        return true;
     }
 
     private function issue(array $row, string $code, array $existing = []): array
@@ -203,7 +283,7 @@ class EnabledBankingTransactionImporter
         return [
             'code' => $code,
             'reason' => match ($code) {
-                'conflict' => 'Dezelfde bankreferentie en rekening, maar een andere boekdatum of een ander bedrag. De bestaande boeking is niet gewijzigd.',
+                'conflict' => 'Dezelfde bankreferentie en rekening, maar afwijkende boekingsgegevens of tegenstrijdige koppelingen/splitsingen. Niets samengevoegd of overschreven; controle nodig.',
                 'missing_identity' => 'Ontbreekt: '.implode(', ', $missing).'. Niet opgeslagen om dubbele boekingen te voorkomen.',
                 'invalid' => 'Ontbrekend of ongeldig: '.implode(', ', $invalid).'. Niet opgeslagen.',
                 'pending' => BankSyncReport::PENDING_REASON,
@@ -243,11 +323,5 @@ class EnabledBankingTransactionImporter
     private function identityHash(string $account, string $reference): string
     {
         return hash('sha256', json_encode(['enablebanking-v2', $account, $reference]));
-    }
-
-    private function sameBooking(Transaction $tx, string $date, float $amount): bool
-    {
-        return $tx->date?->format('Y-m-d') === $date
-            && number_format((float) $tx->amount, 2, '.', '') === number_format($amount, 2, '.', '');
     }
 }

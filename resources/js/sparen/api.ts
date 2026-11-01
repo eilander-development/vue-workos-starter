@@ -188,3 +188,25 @@ export async function removeDuplicateTransaction(keepId: number, removeId: numbe
 export async function loadSyncReport() {
   return sparenRequest("GET", "/api/sparen/sync-report");
 }
+
+export async function loadTransactionHistory(search = '', page = 1, transactionKey = '') {
+  const query = new URLSearchParams({ search, page: String(page), ...(transactionKey ? { transactionKey } : {}) });
+  return sparenRequest('GET', `/api/sparen/transaction-history?${query}`);
+}
+
+export async function loadReservationReview(key: string, search = '') {
+  return sparenRequest('GET', `/api/sparen/reservations/${encodeURIComponent(key)}/review?${new URLSearchParams({ search })}`);
+}
+
+export type ReservationResolution = {
+  action: 'match' | 'expire';
+  revision: string;
+  bookedKey?: string;
+  bookedRevision?: string;
+  linkChoice?: 'merge' | 'reservation' | 'booked';
+  scaleSplit?: boolean;
+};
+
+export async function resolveReservation(key: string, resolution: ReservationResolution): Promise<{ reservationKey: string; booked: Transaction | null }> {
+  return sparenRequest('POST', `/api/sparen/reservations/${encodeURIComponent(key)}/resolve`, resolution);
+}

@@ -11,6 +11,7 @@ class Budget extends CatalogModel
 
     protected $casts = [
         'budget' => 'decimal:2',
+        'forecast_monthly' => 'boolean',
     ];
 
     public function category(): BelongsTo

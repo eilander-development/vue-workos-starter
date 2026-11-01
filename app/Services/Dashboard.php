@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Transaction;
 use App\Models\DynamicBudget;
+use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -35,7 +35,7 @@ class Dashboard
         $transactions = $this->periodTransactionsQuery($start, $end)->get();
         $income = $transactions->filter(fn (Transaction $t) => (float) $t->amount > 0)->sum(fn (Transaction $t) => (float) $t->amount);
         $expenses = $transactions->filter(fn (Transaction $t) => (float) $t->amount < 0)->sum(fn (Transaction $t) => abs((float) $t->amount));
-        $currentBalance = $currentBalanceOverride ?? (float) Transaction::query()->sum('amount');
+        $currentBalance = $currentBalanceOverride ?? (float) Transaction::query()->booked()->sum('amount');
         $remainingBudgetCategories = collect([
             ...array_values($this->categoriesService->list('expense', $start, $end)),
             ...array_values($this->categoriesService->list('saving', $start, $end)),
@@ -45,6 +45,7 @@ class Dashboard
                     ->filter(fn (array $budget) => (float) ($budget['budget'] ?? 0) > 0)
                     ->map(function (array $budget) {
                         $remainingRaw = (float) ($budget['remaining'] ?? 0);
+
                         return [
                             'id' => $budget['id'] ?? null,
                             'name' => $budget['name'] ?? 'Onbekend budget',
@@ -210,7 +211,7 @@ class Dashboard
         $startDate = ($start ?? CarbonImmutable::now()->startOfMonth())->startOfDay();
         $endDate = ($end ?? CarbonImmutable::now()->endOfMonth())->endOfDay();
 
-        return Transaction::query()
+        return Transaction::query()->booked()
             ->where('date', '>=', $startDate->toDateTimeString())
             ->where('date', '<=', $endDate->toDateTimeString());
     }

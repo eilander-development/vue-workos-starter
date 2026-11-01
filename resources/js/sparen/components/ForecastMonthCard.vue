@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { CheckCircle2, TriangleAlert } from 'lucide-vue-next';
+import { ArrowRightLeft, CheckCircle2, TriangleAlert } from 'lucide-vue-next';
 import { computed } from 'vue';
 import {
     euro,
     monthLabel,
     signedEuro,
     type ForecastSnapshot,
+    type forecastMonthComparison,
 } from '../forecast';
 const props = defineProps<{
     month: ForecastSnapshot['months'][number];
     active: boolean;
     structural: boolean;
+    comparison?: ReturnType<typeof forecastMonthComparison>;
+    reference: { label: string; description: string };
 }>();
-const emit = defineEmits<{ select: []; extras: [] }>();
+const emit = defineEmits<{ select: []; extras: []; compare: [] }>();
 const historical = computed(
     () =>
         props.month.warnings?.filter((warning) => warning.kind === 'historical')
@@ -38,12 +41,12 @@ const planned = computed(
     >
         <button
             type="button"
-            class="w-full p-3.5 text-left focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none focus-visible:ring-inset"
+            class="w-full p-4 text-left focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none focus-visible:ring-inset"
             :aria-pressed="active"
             @click="emit('select')"
         >
             <span
-                class="block text-xs font-semibold text-slate-300 capitalize"
+                class="block text-sm font-semibold text-slate-300 capitalize"
                 >{{ monthLabel(month.month) }}</span
             >
             <span
@@ -54,7 +57,7 @@ const planned = computed(
                 >{{ euro(month.after.free) }}</span
             >
             <span
-                class="mt-1 flex items-center gap-1 text-[10px] font-medium"
+                class="mt-1 flex items-center gap-1 text-xs font-medium"
                 :class="
                     month.after.free < 0
                         ? 'text-rose-300'
@@ -71,30 +74,73 @@ const planned = computed(
                 }}</span
             >
             <span
-                class="mt-3 block border-t border-slate-700/50 pt-2 text-[11px] text-slate-400"
-                >Begroting {{ euro(month.before.free) }}</span
+                class="mt-4 block w-full min-w-0 space-y-2 rounded-xl border border-indigo-500/20 bg-slate-950/60 p-3 text-xs leading-relaxed"
+                :title="reference.description"
             >
-            <span
-                class="mt-1 block text-xs font-semibold tabular-nums"
-                :class="
-                    month.after.free > month.before.free
-                        ? 'text-emerald-300'
-                        : month.after.free < month.before.free
-                          ? 'text-rose-300'
-                          : 'text-slate-400'
-                "
-                >{{
-                    signedEuro(
-                        Math.round(
-                            (month.after.free - month.before.free) * 100,
-                        ) / 100,
-                    )
-                }}</span
-            >
-            <span
-                v-if="structural"
-                class="mt-1 block text-[10px] text-slate-500"
-                >Exclusief extra kosten</span
+                <span class="flex w-full items-start gap-2 text-slate-300"
+                    ><ArrowRightLeft
+                        class="mt-0.5 h-4 w-4 shrink-0 text-indigo-300"
+                        aria-hidden="true"
+                    /><span class="sr-only">Vergelijking met </span
+                    ><strong
+                        class="min-w-0 font-semibold [overflow-wrap:anywhere] text-indigo-200"
+                        >{{ reference.label }}</strong
+                    ></span
+                >
+                <span
+                    class="flex w-full flex-wrap justify-between gap-x-3 gap-y-1 text-slate-400"
+                    ><span>Begroting</span
+                    ><span class="whitespace-nowrap tabular-nums">{{
+                        euro(month.before.free)
+                    }}</span></span
+                >
+                <span
+                    class="flex w-full flex-wrap justify-between gap-x-3 gap-y-1 font-semibold"
+                    :class="
+                        month.after.free > month.before.free
+                            ? 'text-emerald-300'
+                            : month.after.free < month.before.free
+                              ? 'text-rose-300'
+                              : 'text-slate-400'
+                    "
+                    ><span>vs begroting</span
+                    ><span class="whitespace-nowrap tabular-nums">{{
+                        signedEuro(
+                            Math.round(
+                                (month.after.free - month.before.free) * 100,
+                            ) / 100,
+                        )
+                    }}</span></span
+                >
+                <span v-if="structural" class="block text-slate-400"
+                    >Exclusief extra kosten</span
+                >
+            </span>
+        </button>
+        <button
+            v-if="comparison"
+            type="button"
+            class="flex w-full items-start gap-1.5 border-t border-indigo-500/15 bg-indigo-500/[0.04] px-3 py-2 text-left text-[10px] text-indigo-300 hover:bg-indigo-500/10"
+            :aria-label="`Afwijkingen buiten vaste begroting voor ${monthLabel(month.month)}`"
+            @click="emit('compare')"
+        >
+            <ArrowRightLeft class="mt-0.5 h-3 w-3 shrink-0" /><span
+                >Afwijking sinds {{ monthLabel(comparison.previousMonth)
+                }}<strong
+                    class="block font-mono"
+                    :class="
+                        comparison.difference > 0
+                            ? 'text-emerald-300'
+                            : comparison.difference < 0
+                              ? 'text-rose-300'
+                              : 'text-slate-400'
+                    "
+                    >{{ signedEuro(comparison.difference) }} ·
+                    {{ comparison.rows.length }}
+                    {{
+                        comparison.rows.length === 1 ? 'post' : 'posten'
+                    }}</strong
+                ></span
             >
         </button>
         <button

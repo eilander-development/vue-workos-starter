@@ -6,6 +6,7 @@ import { applyPotTransferLinkExclusion, goalBudgetItemIds, isPotGoal } from "./p
 
 export function applyTransactionRules(txs: Transaction[], rls: Rule[], sGoals: SavingsGoal[], ownIbans: string[] = []) {
   return txs.map((tx) => {
+    if (tx.status === 'history') return tx;
     const savingsApplied = applyPotTransferLinkExclusion(tx, sGoals, ownIbans);
     if (savingsApplied.linkExcluded) {
       return savingsApplied;

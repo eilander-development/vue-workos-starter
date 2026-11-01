@@ -73,6 +73,38 @@ test('saved forecast has twelve independent months and zero opening balances', f
     expect(BudgetAmountChange::query()->count())->toBe(0);
 });
 
+test('a reduced buffer contribution compensates an income reduction and can be applied and reverted', function () {
+    forecastBudget();
+    $buffer = forecastBudget('buffer', 500, 'saving');
+    $payload = forecastPayload([
+        forecastRule('income', '2027-05', 'delta', -100),
+        forecastRule('buffer', '2027-05', 'delta', -100, 'buffer-rule'),
+    ]);
+    $record = $this->postJson('/api/sparen/forecasts', $payload)->assertCreated()
+        ->assertJsonPath('snapshot.months.0.after.income', 2900)
+        ->assertJsonPath('snapshot.months.0.after.savings', 400)
+        ->assertJsonPath('snapshot.months.0.after.free', 2500)->json();
+    expect((new BudgetProjection)->resolve($buffer, '2027-05')['amount'])->toBe(500.0);
+    $this->postJson("/api/sparen/forecasts/{$record['id']}/apply", ['revision' => $record['revision']])->assertOk();
+    expect((new BudgetProjection)->resolve($buffer, '2027-04')['amount'])->toBe(500.0)
+        ->and((new BudgetProjection)->resolve($buffer, '2027-05')['amount'])->toBe(400.0)
+        ->and((new BudgetProjection)->resolve($buffer, '2028-05')['amount'])->toBe(400.0);
+    $this->getJson('/api/sparen/state?year=2027')->assertOk()->assertJsonPath('monthlyBudgets.4.items.1.actual', 400);
+    $this->getJson('/api/sparen/budget-items/buffer/history')->assertOk()->assertJsonPath('0.rule.value', -100);
+    $this->postJson("/api/sparen/forecasts/{$record['id']}/revert", ['fromMonth' => '2027-05'])->assertOk();
+    expect((new BudgetProjection)->resolve($buffer, '2027-05')['amount'])->toBe(500.0);
+});
+
+test('savings rules support percentages and zero and reject a negative savings contribution', function () {
+    forecastBudget('buffer', 500, 'saving');
+    $this->postJson('/api/sparen/forecasts', forecastPayload([forecastRule('buffer', '2027-05', 'percent', -20)]))
+        ->assertCreated()->assertJsonPath('snapshot.months.0.after.savings', 400);
+    $this->postJson('/api/sparen/forecasts', forecastPayload([forecastRule('buffer', '2027-05', 'set', 0)]))
+        ->assertCreated()->assertJsonPath('snapshot.months.0.after.savings', 0);
+    $this->postJson('/api/sparen/forecasts', forecastPayload([forecastRule('buffer', '2027-05', 'delta', -501)]))->assertUnprocessable();
+    expect(BudgetAmountChange::query()->count())->toBe(0);
+});
+
 test('quarterly pattern is inherited from previous year and fixed amounts persist after the horizon', function () {
     $budget = forecastBudget('insurance', 300, 'expense');
     foreach (ReportingPeriod::SPAREN_MONTH_IDS as $i => $month) {
@@ -283,7 +315,7 @@ test('historical loose expenses are references rather than recurring forecast ex
         ->and($cell['excludedCost']['sourceMonth'])->toBe('2026-08')
         ->and($cell['excludedCost']['amount'])->toBe(250.0);
     $forecast = saveForecast([forecastRule('income', '2027-08')], '2027-08');
-    expect($forecast->snapshot['version'])->toBe(3)
+    expect($forecast->snapshot['version'])->toBe(7)
         ->and($forecast->snapshot['months'][0]['before']['expenses'])->toEqual(0)
         ->and($forecast->snapshot['months'][0]['before']['free'])->toEqual(3000)
         ->and($forecast->snapshot['months'][0]['warnings'][0]['entries'][0]['description'])->toBe('Eenmalige aankoop');
@@ -324,10 +356,27 @@ test('a fixed installment can explicitly be included and ordinary costs can be m
     $card->update(['forecast_mode' => 'fixed']);
     $other = forecastBudget('other', 250, 'expense');
     $other->update(['forecast_mode' => 'extra']);
-    $forecast = saveForecast([forecastRule()]);
-    expect($forecast->snapshot['months'][0]['before']['expenses'])->toEqual(150)
+    $forecast = app(ForecastService::class)->save([...forecastPayload([forecastRule()]), 'settings' => [
+        ['itemId' => 'Creditcard', 'basis' => 'latest', 'included' => true, 'excludedMonths' => [], 'costMode' => 'fixed'],
+        ['itemId' => 'other', 'basis' => 'latest', 'included' => true, 'excludedMonths' => [], 'costMode' => 'extra'],
+    ]], 'Tester');
+    expect($forecast->snapshot['months'][0]['before']['expenses'])->toEqual(250)
+        ->and($forecast->snapshot['months'][0]['after']['expenses'])->toEqual(150)
         ->and($forecast->snapshot['months'][0]['warnings'])->toHaveCount(1)
         ->and($forecast->snapshot['months'][0]['warnings'][0]['reason'])->toBe('marked_extra');
+    expect(saveForecast([])->snapshot['months'][0]['after']['expenses'])->toEqual(250);
+});
+
+test('forecast-only fixed classification composes with an amount rule and preserves correct budget predecessors', function () {
+    $card = forecastBudget('Creditcard', 150, 'expense');
+    $forecast = app(ForecastService::class)->save([...forecastPayload([forecastRule('Creditcard', '2027-05', 'delta', 10)]),
+        'settings' => [['itemId' => 'Creditcard', 'basis' => 'latest', 'included' => true, 'excludedMonths' => [], 'costMode' => 'fixed']],
+    ], 'Tester');
+    expect($forecast->snapshot['months'][0]['after']['expenses'])->toEqual(160)
+        ->and($forecast->snapshot['specs'][0]['beforeAmounts'][5])->toEqual(150);
+    app(ForecastService::class)->apply($forecast);
+    expect((new BudgetProjection)->resolve($card, '2027-05')['amount'])->toBe(160.0)
+        ->and($card->fresh()->forecast_mode)->toBe('auto');
 });
 
 test('changing forecast classification invalidates stale previews and persists through normal post edits', function () {
@@ -449,14 +498,63 @@ test('latest December benefit amount is used on every existing quarterly payment
     expect((new BudgetProjection)->resolve($budget, '2028-06')['amount'])->toBe(362.35);
 });
 
-test('monthly profile is retained unless the latest fixed amount is explicitly selected', function () {
+test('a monthly profile is a forecast-specific exception even if old category preferences exist', function () {
     $budget = forecastBudget('seasonal', 100, 'expense');
+    $budget->update(['forecast_basis' => 'profile']);
     BudgetMonthValue::query()->create(['budget_id' => $budget->id, 'month_id' => 'jun', 'year' => 2026, 'estimated' => 50]);
     BudgetMonthValue::query()->create(['budget_id' => $budget->id, 'month_id' => 'dec', 'year' => 2026, 'estimated' => 120]);
-    $forecast = saveForecast([], '2027-01');
+    $forecast = app(ForecastService::class)->save([...forecastPayload([], '2027-01'), 'settings' => [['itemId' => 'seasonal', 'basis' => 'profile', 'included' => true, 'excludedMonths' => []]]], 'Tester');
     expect($forecast->snapshot['months'][0]['after']['expenses'])->toEqual(100)
         ->and($forecast->snapshot['months'][5]['after']['expenses'])->toEqual(50)
         ->and($forecast->snapshot['months'][11]['after']['expenses'])->toEqual(120);
+});
+
+test('every forecast starts automatic and its exceptions never change category defaults', function () {
+    $budget = forecastBudget('salary', 3000);
+    BudgetMonthValue::query()->create(['budget_id' => $budget->id, 'month_id' => 'dec', 'year' => 2026, 'estimated' => 3200]);
+    $source = app(ForecastService::class)->source('2027-01');
+    expect($source['items'][0]['forecastBasis'])->toBe('latest');
+    $forecast = saveForecast([], '2027-01');
+    expect($forecast->snapshot['months'][0]['after']['income'])->toEqual(3200);
+    $this->postJson('/api/sparen/forecasts', [
+        ...forecastPayload([], '2027-01'), 'settings' => [
+            ['itemId' => 'salary', 'basis' => 'profile', 'included' => true, 'excludedMonths' => [], 'rememberBasis' => true, 'everyMonth' => false],
+        ],
+    ])->assertCreated()->assertJsonPath('snapshot.source.items.0.forecastBasis', 'latest')->assertJsonPath('snapshot.settings.0.basis', 'profile');
+    expect($budget->fresh()->forecast_basis)->toBe('latest')->and((float) $budget->fresh()->budget)->toBe(3000.0);
+    expect(saveForecast([], '2027-01')->snapshot['months'][0]['after']['income'])->toEqual(3200);
+    expect(BudgetAmountChange::query()->count())->toBe(0);
+});
+
+test('preview choices remain local unless remembered and invalid saves roll back remembered preferences', function () {
+    $budget = forecastBudget();
+    $setting = ['itemId' => 'income', 'basis' => 'profile', 'included' => true, 'excludedMonths' => [], 'rememberBasis' => false, 'everyMonth' => true];
+    $this->postJson('/api/sparen/forecasts', [...forecastPayload([]), 'settings' => [$setting]])->assertCreated();
+    expect($budget->fresh()->forecast_basis)->toBe('latest')->and($budget->fresh()->forecast_monthly)->toBeNull();
+    $setting['rememberBasis'] = true;
+    $setting['excludedMonths'] = ['2029-01'];
+    $this->postJson('/api/sparen/forecasts', [...forecastPayload([]), 'settings' => [$setting]])->assertUnprocessable();
+    expect($budget->fresh()->forecast_basis)->toBe('latest')->and($budget->fresh()->forecast_monthly)->toBeNull();
+});
+
+test('a normal monthly pattern continues through historical gaps and explicit scenario rhythm can override it', function () {
+    $budget = forecastBudget('fuel', 100, 'expense');
+    foreach (ReportingPeriod::SPAREN_MONTH_IDS as $month) {
+        BudgetMonthValue::query()->create(['budget_id' => $budget->id, 'month_id' => $month, 'year' => 2026, 'estimated' => $month === 'aug' ? 0 : 100]);
+    }
+    expect(saveForecast([], '2027-01')->snapshot['months'][7]['after']['expenses'])->toEqual(100);
+    $pattern = app(ForecastService::class)->save([...forecastPayload([], '2027-01'), 'settings' => [['itemId' => 'fuel', 'basis' => 'latest', 'included' => true, 'excludedMonths' => [], 'everyMonth' => false, 'cadenceOverride' => true]]], 'Tester');
+    expect($pattern->snapshot['months'][7]['after']['expenses'])->toEqual(0);
+    $forecast = app(ForecastService::class)->save([
+        ...forecastPayload([], '2027-01'), 'settings' => [
+            ['itemId' => 'fuel', 'basis' => 'latest', 'included' => true, 'excludedMonths' => [], 'everyMonth' => true, 'rememberBasis' => true],
+        ],
+    ], 'Tester');
+    expect($forecast->snapshot['months'][7]['after']['expenses'])->toEqual(100)->and($budget->fresh()->forecast_monthly)->toBeNull();
+    expect((new BudgetProjection)->resolve($budget, '2027-08')['amount'])->toBe(0.0);
+    app(ForecastService::class)->apply($forecast);
+    expect((new BudgetProjection)->resolve($budget, '2027-08')['amount'])->toBe(100.0)
+        ->and((new BudgetProjection)->resolve($budget, '2028-08')['amount'])->toBe(100.0);
 });
 
 test('latest amount and a percentage rule compose correctly and persist as fixed amounts', function () {

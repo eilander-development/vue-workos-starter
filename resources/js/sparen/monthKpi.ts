@@ -1,3 +1,4 @@
+import { isBookedTransaction } from './transactionStatus';
 import { defaultReportingMonth, MONTH_ID_TO_NUMBER } from "./month";
 import type { BudgetItem, MonthlyBudget, Transaction } from "./types";
 import type { KpiBreakdownColumn, KpiBreakdownRow } from "./components/KpiBreakdownModal.vue";
@@ -77,7 +78,7 @@ export function sumRawBankTotals(transactions: Transaction[]): {
   let savings = 0;
 
   for (const tx of transactions) {
-    if (tx.isPending) {
+    if (!isBookedTransaction(tx)) {
       continue;
     }
 

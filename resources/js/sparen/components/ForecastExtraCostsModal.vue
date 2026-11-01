@@ -192,9 +192,10 @@ const reason = (row: ForecastWarning) =>
                     }}</strong>
                 </p>
                 <p class="text-xs text-slate-500">
-                    Een vaste maandelijkse aflossing kun je bij de
-                    begrotingspost onder ‘Meenemen in prognoses’ als Vast
-                    instellen.
+                    Een vaste maandelijkse aflossing kun je in deze prognose bij
+                    de post onder ‘Afwijking instellen’ als Vast meetellen
+                    kiezen. Deze keuze blijft bij de prognose en verandert geen
+                    categorie-instellingen.
                 </p>
             </div>
         </section>

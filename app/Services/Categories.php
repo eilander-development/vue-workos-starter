@@ -10,6 +10,7 @@ class Categories
     public function list(string $filter = 'all', ?CarbonInterface $startDate = null, ?CarbonInterface $endDate = null): array
     {
         return Category::with(['budgets.transactions' => function ($query) use ($startDate, $endDate) {
+            $query->booked();
             if ($startDate !== null) {
                 $query->where('date', '>=', $startDate->copy()->startOfDay()->toDateTimeString());
             }

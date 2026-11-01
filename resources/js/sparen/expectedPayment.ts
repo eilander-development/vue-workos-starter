@@ -1,3 +1,4 @@
+import { isBookedTransaction } from './transactionStatus';
 import { transactionCountsTowardBudgetItem } from "./budgetPayment";
 import {
   MONTH_ID_TO_NUMBER,
@@ -42,7 +43,7 @@ export function expectedPaymentForItem(
 ): ExpectedPayment | null {
   const period = reportingPeriodForMonth(month);
   const historyDays = transactions
-    .filter((tx) => !tx.isPending && transactionCountsTowardBudgetItem(tx, item))
+    .filter((tx) => isBookedTransaction(tx) && transactionCountsTowardBudgetItem(tx, item))
     .map((tx) => tx.date.slice(0, 10))
     .filter((date) => date < period.start)
     .map((date) => Number.parseInt(date.slice(8, 10), 10))

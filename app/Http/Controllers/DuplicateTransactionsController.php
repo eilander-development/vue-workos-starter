@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Transaction;
+use App\Services\TransactionLifecycle;
 use App\Support\BankTransactionIdentity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,14 +51,13 @@ class DuplicateTransactionsController extends Controller
             abort_unless($keep && $remove, 409, 'De transacties zijn gewijzigd. Vernieuw het overzicht.');
             $identity = BankTransactionIdentity::key($keep);
             abort_unless($identity !== null && $identity === BankTransactionIdentity::key($remove), 422, 'Deze rijen zijn geen bevestigde dubbele banktransactie.');
-            foreach (['category_id', 'budget_id', 'rule_id', 'savings_goal_key', 'allocations', 'link_excluded'] as $field) {
-                abort_if(! empty($remove->$field) && empty($keep->$field), 422,
-                    'De te verwijderen rij bevat een koppeling die de bewaarde rij mist. Kies de gekoppelde rij om te bewaren.');
-            }
+            $lifecycle = new TransactionLifecycle;
+            abort_unless($lifecycle->compatible([$keep, $remove]), 422, 'De koppelingen of splitsingen spreken elkaar tegen. Los dit eerst op; er is niets gewijzigd.');
+            $lifecycle->mergeLinks($keep, [$remove]);
             $deletedKey = $remove->key ?: 'tx-'.$remove->id;
-            $remove->delete();
+            $lifecycle->archive($remove, $keep, 'confirmed_duplicate');
 
-            return response()->json(['deletedKey' => $deletedKey]);
+            return response()->json(['deletedKey' => $deletedKey, 'archivedKey' => $deletedKey]);
         });
     }
 }

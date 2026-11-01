@@ -19,6 +19,7 @@ defineProps<{
 const emit = defineEmits<{
     setting: [change: ForecastSettingChange];
     history: [item: { id: string; name: string }];
+    openItem: [itemId: string];
 }>();
 </script>
 <template>
@@ -45,9 +46,10 @@ const emit = defineEmits<{
                 Hier staan de posten die deze berekening bepalen. Historische
                 extra kosten tellen niet mee. Een post uitzetten geldt alleen
                 voor deze prognose; haar echte begrotingsbedragen blijven
-                behouden. Kies per post het laatste vaste bedrag of het
-                maandprofiel. De betaalmaanden blijven hetzelfde en expliciet
-                geplande latere bedragen gaan voor.
+                behouden. Vaste posten gebruiken automatisch hun laatste vaste
+                bedrag en bestaande betaalmaanden. Alleen bij een afwijking hoef
+                je iets in te stellen. Klik op een post voor de maandbedragen en
+                transacties; expliciet geplande latere bedragen gaan voor.
             </p>
             <div
                 class="flex flex-wrap gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.06] p-3 font-mono text-sm"
@@ -80,6 +82,7 @@ const emit = defineEmits<{
                 :editable="editable"
                 @setting="emit('setting', $event)"
                 @history="emit('history', $event)"
+                @open-item="emit('openItem', $event)"
             />
             <p
                 v-if="month.warnings?.length"

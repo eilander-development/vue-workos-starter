@@ -41,6 +41,8 @@ export interface BudgetItem {
   paymentCount?: number; // Aantal transacties / betalingen
   notes?: string;
   forecastMode?: 'auto' | 'fixed' | 'extra';
+  forecastBasis?: 'latest' | 'profile';
+  forecastMonthly?: boolean | null;
   icon?: string;
   isPaid?: boolean;
   /** Losse regels per maand (som = begroot bedrag) */
@@ -73,6 +75,8 @@ export interface TransactionAllocation {
 
 export interface Transaction {
   id: string;
+  revision?: string;
+  bankReference?: string | null;
   /** Bankboekdatum (YYYY-MM-DD), niet factuurdatum uit de omschrijving. */
   date: string;
   time?: string;
@@ -81,12 +85,17 @@ export interface Transaction {
   type: "Inkomsten" | "Uitgave" | "Sparen";
   categoryGroup: BudgetCategoryGroup | "Ongecategoriseerd";
   budgetItemId?: string;
+  budgetItemName?: string | null;
   /** Verdeelt één bankmutatie over meerdere begrotingsposten. */
   allocations?: TransactionAllocation[];
   accountIban: string;
   counterparty?: string;
   counterpartyIban?: string | null;
   isPending?: boolean;
+  status?: 'booked' | 'reserved' | 'history';
+  archivedAt?: string | null;
+  archiveReason?: string | null;
+  supersededBy?: string | null;
   matchedRuleId?: string;
   source: "EnableBanking" | "Handmatig" | "CSV-import";
   /** Automatisch of handmatig: nooit koppelen aan begrotingspost */
